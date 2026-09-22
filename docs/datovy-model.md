@@ -33,14 +33,14 @@ organizace (REDIZO) ──< zrizovatel
                │
                ├──< prijimaci_rizeni   (CERMAT JPZ 2024+, rok × kolo × KKOV × ročník)   [plán]
                ├──< jpz_skupina        (CERMAT JPZ 2017–2023, rok × skupina oborů)       [plán]
-organizace ────┼──< maturita           (CERMAT MZ 2015+, rok × období × SMO16 × předmět) [plán]
+organizace ────┼──< maturita           (CERMAT MZ 2015+, rok × období × SMO16 × předmět) [hotovo]
                ├──< inspekce           (ČŠI, datum × PDF)                                [plán]
                └──< web_profil         (infoabsolvent / Atlas, datum scrapování)         [plán]
 ```
 
-Plné čáry jsou implementované (importér MŠMT), hranaté závorky označují
-tabulky navržené pro další importéry. CERMAT do roku 2023 a maturita nemají
-IZO, proto se váží na organizaci (REDIZO), ne na školu.
+Plné čáry jsou implementované (importéry MŠMT a CERMAT maturita), hranaté
+závorky označují tabulky navržené pro další importéry. CERMAT do roku 2023 a
+maturita nemají IZO, proto se váží na organizaci (REDIZO), ne na školu.
 
 ## Implementované tabulky (MŠMT)
 
@@ -67,6 +67,21 @@ Stav po importu pražského snapshotu z 22. 9. 2026:
 | střední školy (`C00`) | 219 |
 | aktivní obory na SŠ | 779 (190 různých KKOV) |
 
+## Implementované tabulky (CERMAT maturita)
+
+### `maturita` — CERMAT MZ 2015+
+Klíč `(redizo, rok, obdobi, smo16, predmet)`; `obdobi` je `j` (jarní) nebo
+`jap` (jaro+podzim), `smo16 = 'CELKEM'` pro řádek za celou školu (jinak kód
+skupiny oborů SMO16, např. `LYC`, `SEK`), `predmet` je `CELKEM` (souhrn za
+celou společnou část MZ, bez skóru/percentilu) nebo `CJ/MA/AJ/NJ/RJ/FJ/SJ`.
+Sloupce: přihlášeni, konali, uspěli, neuspěli, nekonali, průměrný % skór,
+směrodatná odchylka % skóru, průměrný percentil, podíl úspěšných, čistá
+neúspěšnost, podíl volby předmětu (jen u volitelných předmětů, ne ČJ ani
+CELKEM). Bez cizího klíče na `organizace` — CERMAT zahrnuje i školy mimo
+Prahu a zaniklé školy, které v rejstříku MŠMT nejsou; filtr na Prahu se dělá
+JOINem v dotazech (nebo `--jen-praha` při importu). Zdroj:
+[`research/cermat.md`](research/cermat.md), oddíly 4, 7, 9, 10.
+
 ## Plánované tabulky (návrh)
 
 ### `prijimaci_rizeni` — CERMAT JPZ, nový formát 2024+
@@ -80,11 +95,6 @@ Zdroj: [`research/cermat.md`](research/cermat.md), oddíl 6.
 Klíč `(redizo, skupina_oboru, rocnik, rok)`. Přihlášeni, konali, průměrné
 percentilové umístění a směrodatná odchylka za ČJ a MA. Bez IZO a KKOV, jen
 pro dlouhé trendy.
-
-### `maturita` — CERMAT MZ 2015+
-Klíč `(redizo, rok, obdobi, smo16, predmet)`; `smo16 = 'CELKEM'` pro celou
-školu. Přihlášeni, konali, uspěli, neuspěli, nekonali, průměrný % skór,
-percentil, čistá neúspěšnost, podíl volby předmětu.
 
 ### `inspekce` — ČŠI
 Klíč `(redizo, datum_od)`. `datum_do`, `pdf_url`, `portal_url`, později

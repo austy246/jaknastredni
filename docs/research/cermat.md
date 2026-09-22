@@ -121,13 +121,64 @@ Ověřeno na `MZ2017j_SC_skolobory.xlsx` a `MZ2026j_SC_skolobory.xlsx` (oba: 2 l
 - Nebyl ověřen skutečný obsah 2. kola PZ 2026 (odkaz existuje, ale sezóna 2026 probíhá – soubor může být částečně prázdný/neaktuální k 22.9.2026).
 - Nebyly stahovány ani kontrolovány soubory „uchazeci_prihlasky_vysledky" (jednotlivé přihlášky uchazečů) ani položková data po úlohách – mimo scope „po školách", ale mohou být zajímavé pro budoucí rozšíření.
 - Power BI dashboard nebyl analyzován v prohlížeči/přes network trace (jen statický HTML), takže existence případného skrytého JSON API nebyla zcela vyloučena, jen nebyla nalezena v dostupném statickém kódu.
-- Nebyly ověřeny hlavičky souborů MZ za roky 2018–2025 (jen 2017 a 2026) a JPZ nový formát za roky 2024–2025 (jen 2026) – doporučeno doověřit před importem (bod 10.8).
+- Hlavičky souborů MZ za roky 2018–2025 a JPZ nový formát za roky 2024–2025 byly doověřeny dodatečně, viz oddíl 12 (MZ) — JPZ 2024–2025 zůstává neověřené.
 
-## Přílohy (staženo do scratchpadu, ne v repu)
+## 12. Porovnání hlaviček MZ 2015–2026 (ověřeno před importem importéru `cermat_mz.py`)
+
+Staženo a porovnáno všech **24 souborů** `MZ{rok}{j,jap}_SC_skolobory.xlsx` pro
+roky 2015–2026 (oba soubory za každý rok). Hlavička je vždy na **řádku 2**
+(řádek 1 je sloučený titulek), datová oblast začíná řádkem 3. Zjištění:
+
+- **Sloupce od `TŘÍDĚNÍ` dál (fixní identifikační sloupce i všechny bloky
+  předmětů) mají naprosto stejný název a pořadí ve všech 24 souborech.**
+  Bloky předmětů jsou vždy v pořadí `SPOLEČNÁ ČÁST MZ CELKEM` (9 sloupců,
+  bez skóru/percentilu, jen počty a dvě míry neúspěšnosti navíc – „hrubá
+  neúspěšnost" a „neúčast"), `ČESKÝ JAZYK` (10 sloupců, bez podílu volby
+  předmětu – ČJ je povinný), `MATEMATIKA, ANGLIČTINA, NĚMČINA, RUŠTINA,
+  FRANCOUZŠTINA, ŠPANĚLŠTINA` (po 11 sloupcích, včetně podílu volby
+  předmětu – volí se mezi MA a cizím jazykem). Celkem 11 fixních + 85
+  předmětových = 96 sloupců od `TŘÍDĚNÍ`.
+- **Liší se jen počet a pojmenování 0–2 úvodních ID sloupců před `TŘÍDĚNÍ`**:
+  - `j` soubory **2015–2017**: žádné úvodní sloupce, `TŘÍDĚNÍ` je sloupec A
+    (96 sloupců celkem).
+  - `j` soubory **2018–2026**: dva úvodní sloupce `entita_id_row, id_row`
+    (98 sloupců).
+  - `jap` soubory **2015–2024**: dva úvodní sloupce, ale **nepojmenované** –
+    1. sloupec má prázdnou hlavičku (`None`), 2. sloupec se jmenuje `entita`
+    (98 sloupců).
+  - `jap` soubory **2025–2026**: stejné dva sloupce, nově pojmenované
+    `entita_id_row, id_row` (98 sloupců) – sjednoceno s `j`.
+  - Žádný jiný rozdíl (počet listů, typy řádků, hodnoty ve sloupci
+    `TŘÍDĚNÍ`) mezi roky nalezen nebyl.
+- **Důsledek pro parser**: mapovat sloupce podle jména hledáním `TŘÍDĚNÍ`,
+  `ROK`, `REDIZO`, `SMO16` a `KRAJ - NÁZEV` v hlavičce (řádek 2) a bloky
+  předmětů počítat pozičně od prvního sloupce za `KRAJ - NÁZEV` v pevně
+  daných šířkách (9/10/11×6) – funguje shodně pro všech 24 souborů bez
+  ohledu na úvodní ID sloupce. Přesně to dělá `jaknastredni/cermat_mz.py`.
+- **REDIZO** je v části souborů uloženo jako číslo (např. `2026 jap`), v
+  jiných jako text (`2017 j`) – nutné normalizovat na 9místný textový řetězec
+  se zleva doplněnými nulami.
+- **Chybějící hodnoty** (typicky cizí jazyky, které na dané škole nikdo
+  nepsal) nejsou `None`/prázdné buňky, ale doslovný řetězec `"-"` – parser ho
+  převádí na `NULL`.
+- Ověřeno na referenční škole REDIZO 600006573 (Obchodní akademie, Heroldovy
+  sady): řádek CELKEM/CELKEM v `MZ2026j_SC_skolobory.xlsx` dává přihlášeno
+  116, konalo 113, uspělo 111, neuspělo 2, nekonalo 3 – shoduje se s
+  příkladem v oddílu 7.
+
+Maturitní soubory jsou napříč 2015–2026 bezpečně importovatelné jedním
+parserem; JPZ nový formát (2024–2025) zůstává neověřený a je otevřenou
+otázkou pro příští importér (JPZ 2024+).
+
+## Přílohy
+Soubory JPZ (oddíl 5–6) zůstaly jen ve scratchpadu průzkumu, mimo repo:
 - `<scratchpad>/cermat/files/JPZ2017_skoly-skolobory_vysledky.xlsx`
 - `<scratchpad>/cermat/files/JPZ2020_skoly-skolobory_vysledky.xlsx`
 - `<scratchpad>/cermat/files/JPZ2023_skoly-skolobory_vysledky.xlsx`
 - `<scratchpad>/cermat/files/PZ2026_kolo1_skolobory_{vysledky,prihlasky,kapacity}.xlsx`
-- `<scratchpad>/cermat/files/MZ2017j_SC_skolobory.xlsx`
-- `<scratchpad>/cermat/files/MZ2026j_SC_skolobory.xlsx`
 - `<scratchpad>/cermat/files/PZ2024-2026_agregace_typskoly_region_prihlasky.xlsx`
+
+Soubory maturity `MZ{rok}{j,jap}_SC_skolobory.xlsx` (2015–2026, 24 souborů)
+jsou naimportované a uložené v repu v `data/raw/cermat/` (rozhodnutí uložit
+i syrová data do repa, ne jen do `.gitignore`d `data/`, viz README, sekce
+„Rozhodnutí o ukládání dat").

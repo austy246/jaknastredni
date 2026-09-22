@@ -123,6 +123,31 @@ CREATE TABLE IF NOT EXISTS obor (
 );
 CREATE INDEX IF NOT EXISTS ix_obor_kkov ON obor(kod_kkov);
 
+-- Maturitní výsledky po školách (CERMAT MZ, agregovaná data 2015+).
+-- REDIZO je bez cizího klíče na organizace: CERMAT zahrnuje i školy mimo
+-- Prahu a mezitím zaniklé školy, které v rejstříku MŠMT nejsou; filtrování
+-- na Prahu se dělá JOINem v dotazech, ne omezením při importu.
+CREATE TABLE IF NOT EXISTS maturita (
+    redizo                  TEXT    NOT NULL,
+    rok                     INTEGER NOT NULL,
+    obdobi                  TEXT    NOT NULL,   -- 'j' jarní, 'jap' jaro+podzim
+    smo16                   TEXT    NOT NULL,   -- skupina oborů; 'CELKEM' = celá škola
+    predmet                 TEXT    NOT NULL,   -- 'CELKEM','CJ','MA','AJ','NJ','RJ','FJ','SJ'
+    prihlaseni              INTEGER,
+    konali                  INTEGER,
+    uspeli                  INTEGER,
+    neuspeli                INTEGER,
+    nekonali                INTEGER,
+    prumerny_skor           REAL,               -- PRŮMĚRNÝ % SKÓR (chybí u předmětu CELKEM)
+    smerodatna_odchylka     REAL,               -- SMĚRODATNÁ ODCHYLKA % SKÓRU
+    prumerny_percentil      REAL,               -- PRŮMĚRNÉ PERCENTILOVÉ UMÍSTĚNÍ
+    podil_uspesnych         REAL,               -- PODÍL ÚSPĚŠNÝCH (%)
+    cista_neuspesnost       REAL,               -- ČISTÁ NEÚSPĚŠNOST (%)
+    podil_volby_predmetu    REAL,               -- jen u volitelných předmětů (ne CJ, ne CELKEM)
+    PRIMARY KEY (redizo, rok, obdobi, smo16, predmet)
+);
+CREATE INDEX IF NOT EXISTS ix_maturita_redizo ON maturita(redizo);
+
 -- Pohled: střední školy s organizací (nejčastější dotaz).
 CREATE VIEW IF NOT EXISTS v_stredni_skola AS
 SELECT s.izo, s.redizo, o.nazev AS organizace, s.nazev AS skola, s.druh,
