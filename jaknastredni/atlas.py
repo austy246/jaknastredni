@@ -48,6 +48,7 @@ Schéma JSON blobu v `web_profil.data` (zdroj `'atlas'`):
                 "prijimaci_zkousky": str | None,
                 "plp": bool | None,
                 "ozp": bool | None,
+                "skolne_rocne": int | None,
                 "doporuceny_prospech": float | None,
             },
             ...
@@ -99,12 +100,17 @@ ZDROJ = "atlas"
 
 _SKOLA_HREF_RE = re.compile(r"^/ss(\d+)-[^/?]+$")
 _REDIZO_RE = re.compile(r"(\d{9})")
-_KKOV_RE = re.compile(r"^(.*?)\s*\(([\w/\-]+)\)\s*$")
+_SLASH_RE = re.compile(r"(\d+)\s*/\s*(\d+)")
 
-# Popisky v boxu "Doplňující informace" (h3 nadpis + text v následujícím <p>).
-_DOPLNUJICI_LABELS = {
+# Popisky nadpisů <h2> v `div.description` (volný text v následujícím
+# `<article><div>...</div></article>`).
+_POPIS_HEADING_LABELS = {
     "Dny otevřených dveří": "dny_otevrenych_dveri",
     "Doplňující informace": "doplnujici_informace",
+}
+
+# Popisky v `ul.advinfo > li > div > strong` (hodnota je sourozenec `<span>`).
+_ADVINFO_LABELS = {
     "Cizí jazyky": "cizi_jazyky",
     "Ubytování": "ubytovani",
     "Stravování": "stravovani",
@@ -143,9 +149,15 @@ class RateLimitedSession:
 # --------------------------------------------------------------------------- seznam
 
 def _parse_maxpages(html: str) -> int:
-    """Vrátí počet stran seznamu z `div.pagination[data-maxpages]` (1, pokud chybí)."""
+    """Vrátí počet stran seznamu (1, pokud chybí).
+
+    Skutečné HTML (ověřeno živě, liší se od dřívějšího průzkumu) má
+    `data-maxpages` na vnořeném `<div>` uvnitř `<div class="pagination">`, ne
+    na tomtéž elementu, který nese třídu `pagination` — proto `div[data-maxpages]`,
+    ne `div.pagination[data-maxpages]`.
+    """
     soup = BeautifulSoup(html, "html.parser")
-    div = soup.select_one("div.pagination[data-maxpages]")
+    div = soup.select_one("div.pagination div[data-maxpages]")
     if not div:
         return 1
     try:
@@ -185,9 +197,13 @@ def _text(el: Tag | None) -> str | None:
 
 
 def _int(text: str | None) -> int | None:
+    """Vytáhne první celé číslo z textu. Odstraňuje i pevnou mezeru `\\xa0`
+    použitou na atlasskolstvi.cz jako oddělovač tisíců (např. "74\\xa0800 Kč"),
+    ne jen obyčejnou mezeru — jinak by se číslo useklo na první skupinu.
+    """
     if not text:
         return None
-    m = re.search(r"-?\d+", text.replace(" ", ""))
+    m = re.search(r"-?\d+", re.sub(r"\s", "", text))
     return int(m.group()) if m else None
 
 
@@ -210,90 +226,141 @@ def _bool_ano_ne(text: str | None) -> bool | None:
 
 
 def _extract_redizo(soup: BeautifulSoup) -> str | None:
-    """Přečte REDIZO z čitelného textu stránky (`<strong>Redizo:</strong> 600004686`),
-    viz docs/research/atlas-infoabsolvent.md, oddíl 1.3 — Atlas ho na rozdíl od
-    infoabsolventu nemá v URL.
+    """Přečte REDIZO z čitelného textu stránky (`<strong>Redizo:</strong> 600004686`,
+    ve `<li>` sdíleném se Zřizovatelem a IČ), viz
+    docs/research/atlas-infoabsolvent.md, oddíl 1.3 — Atlas ho na rozdíl od
+    infoabsolventu nemá v URL. Čte se z textového uzlu hned za `<strong>`, ne
+    z celého okolního textu (ten obsahuje i IČ, což je taky číslo).
     """
     strong = soup.find("strong", string=re.compile(r"Redizo"))
     if strong is None:
         return None
+    tail = strong.next_sibling
+    text = str(tail) if tail is not None else ""
+    m = _REDIZO_RE.search(text)
+    if m:
+        return m.group(1)
+    # záložní varianta: celý text rodiče (pro neočekávanou strukturu)
     parent = strong.parent
-    text = parent.get_text(" ", strip=True) if parent is not None else (strong.next_sibling or "")
-    m = _REDIZO_RE.search(str(text))
-    return m.group(1) if m else None
+    if parent is not None:
+        m = _REDIZO_RE.search(parent.get_text(" ", strip=True))
+        return m.group(1) if m else None
+    return None
 
 
 def _parse_doplnujici(soup: BeautifulSoup) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    box = soup.select_one("div.doplnujiciInfo")
-    if box is None:
-        return out
-    for h3 in box.select("h3"):
-        key = _DOPLNUJICI_LABELS.get(h3.get_text(strip=True))
-        if not key:
-            continue
-        p = h3.find_next_sibling("p")
-        val = _text(p)
-        if val:
-            out[key] = val
+    desc = soup.select_one("div.description")
+    if desc is not None:
+        for h2 in desc.select("h2"):
+            key = _POPIS_HEADING_LABELS.get(h2.get_text(strip=True))
+            if not key:
+                continue
+            article = h2.find_next_sibling("article")
+            if article is None:
+                continue
+            div = article.select_one("div")
+            val = _text(div) if div is not None else _text(article)
+            if val:
+                out[key] = val
+    advinfo = soup.select_one("ul.advinfo")
+    if advinfo is not None:
+        for li in advinfo.select("li"):
+            strong = li.select_one("strong")
+            if strong is None:
+                continue
+            key = _ADVINFO_LABELS.get(strong.get_text(strip=True))
+            if not key:
+                continue
+            val = _text(li.select_one("span"))
+            if val:
+                out[key] = val
     return out
 
 
 def _find_cell(tr: Tag, prefix: str) -> Tag | None:
-    """Najde `<td data-name="...">` podle prefixu popisku sloupce — hlavičky
-    "Přijmou {rok}/{rok+1}" a "Přihl./přij. {rok-1}/{rok}" mají rok zapečený
-    v textu, proto se nepárují přesnou shodou, ale prefixem.
+    """Najde `<th>`/`<td data-name="...">` podle prefixu popisku sloupce —
+    hlavičky "Přijmou {rok}/{rok+1}" a "Přihl./přij. {rok-1}/{rok}" mají rok
+    zapečený v textu (a chybí úplně, když škola loňská data nemá), proto se
+    nepárují přesnou shodou, ale prefixem.
     """
-    for td in tr.select("td[data-name]"):
-        if td["data-name"].startswith(prefix):
-            return td
+    for el in tr.select("[data-name]"):
+        if el["data-name"].startswith(prefix):
+            return el
     return None
 
 
-def _split_nazev_kkov(text: str | None) -> tuple[str | None, str | None]:
-    if not text:
-        return None, None
-    m = _KKOV_RE.match(text)
-    if m:
-        return m.group(1).strip(), m.group(2).strip()
-    return text.strip(), None
+def _parse_obor_header_row(tr: Tag) -> dict[str, Any]:
+    """Naparsuje první ze dvou `<tr>`, které v `table.sslist` tvoří jeden obor
+    — obsahuje buňku `data-name="Obor, zaměření, kód oboru KKOV"` (název v
+    `<strong>` uvnitř `<a>`, kód KKOV v sourozeneckém `<span>`), ukončení
+    studia (typ v `<strong>`, délka v `<span>`), plán přijmout, loňský
+    přihlášení/přijatí (odděleno lomítkem), přijímací zkoušky, PLP, OZP.
+    """
+    obor_cell = _find_cell(tr, "Obor")
+    nazev_oboru = kod_kkov = None
+    if obor_cell is not None:
+        nazev_oboru = _text(obor_cell.select_one("strong")) or _text(obor_cell)
+        kod_kkov = _text(obor_cell.select_one("span"))
 
+    ukonceni_cell = _find_cell(tr, "Ukončení")
+    typ_ukonceni = delka_studia = None
+    if ukonceni_cell is not None:
+        typ_ukonceni = _text(ukonceni_cell.select_one("strong"))
+        delka_studia = _text(ukonceni_cell.select_one("span"))
 
-def _parse_obor_row(tr: Tag) -> dict[str, Any]:
-    nazev_kkov = _text(_find_cell(tr, "Obor"))
-    nazev_oboru, kod_kkov = _split_nazev_kkov(nazev_kkov)
-
-    prihl_prijati = _text(_find_cell(tr, "Přihl./přij."))
+    prihl_prijati_text = _text(_find_cell(tr, "Přihl./přij."))
     loni_prihlaseni = loni_prijati = None
-    if prihl_prijati and "/" in prihl_prijati:
-        a, b = prihl_prijati.split("/", 1)
-        loni_prihlaseni, loni_prijati = _int(a), _int(b)
+    if prihl_prijati_text:
+        m = _SLASH_RE.search(prihl_prijati_text)
+        if m:
+            loni_prihlaseni, loni_prijati = int(m.group(1)), int(m.group(2))
 
-    row: dict[str, Any] = {
+    return {
         "nazev_oboru": nazev_oboru,
         "kod_kkov": kod_kkov,
-        "typ_ukonceni": _text(_find_cell(tr, "Typ ukončení")),
-        "delka_studia": _text(_find_cell(tr, "Délka studia")),
+        "typ_ukonceni": typ_ukonceni,
+        "delka_studia": delka_studia,
         "planovany_pocet_prijmout": _int(_text(_find_cell(tr, "Přijmou"))),
         "loni_prihlaseni": loni_prihlaseni,
         "loni_prijati": loni_prijati,
         "prijimaci_zkousky": _text(_find_cell(tr, "Přijímací zkoušky")),
         "plp": _bool_ano_ne(_text(_find_cell(tr, "PLP"))),
         "ozp": _bool_ano_ne(_text(_find_cell(tr, "OZP"))),
-        "doporuceny_prospech": _float(_text(_find_cell(tr, "Doporučený prospěch"))),
     }
-    return {k: v for k, v in row.items() if v is not None}
+
+
+def _merge_obor_continuation_row(row: dict[str, Any], tr: Tag) -> None:
+    """Doplní do rozestavěného řádku oboru druhý ze dvou `<tr>` (`class="nobg"`):
+    školné a doporučený prospěch."""
+    skolne = _int(_text(_find_cell(tr, "Školné")))
+    if skolne is not None:
+        row["skolne_rocne"] = skolne
+    prospech = _float(_text(_find_cell(tr, "Doporučený prospěch")))
+    if prospech is not None:
+        row["doporuceny_prospech"] = prospech
 
 
 def _parse_obory(soup: BeautifulSoup) -> list[dict[str, Any]]:
+    """Naparsuje `table.sslist` — každý obor zabírá DVA `<tr>` (hlavní řádek +
+    `<tr class="nobg">` se školným/prospěchem), proto se páruje průchodem
+    seznamu řádků, ne 1:1 na `<tr>`. Řádky-oddělovače sekcí ("Dálkové
+    studium:", "Nástavby:") nemají buňku oboru ani školné/prospěch — přeskočí
+    se, aniž by přerušily rozestavěný obor.
+    """
     out: list[dict[str, Any]] = []
-    for table in soup.select("table.oborTable"):
-        for tr in table.select("tbody tr"):
-            if not tr.select_one("td[data-name]"):
-                continue
-            row = _parse_obor_row(tr)
-            if row:
-                out.append(row)
+    current: dict[str, Any] | None = None
+    for tr in soup.select("table.sslist tbody tr"):
+        if _find_cell(tr, "Obor") is not None:
+            if current is not None:
+                out.append({k: v for k, v in current.items() if v is not None})
+            current = _parse_obor_header_row(tr)
+        elif current is not None and (
+            _find_cell(tr, "Školné") is not None or _find_cell(tr, "Doporučený prospěch") is not None
+        ):
+            _merge_obor_continuation_row(current, tr)
+    if current is not None:
+        out.append({k: v for k, v in current.items() if v is not None})
     return out
 
 
