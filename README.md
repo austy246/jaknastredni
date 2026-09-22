@@ -323,6 +323,23 @@ Podrobně: [`docs/research/dalsi-zdroje.md`](docs/research/dalsi-zdroje.md)
   jen PDF se souhrnnými statistikami.
 - `FilipSivak/cermat-data` — jednorázový snapshot z roku 2020, zastaralé.
 
+### 11. Statistické výkazy MŠMT/ÚIV (výkonové ukazatele školství)
+**Zvažováno, neověřeno.** `data.uiv.cz` / `stistko.msmt.cz` by měly
+publikovat po školách počty žáků, tříd a pedagogů ze statistických výkazů
+(řada S), tedy dopočitatelný **poměr žák/učitel a průměrnou velikost
+třídy** — metriku kvality, kterou žádný z výše ověřených zdrojů nemá.
+Potřeba ověřit dostupnost, formát a granularitu (škola vs. IZO) stažením,
+jako u ostatních zdrojů.
+
+### 12. PID / Golemio GTFS (dopravní dostupnost MHD)
+**Zvažováno, neověřeno.** Alternativa k převzetí statického
+`transit_graph.json` z `tangero/stredniskoly` (bod 10, neověřená licence)
+— aktuální a udržovaná otevřená data Pražské integrované dopravy (GTFS
+přes Golemio/PID) by šla použít pro vlastní dopočet reálné dojezdové doby
+MHD ze zadané adresy do každé školy, bez závislosti na cizím scraperu.
+Potřeba ověřit endpoint, licenci a formát (GTFS/GTFS-RT) a rozsah práce na
+routing výpočtu.
+
 ## Kontrolní součty: kolik je v Praze středních škol
 
 | Zdroj | Počet | Poznámka |
@@ -369,3 +386,6 @@ JPZ). Rejstřík MŠMT je referenční množina.
 - Konzistence hlaviček CERMAT souborů v neověřených letech (JPZ 2024–2025,
   MZ 2018–2025) — ověřit před ostrým importem.
 - Struktura sekcí v ČŠI PDF napříč šablonami různých let.
+- Body 11 a 12 (výkonové ukazatele MŠMT/ÚIV, PID/Golemio GTFS) jsou zatím
+  jen nápady bez ověření stažením — než se implementují, potřebují stejný
+  research postup jako zdroje 1–6.
