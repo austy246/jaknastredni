@@ -163,6 +163,30 @@ CREATE TABLE IF NOT EXISTS inspekce (
 );
 CREATE INDEX IF NOT EXISTS ix_inspekce_redizo ON inspekce(redizo);
 
+-- Výsledky jednotné přijímací zkoušky (JPZ) po školách a oborových skupinách,
+-- CERMAT „starý formát" 2017–2023 (od 2024 nahrazeno mnohem granulárnější
+-- tabulkou prijimaci_rizeni podle IZO+KKOV). Bez IZO a bez KKOV — jen hrubá
+-- „oborová skupina" (GY8, GY4, LYC, 4LETÉ OBORY, ...). Metrika úspěšnosti je
+-- průměrné percentilové umístění (0–100), ne bodové skóre. Stejně jako
+-- maturita bez cizího klíče na organizace (školy mimo Prahu, zaniklé školy);
+-- filtrování na Prahu se dělá JOINem, nebo --jen-praha při importu.
+CREATE TABLE IF NOT EXISTS jpz_skupina (
+    redizo                  TEXT    NOT NULL,
+    skupina_oboru           TEXT    NOT NULL,   -- 'GY8','GY6','GY4','LYC','4LETÉ OBORY','SEK','NAS',...
+    rocnik                  INTEGER NOT NULL,
+    rok                     INTEGER NOT NULL,
+    prihlaseni_cj           INTEGER,
+    konali_cj               INTEGER,
+    prumerny_percentil_cj   REAL,
+    smerodatna_odchylka_cj  REAL,
+    prihlaseni_ma           INTEGER,
+    konali_ma               INTEGER,
+    prumerny_percentil_ma   REAL,
+    smerodatna_odchylka_ma  REAL,
+    PRIMARY KEY (redizo, skupina_oboru, rocnik, rok)
+);
+CREATE INDEX IF NOT EXISTS ix_jpz_skupina_redizo ON jpz_skupina(redizo);
+
 -- Pohled: střední školy s organizací (nejčastější dotaz).
 CREATE VIEW IF NOT EXISTS v_stredni_skola AS
 SELECT s.izo, s.redizo, o.nazev AS organizace, s.nazev AS skola, s.druh,
