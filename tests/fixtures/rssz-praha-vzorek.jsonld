@@ -1,0 +1,394 @@
+{
+ "@context": "http://msmt.cz/",
+ "datumVystupu": "2026-09-22",
+ "list": [
+  {
+   "redIzo": "600006573",
+   "ico": "61385387",
+   "kraj": "Hlavní město Praha",
+   "uplnyNazev": "Obchodní akademie, Praha 10, Heroldovy sady 1",
+   "zkracenyNazev": "Obchodní akademie",
+   "adresa": {
+    "ulice": "Heroldovy sady",
+    "cisloDomovni": 362,
+    "typCislaDomovniho": "č.p.",
+    "cisloOrientacni": 1,
+    "dodatekOrientacnihoCisla": null,
+    "obec": "Praha",
+    "castObce": "Vršovice",
+    "cisloObvoduPrahy": "Praha 10",
+    "psc": "101 00",
+    "kodRUIAN": 22658289,
+    "okres": "CZ010A",
+    "uzemiDleORP": "CZ01100"
+   },
+   "pravniForma": "331",
+   "typZrizovatele": "7",
+   "emaily": [
+    "test@example.cz"
+   ],
+   "platnostNaDobuNeurcitou": true,
+   "reditel": {
+    "nazevOsoby": "Testovací Ředitel",
+    "reditelJeStatutar": true,
+    "datumVznikuFunkce": "2008-08-19",
+    "adresa": "-"
+   },
+   "statutarniOrgany": [],
+   "zrizovatele": [
+    {
+     "druhOsoby": "PO",
+     "pravniForma": "804",
+     "datumNarozeni": null,
+     "ico": "00064581",
+     "nazevOsoby": "Hlavní město Praha",
+     "adresa": "-"
+    }
+   ],
+   "skolyAZarizeni": [
+    {
+     "izo": "000638510",
+     "uplnyNazev": "Střední škola",
+     "druh": "C00",
+     "jazyk": "100",
+     "kapacity": [
+      {
+       "mernaJednotka": "01",
+       "nejvyssiPovolenyPocet": 500
+      }
+     ],
+     "mistaVyuky": [
+      {
+       "IDmista": "000638510",
+       "typ": "C31",
+       "adresa": {
+        "ulice": "Heroldovy sady",
+        "cisloDomovni": 362,
+        "typCislaDomovniho": "č.p.",
+        "cisloOrientacni": 1,
+        "dodatekOrientacnihoCisla": null,
+        "obec": "Praha",
+        "castObce": "Vršovice",
+        "cisloObvoduPrahy": "Praha 10",
+        "psc": "101 00",
+        "kodRUIAN": 22658289,
+        "okres": null,
+        "uzemiDleORP": null
+       }
+      }
+     ],
+     "obory": [
+      {
+       "kod": "63-41-M/02",
+       "nazev": "Obchodní akademie",
+       "formaVzdelavani": "10",
+       "delkaVzdelavani": "40",
+       "jazykOboru": "10",
+       "kapacita": 240,
+       "mernaJednotkaKapacit": "01",
+       "dobihajiciObor": false
+      },
+      {
+       "kod": "78-42-M/02",
+       "nazev": "Ekonomické lyceum",
+       "formaVzdelavani": "10",
+       "delkaVzdelavani": "40",
+       "jazykOboru": "10",
+       "kapacita": 360,
+       "mernaJednotkaKapacit": "01",
+       "dobihajiciObor": false
+      },
+      {
+       "kod": "78-42-M/08",
+       "nazev": "Lyceum (režim pokusného ověřování)",
+       "formaVzdelavani": "10",
+       "delkaVzdelavani": "40",
+       "jazykOboru": "10",
+       "kapacita": 136,
+       "mernaJednotkaKapacit": "01",
+       "dobihajiciObor": false
+      }
+     ],
+     "datumZapisu": "2005-01-01",
+     "datumZahajeniCinnosti": "1996-05-16"
+    }
+   ]
+  },
+  {
+   "redIzo": "600004562",
+   "ico": "70837783",
+   "kraj": "Hlavní město Praha",
+   "uplnyNazev": "Vyšší odborná škola grafická a Střední průmyslová škola grafická, Praha 1, Hellichova 22",
+   "zkracenyNazev": "VOŠ grafická a SPŠ grafická",
+   "adresa": {
+    "ulice": "Hellichova",
+    "cisloDomovni": 535,
+    "typCislaDomovniho": "č.p.",
+    "cisloOrientacni": 22,
+    "dodatekOrientacnihoCisla": null,
+    "obec": "Praha",
+    "castObce": "Malá Strana",
+    "cisloObvoduPrahy": "Praha 1",
+    "psc": "118 00",
+    "kodRUIAN": 21700281,
+    "okres": "CZ0101",
+    "uzemiDleORP": "CZ01100"
+   },
+   "pravniForma": "331",
+   "typZrizovatele": "7",
+   "emaily": [
+    "test@example.cz"
+   ],
+   "platnostNaDobuNeurcitou": true,
+   "reditel": {
+    "nazevOsoby": "Testovací Ředitel",
+    "reditelJeStatutar": true,
+    "datumVznikuFunkce": "2017-09-01",
+    "adresa": "-"
+   },
+   "statutarniOrgany": [],
+   "zrizovatele": [
+    {
+     "druhOsoby": "PO",
+     "pravniForma": "804",
+     "datumNarozeni": null,
+     "ico": "00064581",
+     "nazevOsoby": "HLAVNÍ MĚSTO PRAHA",
+     "adresa": "-"
+    }
+   ],
+   "skolyAZarizeni": [
+    {
+     "izo": "000638595",
+     "uplnyNazev": "Střední škola",
+     "druh": "C00",
+     "jazyk": "100",
+     "kapacity": [
+      {
+       "mernaJednotka": "01",
+       "nejvyssiPovolenyPocet": 330
+      }
+     ],
+     "mistaVyuky": [
+      {
+       "IDmista": "000638595",
+       "typ": "C31",
+       "adresa": {
+        "ulice": "Hellichova",
+        "cisloDomovni": 535,
+        "typCislaDomovniho": "č.p.",
+        "cisloOrientacni": 22,
+        "dodatekOrientacnihoCisla": null,
+        "obec": "Praha",
+        "castObce": "Malá Strana",
+        "cisloObvoduPrahy": "Praha 1",
+        "psc": "118 00",
+        "kodRUIAN": 21700281,
+        "okres": null,
+        "uzemiDleORP": null
+       }
+      },
+      {
+       "IDmista": "151010366",
+       "typ": "C10",
+       "adresa": {
+        "ulice": "Maltézské náměstí",
+        "cisloDomovni": 472,
+        "typCislaDomovniho": "č.p.",
+        "cisloOrientacni": 16,
+        "dodatekOrientacnihoCisla": null,
+        "obec": "Praha",
+        "castObce": "Malá Strana",
+        "cisloObvoduPrahy": "Praha 1",
+        "psc": "118 00",
+        "kodRUIAN": 21699569,
+        "okres": null,
+        "uzemiDleORP": null
+       }
+      }
+     ],
+     "obory": [
+      {
+       "kod": "82-41-M/02",
+       "nazev": "Užitá fotografie a média",
+       "formaVzdelavani": "10",
+       "delkaVzdelavani": "40",
+       "jazykOboru": "10",
+       "kapacita": 60,
+       "mernaJednotkaKapacit": "01",
+       "dobihajiciObor": false
+      },
+      {
+       "kod": "82-42-M/01",
+       "nazev": "Konzervátorství a restaurátorství",
+       "formaVzdelavani": "10",
+       "delkaVzdelavani": "40",
+       "jazykOboru": "10",
+       "kapacita": 60,
+       "mernaJednotkaKapacit": "01",
+       "dobihajiciObor": false
+      },
+      {
+       "kod": "82-41-M/05",
+       "nazev": "Grafický design",
+       "formaVzdelavani": "10",
+       "delkaVzdelavani": "40",
+       "jazykOboru": "10",
+       "kapacita": 120,
+       "mernaJednotkaKapacit": "01",
+       "dobihajiciObor": false
+      },
+      {
+       "kod": "34-41-M/01",
+       "nazev": "Polygrafie",
+       "formaVzdelavani": "10",
+       "delkaVzdelavani": "40",
+       "jazykOboru": "10",
+       "kapacita": 180,
+       "mernaJednotkaKapacit": "01",
+       "dobihajiciObor": false
+      }
+     ],
+     "datumZapisu": "2005-01-01",
+     "datumZahajeniCinnosti": "1996-11-12"
+    },
+    {
+     "izo": "110025962",
+     "uplnyNazev": "Vyšší odborná škola",
+     "druh": "E00",
+     "jazyk": "100",
+     "kapacity": [
+      {
+       "mernaJednotka": "05",
+       "nejvyssiPovolenyPocet": 180
+      }
+     ],
+     "mistaVyuky": [
+      {
+       "IDmista": "110025962",
+       "typ": "E11",
+       "adresa": {
+        "ulice": "Hellichova",
+        "cisloDomovni": 535,
+        "typCislaDomovniho": "č.p.",
+        "cisloOrientacni": 22,
+        "dodatekOrientacnihoCisla": null,
+        "obec": "Praha",
+        "castObce": "Malá Strana",
+        "cisloObvoduPrahy": "Praha 1",
+        "psc": "118 00",
+        "kodRUIAN": 21700281,
+        "okres": null,
+        "uzemiDleORP": null
+       }
+      },
+      {
+       "IDmista": "151010374",
+       "typ": "E11",
+       "adresa": {
+        "ulice": "Maltézské náměstí",
+        "cisloDomovni": 472,
+        "typCislaDomovniho": "č.p.",
+        "cisloOrientacni": 16,
+        "dodatekOrientacnihoCisla": "",
+        "obec": "Praha",
+        "castObce": "Malá Strana",
+        "cisloObvoduPrahy": "Praha 1",
+        "psc": "118 00",
+        "kodRUIAN": 21699569,
+        "okres": null,
+        "uzemiDleORP": null
+       }
+      }
+     ],
+     "obory": [
+      {
+       "kod": "82-41-N/05",
+       "nazev": "Grafický design a realizace tiskovin",
+       "formaVzdelavani": "10",
+       "delkaVzdelavani": "30",
+       "jazykOboru": "10",
+       "kapacita": 180,
+       "mernaJednotkaKapacit": "05",
+       "dobihajiciObor": false
+      }
+     ],
+     "datumZapisu": "2005-01-01",
+     "datumZahajeniCinnosti": "1996-11-12"
+    }
+   ]
+  },
+  {
+   "redIzo": "600000257",
+   "ico": "25143701",
+   "kraj": "Hlavní město Praha",
+   "uplnyNazev": "Bilingvální mateřská škola pro sluchově postižené s.r.o.",
+   "zkracenyNazev": "Bilingvální MŠ pro sluch.postiž. s.r.o.",
+   "adresa": {
+    "ulice": "Hábova",
+    "cisloDomovni": 1571,
+    "typCislaDomovniho": "č.p.",
+    "cisloOrientacni": 22,
+    "dodatekOrientacnihoCisla": null,
+    "obec": "Praha",
+    "castObce": "Stodůlky",
+    "cisloObvoduPrahy": "Praha 5",
+    "psc": "155 00",
+    "kodRUIAN": 22119281,
+    "okres": "CZ0105",
+    "uzemiDleORP": "CZ01100"
+   },
+   "pravniForma": "112",
+   "typZrizovatele": "5",
+   "emaily": [
+    "test@example.cz"
+   ],
+   "platnostNaDobuNeurcitou": true,
+   "reditel": {
+    "nazevOsoby": "Testovací Ředitel",
+    "reditelJeStatutar": true,
+    "datumVznikuFunkce": "1997-01-01",
+    "adresa": "-"
+   },
+   "statutarniOrgany": [],
+   "zrizovatele": [],
+   "skolyAZarizeni": [
+    {
+     "izo": "110035585",
+     "uplnyNazev": "Mateřská škola",
+     "druh": "A00",
+     "jazyk": "100",
+     "kapacity": [
+      {
+       "mernaJednotka": "04",
+       "nejvyssiPovolenyPocet": 18
+      }
+     ],
+     "mistaVyuky": [
+      {
+       "IDmista": "110035585",
+       "typ": "A12",
+       "adresa": {
+        "ulice": "Hábova",
+        "cisloDomovni": 1571,
+        "typCislaDomovniho": "č.p.",
+        "cisloOrientacni": 22,
+        "dodatekOrientacnihoCisla": null,
+        "obec": "Praha",
+        "castObce": "Stodůlky",
+        "cisloObvoduPrahy": "Praha 5",
+        "psc": "155 00",
+        "kodRUIAN": 22119281,
+        "okres": null,
+        "uzemiDleORP": null
+       }
+      }
+     ],
+     "obory": [],
+     "datumZapisu": "2005-01-01",
+     "datumZahajeniCinnosti": "1996-09-01"
+    }
+   ]
+  }
+ ]
+}

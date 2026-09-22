@@ -1,0 +1,13 @@
+# data
+data/
+*.db
+*.db-journal
+
+# python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+dist/
+build/
