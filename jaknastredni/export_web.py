@@ -90,10 +90,19 @@ def export(conn) -> dict[str, Any]:
             "smrsteni": pruvodce.SMRSTENI,
             "min_vzorek": pruvodce.MIN_VZOREK,
             "okno_pasma": pruvodce.OKNO_PASMA,
+            "max_navrh_bodu": pruvodce.MAX_NAVRH_BODU,
             "slozky_skore": pruvodce.SLOZKY_SKORE,
             "priority": {k: {"popis": p, "slozka": s} for k, (p, s) in pruvodce.PRIORITY.items()},
             "pasma_portfolia": pruvodce.PASMA_PORTFOLIA,
         },
+        "priprava": {
+            klic: {"otazka": otazka,
+                   "varianty": {kod: {"popis": popis, "mira": mira}
+                                for kod, (popis, mira) in varianty.items()}}
+            for klic, (otazka, varianty) in pruvodce.PRIPRAVA_OTAZKY.items()
+        },
+        "terminy": {k: (v.isoformat() if hasattr(v, "isoformat") else v)
+                    for k, v in pruvodce.terminy(nabidky).items()},
         "osobnostni": {
             klic: {"otazka": otazka,
                    "varianty": {kod: {"popis": popis, "typy": typy}

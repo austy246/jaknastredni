@@ -1473,6 +1473,14 @@ def prubeh_pruvodce() -> Profil:
         [("", "ne"), ("ano", "ano, ukaž i obory s talentovou zkouškou")],
     )
 
+    # Otázky 13–15: příprava. Neptáme se „jak moc se budeš snažit" — to
+    # odpoví každý „hodně". Ptáme se na chování, které už běží, a na čas.
+    priprava: dict[str, str | None] = {}
+    for i, (klic, (otazka, varianty)) in enumerate(PRIPRAVA_OTAZKY.items(), start=13):
+        odpoved = _zeptej_se_vyber(
+            f"{i}) {otazka}", [(kod, popis) for kod, (popis, _) in varianty.items()])
+        priprava[klic] = odpoved[0] if odpoved else None
+
     return Profil(
         trida=trida,
         oblasti_zajmu=oblasti_zajmu,
@@ -1484,6 +1492,9 @@ def prubeh_pruvodce() -> Profil:
         prospech=prospech,
         priority=priority,
         talentove=bool(talentove and talentove[0]),
+        priprava_ted=priprava.get("priprava_ted"),
+        hodin_tydne=priprava.get("hodin_tydne"),
+        kurz=priprava.get("kurz"),
         po_skole=osobnostni.get("po_skole"),
         rozhodnuto=osobnostni.get("rozhodnuto"),
         praxe=osobnostni.get("praxe"),
@@ -1678,6 +1689,26 @@ def main(argv: list[str] | None = None) -> int:
             ensure_ascii=False, indent=2,
         ))
         return 0
+
+    t = terminy(nabidky)
+    if t["jpz"] or t["prihlasky_do"]:
+        casti = []
+        if t["prihlasky_do"]:
+            casti.append(f"přihlášky do {t['prihlasky_do'].strftime('%d. %m. %Y')}"
+                         f" ({t['tydnu_do_prihlasky']} týdnů)")
+        if t["jpz"]:
+            casti.append(f"jednotná zkouška {t['jpz'].strftime('%d. %m. %Y')}"
+                         f" ({t['tydnu_do_jpz']} týdnů)")
+        print("\n=== Kolik je času ===")
+        print("  " + " · ".join(casti))
+        print("  Termín přihlášky je ta tvrdší deadline — trojice škol musí být hotová dřív.")
+
+    navrh, veta = navrh_zlepseni(profil)
+    if veta:
+        print(f"\n{veta}")
+        if navrh and not profil.zlepseni_bodu:
+            print(f"  (Spusť znovu s \"zlepseni_bodu\": {navrh:.0f} v profilu, "
+                  "ať vidíš pětici pro ten cíl.)")
 
     print(f"\n=== Vyhovuje {len(vysledky)} nabídek, tady je {len(nejlepsi)} nejlepších ===")
     for h in hlasky:

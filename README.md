@@ -412,10 +412,14 @@ jednotkou je **nabídka = škola × obor** (623 denních nabídek pražských S�
 protože přihláška se podává na obor a všechna čísla (kapacita, poměr
 přihlášek, hranice přijetí) jsou oborová.
 
-Devět otázek (povinná jen první — ze které třídy se uchazeč hlásí), z nich
-tvrdé filtry (třída, typ vzdělání, oblast zájmu, školné, jazyk) a průhledné
-vážené skóre shody ze šesti složek (`zajem`, `dosazitelnost`, `kvalita`,
-`blizkost`, `cena`, `prostredi`). Výstup:
+Patnáct otázek (povinná jen první — ze které třídy se uchazeč hlásí).
+**Na typ vzdělání se neptá, odvozuje ho** ze tří osobnostních otázek
+(co po škole / máš už jasno / kolik praxe) a ukáže ho nad výsledkem jako
+zjištění. Tvrdé filtry jsou jen čtyři (třída, oblast zájmu, školné,
+talentovky), zbytek je průhledné vážené skóre shody z osmi složek
+(`zajem`, `typ`, `dosazitelnost`, `kvalita`, `blizkost`, `cena`,
+`prostredi`, `jazyk`). Kdy jsou přijímačky se taky neptá — termíny zná
+z dat a ukazuje, kolik týdnů zbývá. Výstup:
 
 - **5 nejlepších nabídek**, nejvýš jedna od každé školy, každá s důvody
   (`+`) i varováními (`!`);

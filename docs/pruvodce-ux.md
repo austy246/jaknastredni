@@ -41,7 +41,7 @@ než holé „90 %".
 
 ## Průchod otázkami
 
-Dvanáct otázek, z toho **povinná jediná** (první). Každá další jen zužuje;
+Patnáct otázek, z toho **povinná jediná** (první). Každá další jen zužuje;
 kdo nic nevyplní, dostane pětici škol s nejlepšími maturitními výsledky,
 kam se dá dostat. Pořadí je od nejvíc rozhodujícího filtru k nejjemnějšímu,
 aby se dalo kdykoli odejít s rozumným výsledkem.
@@ -58,12 +58,18 @@ aby se dalo kdykoli odejít s rozumným výsledkem.
 | 8 | Průměr na vysvědčení | číslo 1–5 | skóre `dosazitelnost` | `doporuceny_prospech` (Atlas školství) |
 | 9 | Kolik můžete dát za školné? | výběr | tvrdý filtr + skóre `cena` | `web_profil` → `skolne_rocne` |
 | 10 | Co je pro tebe nejdůležitější? (max 3) | víc možností | mění váhy složek | — |
-| 11 | Chceš mít jistotu konkrétního jazyka? | výběr | tvrdý filtr | `web_profil` → `vyucovane_jazyky` |
+| 11 | Chceš mít jistotu konkrétního jazyka? | výběr | skóre `jazyk` | `web_profil` → `vyucovane_jazyky` |
 | 12 | Děláš sport/umění závodně? | výběr | tvrdý filtr | `talentova_zkouska` |
+| 13 | Připravuješ se už teď? | výběr | návrh posuvníku | — |
+| 14 | Kolik hodin týdně reálně máš? | výběr | návrh posuvníku | — |
+| 15 | Chodíš na kurz nebo doučování? | výběr | návrh posuvníku | — |
 
-(Desátá možnost — školy zřízené pro žáky se zdravotním postižením —
-není otázka ve formuláři, ale přepínač `Profil.specialni_potreby`;
-viz „Co se do výsledku nedostane vůbec".)
+Školy zřízené pro žáky se zdravotním postižením nejsou otázka ve formuláři,
+ale přepínač `Profil.specialni_potreby` (viz „Co se do výsledku nedostane
+vůbec"). **Kdy jsou přijímačky se taky neptáme — spočítá se to**: termíny ze
+scrapu (`prihlasky_do`, `termin_jpz`) se posunou na nejbližší budoucí výskyt
+a nad výsledkem se ukáže, kolik zbývá týdnů. Ta tvrdší deadline není zkouška,
+ale **termín přihlášky** — trojice škol musí být hotová o dva měsíce dřív.
 
 Proč zrovna takhle:
 
@@ -85,25 +91,61 @@ Proč zrovna takhle:
 - **Otázka 7 se ptá na body z 50, ne na procenta.** Uchazeč dostane
   z přijímaček nanečisto „19 bodů z češtiny", ne „38 %". Převod na % skór,
   se kterým pracuje CERMAT, dělá formulář.
-- **Otázka 3 se ptá na oblasti, ne na obory.** Skupin oborů je v pražské
+- **Otázka 5 se ptá na oblasti, ne na obory.** Skupin oborů je v pražské
   nabídce 27 a jejich oficiální názvy („Obecně odborná příprava") uchazeči
   nic neříkají. `oblasti.py` je mapuje na 11 srozumitelných oblastí, které
   se **smějí překrývat** — elektrotechnika (26) patří pod „IT" i pod
   „Techniku", polygrafie (34) pod „Řemesla" i „Média". Filtr má radši
   nabídnout víc než obor schovat.
-- **Otázky 5 a 6 jsou dvě, ne jedna.** Na skór z přijímaček nanečisto
+- **Otázky 7 a 8 jsou dvě, ne jedna.** Na skór z přijímaček nanečisto
   odpoví jen část uchazečů (a v září skoro nikdo), průměr na vysvědčení zná
-  každý. Otázka 5 je přesnější a pohání odhad šance; otázka 6 je záchytná a
+  každý. Otázka 7 je přesnější a pohání odhad šance; otázka 8 je záchytná a
   promítá se do skóre `dosazitelnost` (školy dávají body za prospěch).
   Ani jedna není povinná — bez nich se šance odhaduje jen z poměru
   přihlášek ku kapacitě a průvodce to u výsledku napíše.
-- **Otázka 8 nemění, co se zobrazí, ale v jakém pořadí.** Zvolená priorita
+- **Otázka 10 nemění, co se zobrazí, ale v jakém pořadí.** Zvolená priorita
   zdvojnásobí váhu své složky skóre (`_vahy_profilu`). Víc než tři priority
   = žádná priorita, proto tvrdý limit tři.
-- **Otázka 4 nefiltruje, jen váží.** Kdo zaškrtne Prahu 6, ale hledá
+- **Otázka 6 nefiltruje, jen váží.** Kdo zaškrtne Prahu 6, ale hledá
   bezplatný IT obor, žádný tam nenajde — místo prázdného výsledku dostane
   okolí a poznámku „v Praze 6 nic takového není". Sousedství obvodů je
   hrubá náhrada dojezdové doby MHD (viz „Co návrh zatím neumí").
+
+- **Otázky 13–15 se neptají na odhodlání.** „Jak moc se budeš připravovat?"
+  odpoví každý „hodně" a odpověď nemá informační hodnotu. Ptáme se na
+  chování, které už běží, a na čas, který reálně je. Z odpovědí vyjde
+  **návrh polohy posuvníku** (0–10 bodů na předmět), ne předpověď —
+  a průvodce to o sobě říká nahlas: žádná veřejná data nevážou hodiny
+  přípravy na body, soubory uchazečů CERMAT obsahují výsledek, ne přípravu.
+  Jakýkoli převod „3× týdně = +15 bodů" by byl vymyšlený, tedy přesně to,
+  co u agregátorů kritizujeme (README, zdroj 6).
+- **Jazyk (otázka 11) váží, nefiltruje.** Jako tvrdý filtr vyhazoval třetinu
+  nabídky (138 → 90) a měnil 3 z 5 škol v pětici — na otázku, která vypadá
+  jako detail na konci formuláře, moc. Kdo na jazyku trvá, zapne
+  `Profil.jazyk_povinny`.
+
+### Jak se pozná, co která otázka dělá
+
+Měřeno na reálném profilu (9. třída, IT + humanitní, Praha 12, 108/200 b.,
+prospěch 1,4, do 30 tis., priorita kvalita) — mění se vždy jedna odpověď:
+
+| Otázka | Změna | Nabídek (ze 138) | Vymění v pětici |
+|---|---|---|---|
+| 1. třída | 5. místo 9. | 25 | 5/5 |
+| 2.–4. osobnostní | „rovnou pracovat" místo „na vysokou" | 138 | typy `[M,M,M,M,G4]` → `[H,H,M,L0,H]` |
+| 5. oblasti | jen IT / nevyplněno | 42 / 369 | 2/5 |
+| 6. bydliště | Praha 6 místo 12 | 138 | 3/5 |
+| 7. body | +5 b. v obou / nevyplněno | 138 | 3/5 / 4/5 |
+| 8. prospěch | 3,0 místo 1,4 | 138 | 1/5 |
+| 9. školné | nerozhoduje / jen zdarma | 208 / 129 | 1/5 / 0/5 |
+| 10. priorita | jistota místo kvality | 138 | 3/5 |
+| 11. jazyk | němčina | 138 | 3/5 |
+| 12. talentovky | zapnuto | 139 | 0/5 |
+
+Tohle měření odhalilo, že složka `typ` původně nedělala nic (0–1 z 5) —
+měla jen 16 % váhy a její surové hodnoty se mačkaly kolem 0,75. Opravou
+bylo zvýšení váhy na 21 % **a normalizace proti kandidátům**, takže
+rozhoduje pořadí typů, ne jejich absolutní hodnota.
 
 ### Co se do výsledku nedostane vůbec
 

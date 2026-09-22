@@ -88,6 +88,11 @@
   .pocet { font-size: .9rem; color: var(--ink-muted); white-space: nowrap; }
   .pocet b { font-family: "IBM Plex Mono", monospace; font-size: 1.35rem; color: var(--accent); font-weight: 500; }
 
+  .terminy {
+    margin: 16px 0 0; padding: 10px 14px; font-size: .88rem;
+    background: var(--accent-soft); border-left: 3px solid var(--accent); color: var(--ink);
+  }
+  .terminy b { font-family: "IBM Plex Mono", monospace; }
   .intro { padding-block: 24px 8px; max-width: 62ch; }
   .intro p { color: var(--ink-muted); margin: 8px 0 0; }
 
@@ -211,6 +216,8 @@
 </header>
 
 <div class="wrap">
+  <p class="terminy" id="terminy"></p>
+
   <div class="intro">
     <p class="eyebrow">Prototyp průvodce · pražské střední školy</p>
     <p>Devět otázek, z nichž povinná je jen první. Každá odpověď hned mění
@@ -262,7 +269,8 @@
       </div>
       <div class="radky">
         <div class="pole" style="flex:1;min-width:260px">
-          <label for="zlepseni">Když se do dubna zlepšíš o <b id="zlepseni-popis">0</b> bodů (z 50 v každém předmětu)</label>
+          <label for="zlepseni">Když se do zkoušek zlepšíš o <b id="zlepseni-popis">+0</b> bodů
+            <b>v každém předmětu</b> (z 50)</label>
           <input type="range" id="zlepseni" min="0" max="20" step="1" value="0" style="width:100%">
         </div>
       </div>
@@ -298,6 +306,24 @@
       <p class="hint">Obory s talentovou zkouškou mají jinou vstupní zkoušku a přihlášku už do 30. 11.
         Bez zaškrtnutí je do výsledku nepouštím.</p>
       <div class="chips" id="q-talentove"></div>
+    </div>
+
+    <div class="q">
+      <header><span class="cislo">13</span><h3>Připravuješ se na přijímačky už teď?</h3></header>
+      <p class="hint">Neptám se, jak moc se budeš snažit — to odpoví každý „hodně". Ptám se na to,
+        co už běží, a na čas, který reálně je.</p>
+      <div class="chips" id="q-priprava-ted"></div>
+    </div>
+
+    <div class="q">
+      <header><span class="cislo">14</span><h3>Kolik hodin týdně na to reálně máš?</h3></header>
+      <div class="chips" id="q-hodin-tydne"></div>
+    </div>
+
+    <div class="q">
+      <header><span class="cislo">15</span><h3>Chodíš na přípravný kurz nebo doučování?</h3></header>
+      <div class="chips" id="q-kurz"></div>
+      <p class="hint" id="navrh-zlepseni"></p>
     </div>
   </form>
 
@@ -353,7 +379,8 @@
   var stav = { trida: 9, oblasti: [], obvody: [], skorCj: null, skorMa: null,
                prospech: null, skolneMax: null, jazyk: null, priority: [],
                talentove: false, zlepseni: 0,
-               osobnostni: { po_skole: null, rozhodnuto: null, praxe: null } };
+               osobnostni: { po_skole: null, rozhodnuto: null, praxe: null },
+               priprava: { priprava_ted: null, hodin_tydne: null, kurz: null } };
 
   // ---- pomocné ----
   function el(tag, cls, text) {
@@ -816,6 +843,9 @@
       stav.osobnostni[k] = zaskrtnute(k)[0] || null;
     });
     stav.talentove = !!zaskrtnute("talentove")[0];
+    ["priprava_ted", "hodin_tydne", "kurz"].forEach(function (k) {
+      stav.priprava[k] = zaskrtnute(k)[0] || null;
+    });
     // Data MŠMT znají jen správní obvody Praha 1–10, lidé svoji MČ (Praha 12).
     stav.obvody = zaskrtnute("obvody").map(function (mc) {
       return C.mc_na_obvod[mc] || mc;
@@ -829,6 +859,7 @@
     var bodyCj = cislo("skor-cj", 0, 50), bodyMa = cislo("skor-ma", 0, 50);
     stav.zlepseni = cislo("zlepseni", 0, 20) || 0;
     document.getElementById("zlepseni-popis").textContent = "+" + stav.zlepseni;
+    vykresliNavrh();
     stav.skorCj = bodyCj == null ? null : Math.min(50, bodyCj + stav.zlepseni) / 50 * 100;
     stav.skorMa = bodyMa == null ? null : Math.min(50, bodyMa + stav.zlepseni) / 50 * 100;
     stav.prospech = cislo("prospech", 1, 5);
@@ -846,6 +877,48 @@
   function zmenaTridy(e) {
     stav.trida = Number(e.target.value);
     zmena();
+  }
+
+  // Návrh výchozí polohy posuvníku z odpovědí na přípravu. Pravidlo palce,
+  // ne předpověď — data, která by vázala hodiny přípravy na body, neexistují.
+  function navrhZlepseni() {
+    var miry = [];
+    for (var klic in D.priprava) {
+      var odpoved = stav.priprava[klic];
+      var v = D.priprava[klic].varianty;
+      if (odpoved && v[odpoved]) miry.push(v[odpoved].mira);
+    }
+    if (!miry.length) return null;
+    var prumer = miry.reduce(function (a, b) { return a + b; }, 0) / miry.length;
+    return Math.round(K.max_navrh_bodu * prumer);
+  }
+
+  function vykresliNavrh() {
+    var el2 = document.getElementById("navrh-zlepseni");
+    var navrh = navrhZlepseni();
+    if (navrh == null) {
+      el2.textContent = "Bez odpovědí posuvník v otázce 7 nikam neposouvám.";
+      return;
+    }
+    el2.textContent = "Podle odpovědí bych počítal s +" + navrh + " body v každém předmětu"
+      + " (posuvník v otázce 7 je teď na +" + stav.zlepseni + "). Je to pravidlo palce,"
+      + " ne předpověď — kolik bodů příprava reálně přinese, z veřejných dat nikdo neví.";
+  }
+
+  function vykresliTerminy() {
+    var t = D.terminy, box = document.getElementById("terminy");
+    if (!t || (!t.jpz && !t.prihlasky_do)) { box.hidden = true; return; }
+    function den(iso) {
+      var d = new Date(iso);
+      return d.getDate() + ". " + (d.getMonth() + 1) + ". " + d.getFullYear();
+    }
+    var casti = [];
+    if (t.prihlasky_do) casti.push("přihlášky do <b>" + den(t.prihlasky_do) + "</b> ("
+      + t.tydnu_do_prihlasky + " týdnů)");
+    if (t.jpz) casti.push("jednotná zkouška <b>" + den(t.jpz) + "</b> ("
+      + t.tydnu_do_jpz + " týdnů)");
+    box.innerHTML = casti.join(" · ")
+      + " — termín přihlášky je ta tvrdší deadline, trojice škol musí být hotová dřív.";
   }
 
   function poznamky(vysledky) {
@@ -917,6 +990,14 @@
       }), "radio", par[0], zmena);
     });
 
+  [["priprava_ted", "q-priprava-ted"], ["hodin_tydne", "q-hodin-tydne"], ["kurz", "q-kurz"]]
+    .forEach(function (par) {
+      var varianty = D.priprava[par[0]].varianty;
+      chips(par[1], Object.keys(varianty).map(function (kod) {
+        return { hodnota: kod, popis: varianty[kod].popis };
+      }), "radio", par[0], zmena);
+    });
+
   chips("q-talentove", [{ hodnota: "", popis: "Ne", vychozi: true },
                         { hodnota: "ano", popis: "Ano, ukaž i obory s talentovkou" }],
         "radio", "talentove", zmena);
@@ -946,7 +1027,9 @@
     { hodnota: "I", popis: "Italština" }, { hodnota: "", popis: "Nezáleží", vychozi: true }
   ], "radio", "jazyk", zmena);
 
-  ["skor-cj", "skor-ma", "prospech"].forEach(function (id) {
+  // Pozor na "zlepseni": bez posluchače byl posuvník úplně mrtvý — hýbal se,
+  // ale výsledek se nepřekresloval.
+  ["skor-cj", "skor-ma", "prospech", "zlepseni"].forEach(function (id) {
     document.getElementById(id).addEventListener("input", zmena);
   });
 
@@ -957,6 +1040,7 @@
       + "jehož scraper zatím není v databázi. Do té doby otázka výsledek neovlivní.";
   }
 
+  vykresliTerminy();
   zmena();
 })();
 </script>
