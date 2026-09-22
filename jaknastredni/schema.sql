@@ -148,6 +148,25 @@ CREATE TABLE IF NOT EXISTS maturita (
 );
 CREATE INDEX IF NOT EXISTS ix_maturita_redizo ON maturita(redizo);
 
+-- Scrapovaný doplňkový profil školy (infoabsolvent.cz, případně Atlas
+-- školství) — pole, která rejstřík MŠMT nemá: přijímací kritéria, školné,
+-- dny otevřených dveří, jazyky, vybavení, loňský poměr přihlášených/plánu
+-- přijmout. Bez cizího klíče na organizace (stejný důvod jako u maturity —
+-- nechceme, aby scraper spadl na REDIZO, které v lokálním snapshotu MŠMT
+-- zrovna chybí). `data` je JSON objekt, ne rozepsané sloupce (viz
+-- docs/datovy-model.md, tabulka web_profil). Osobní údaje se do `data`
+-- neukládají (žádné jméno ředitele/adresy fyzických osob) — to už řeší
+-- organizace.reditel_jmeno.
+CREATE TABLE IF NOT EXISTS web_profil (
+    redizo      TEXT NOT NULL,
+    zdroj       TEXT NOT NULL,      -- 'infoabsolvent', případně později 'atlas'
+    stazeno     TEXT NOT NULL,      -- ISO datum stažení (YYYY-MM-DD)
+    url         TEXT,
+    data        TEXT NOT NULL,      -- JSON objekt s naparsovanými poli
+    PRIMARY KEY (redizo, zdroj, stazeno)
+);
+CREATE INDEX IF NOT EXISTS ix_web_profil_redizo ON web_profil(redizo);
+
 -- Pohled: střední školy s organizací (nejčastější dotaz).
 CREATE VIEW IF NOT EXISTS v_stredni_skola AS
 SELECT s.izo, s.redizo, o.nazev AS organizace, s.nazev AS skola, s.druh,
