@@ -121,7 +121,7 @@ Ověřeno na `MZ2017j_SC_skolobory.xlsx` a `MZ2026j_SC_skolobory.xlsx` (oba: 2 l
 - Nebyl ověřen skutečný obsah 2. kola PZ 2026 (odkaz existuje, ale sezóna 2026 probíhá – soubor může být částečně prázdný/neaktuální k 22.9.2026).
 - Nebyly stahovány ani kontrolovány soubory „uchazeci_prihlasky_vysledky" (jednotlivé přihlášky uchazečů) ani položková data po úlohách – mimo scope „po školách", ale mohou být zajímavé pro budoucí rozšíření.
 - Power BI dashboard nebyl analyzován v prohlížeči/přes network trace (jen statický HTML), takže existence případného skrytého JSON API nebyla zcela vyloučena, jen nebyla nalezena v dostupném statickém kódu.
-- Hlavičky souborů MZ za roky 2018–2025 a JPZ nový formát za roky 2024–2025 byly doověřeny dodatečně, viz oddíl 12 (MZ) — JPZ 2024–2025 zůstává neověřené.
+- Hlavičky souborů MZ za roky 2018–2025 a JPZ nový formát za roky 2024–2025 byly doověřeny dodatečně, viz oddíl 12 (MZ) a oddíl 13 (JPZ nový formát) — obojí je teď ověřeno.
 
 ## 12. Porovnání hlaviček MZ 2015–2026 (ověřeno před importem importéru `cermat_mz.py`)
 
@@ -170,15 +170,96 @@ Maturitní soubory jsou napříč 2015–2026 bezpečně importovatelné jedním
 parserem; JPZ nový formát (2024–2025) zůstává neověřený a je otevřenou
 otázkou pro příští importér (JPZ 2024+).
 
+## 13. Porovnání hlaviček JPZ nový formát 2024–2026 (ověřeno před importem importéru `cermat_jpz.py`)
+
+Staženo a porovnáno všech **18 souborů** `PZ{rok}_kolo{1,2}_skolobory_{vysledky,prihlasky,kapacity}.xlsx`
+pro roky 2024, 2025, 2026 (oba kola, všechny tři typy souboru za kombinaci).
+
+**Hlavička je u nového formátu JPZ na 1. řádku listu** (na rozdíl od starého
+formátu JPZ a od maturity, kde je na 2. řádku kvůli sloučenému titulku) —
+`ws.iter_rows(min_row=1, ...)`, žádné přeskakování řádků.
+
+- **`_vysledky.xlsx` (91 sloupců) má napříč 2024, 2025, 2026 (obě kola)
+  naprosto identický název i pořadí všech 91 sloupců** — žádný drift.
+  Ověřeno diffem hlaviček všech 6 souborů `_vysledky.xlsx` (2024–2026 × kolo
+  1–2).
+- **`_prihlasky.xlsx` (39 sloupců) a `_kapacity.xlsx` (32 sloupců) mají
+  jeden drift**: 2. sloupec hlavičky se v letech **2024 a 2025** jmenuje
+  **`IS_SO`**, zatímco ve **2026** (a ve `_vysledky.xlsx` všechny roky) je
+  to **`ID_SO`** — stejná hodnota (UUID nabídky), jen přejmenovaný sloupec
+  (pravděpodobně překlep na straně CERMAT opravený až pro 2026). Zbytek
+  hlavičky je identický ve všech letech/kolech. Parser musí zkusit oba
+  názvy (`ID_SO` a `IS_SO`) při hledání sloupce.
+- **`_prihlasky.xlsx` a `_kapacity.xlsx` jsou obsahově podmnožinou
+  `_vysledky.xlsx`** — mají stejný počet řádků (ověřeno na 2024 kolo 1:
+  6262 řádků ve všech třech souborech) a stejné hodnoty ve sloupcích, které
+  mají společné (`KAPACITA`, `PŘIHLÁŠKY CELKEM`, …). `_vysledky.xlsx`
+  navíc obsahuje `PŘIJATÍ`, skóre, percentily a důvody nepřijetí, které
+  `_prihlasky`/`_kapacity` nemají vůbec. Prakticky by tedy šlo importovat
+  jen `_vysledky.xlsx`; import všech tří a spojení přes `ID_SOF` (viz níže)
+  se dělá pro odolnost vůči budoucím letům, kde by se sady sloupců mohly
+  rozejít, a protože to explicitně žádá zadání importéru.
+- **Spojovací klíč mezi soubory: `ID_SOF`, ne `ID_SO`.** `ID_SOF` je
+  CERMAT interní UUID **řádku** (jedno zaměření oboru), je 100% unikátní
+  v každém souboru zvlášť a shoduje se napříč všemi třemi soubory (ověřeno
+  na 2024 kolo 1: 6262/6262 shod pro `_kapacity.xlsx`, 6261/6262 pro
+  `_prihlasky.xlsx` — 1 řádek se liší v `PŘIHLÁŠKY CELKEM` o 1, zanedbatelná
+  nesrovnalost zdrojových dat). `ID_SO` je naproti tomu UUID **nabídky**
+  sdílené mezi víc řádky (víc zaměření oborů pod jedním KKOV může mít
+  stejné `ID_SO`, ale různé `ID_SOF`) — pro spojování souborů 1:1 je tedy
+  `ID_SOF` spolehlivější než `ID_SO`/`(REDIZO, KKOV, ROČNÍK, ROK, KOLO)`
+  navržené v zadání, a navíc obchází drift `ID_SO`/`IS_SO` popsaný výše.
+  **Volba pro `cermat_jpz.py`: join přes `ID_SOF`.**
+- **Klíč `(izo, kod_kkov, rocnik, rok, kolo)` navržený v `docs/datovy-model.md`
+  není v reálných datech jednoznačný.** Na souboru `PZ2024_kolo1_..._vysledky.xlsx`
+  má 532 z 6262 řádků (8,5 %) duplicitní `(IZO, KKOV, ROČNÍK, ROK, KOLO)`;
+  po přidání `ZAMĚŘENÍ OBORU` klesne počet kolizí na 135 (2,2 %); teprve po
+  přidání `FORMA VZDĚLÁVÁNÍ`, `DÉLKA STUDIA` a `JAZYK STUDIA` (celkem tedy
+  9 sloupců) je klíč jednoznačný na 0 kolizí (ověřeno na 2024 kolo 1, 2026
+  kolo 1 i 2026 kolo 2). Příklad: IZO `izo_000638595` (SPŠ grafická), KKOV
+  `82-41-M/05`, ročník 9, rok 2024, kolo 1 má 3 řádky se stejným `ID_SO`
+  (sdílená kapacita 10 míst), ale různým `ZAMĚŘENÍ OBORU` (Design tiskovin /
+  Design objektů a obalů / Design digitálních médií) a různým počtem
+  přihlášek (41 / 44 / 68) — sloučení do jednoho řádku by ztratilo reálná
+  data. Tabulka `prijimaci_rizeni` proto má rozšířený primární klíč (viz
+  `schema.sql`), stejný princip jako už existující tabulka `obor`
+  (`izo, kod_kkov, forma, delka, jazyk`).
+- **IZO má vždy textový prefix `izo_` následovaný přesně 9 číslicemi** ve
+  všech ověřených souborech/letech — bezpečně odstranitelné `s[4:]` nebo
+  `str.removeprefix("izo_")`.
+- **REDIZO a DÉLKA STUDIA mění typ mezi soubory** (REDIZO je ve `_vysledky.xlsx`
+  vždy `int`, ale ve `_kapacity.xlsx` roku 2026 `str`; DÉLKA STUDIA je ve
+  `_vysledky.xlsx` vždy `int` (4/5/…), ale ve `_kapacity.xlsx` `str` typu
+  `'4.0'`) — nutné normalizovat před uložením/porovnáváním (stejný vzorec
+  jako `_redizo()` v `cermat_mz.py`).
+- **Chybějící hodnoty jsou skutečné `None` buňky**, ne řetězec `"-"` jako u
+  maturity/starého JPZ formátu — parser přesto zachovává stejnou `_num()`
+  konvenci (`"-"`/`None`/`""` → `NULL`) pro robustnost, kdyby se to v
+  budoucích letech změnilo.
+- **PZ2026 kolo 2 JE naplněné reálnými výsledky** (2707 řádků ve
+  `_vysledky.xlsx`, s vyplněnými skóre/percentily), na rozdíl od opatrné
+  poznámky v oddíle 11 — k 22. 9. 2026 je jarní přijímací řízení 2026 (obě
+  kola) už uzavřené. Ponechána je přesto obranná logika v `download()` pro
+  HTTP 404 (soubor budoucího kola/roku, který ještě nevyšel) a v `parse()`
+  pro prázdný list (0 datových řádků) — obojí se zaloguje a přeskočí, import
+  ostatních let/kol pokračuje.
+- Sloupce mimo výše uvedené (adresa, kraj/okres/ORP, zřizovatel, typ školy,
+  skupina oborů, maturitní status, povinnost JPZ) se **do `prijimaci_rizeni`
+  neukládají** — stejná zásada jako u `maturita` (jméno/adresu školy nese
+  rejstřík MŠMT přes IZO/REDIZO, ne CERMAT).
+
+Import: `jaknastredni/cermat_jpz.py`, testy `tests/test_cermat_jpz.py`.
+
 ## Přílohy
-Soubory JPZ (oddíl 5–6) zůstaly jen ve scratchpadu průzkumu, mimo repo:
+Soubory JPZ starého formátu (oddíl 5) zůstaly jen ve scratchpadu průzkumu,
+mimo repo:
 - `<scratchpad>/cermat/files/JPZ2017_skoly-skolobory_vysledky.xlsx`
 - `<scratchpad>/cermat/files/JPZ2020_skoly-skolobory_vysledky.xlsx`
 - `<scratchpad>/cermat/files/JPZ2023_skoly-skolobory_vysledky.xlsx`
-- `<scratchpad>/cermat/files/PZ2026_kolo1_skolobory_{vysledky,prihlasky,kapacity}.xlsx`
 - `<scratchpad>/cermat/files/PZ2024-2026_agregace_typskoly_region_prihlasky.xlsx`
 
-Soubory maturity `MZ{rok}{j,jap}_SC_skolobory.xlsx` (2015–2026, 24 souborů)
-jsou naimportované a uložené v repu v `data/raw/cermat/` (rozhodnutí uložit
-i syrová data do repa, ne jen do `.gitignore`d `data/`, viz README, sekce
-„Rozhodnutí o ukládání dat").
+Soubory maturity `MZ{rok}{j,jap}_SC_skolobory.xlsx` (2015–2026, 24 souborů) a
+JPZ nového formátu `PZ{2024,2025,2026}_kolo{1,2}_skolobory_{vysledky,prihlasky,kapacity}.xlsx`
+(18 souborů) jsou naimportované a uložené v repu v `data/raw/cermat/`
+(rozhodnutí uložit i syrová data do repa, ne jen do `.gitignore`d `data/`,
+viz README, sekce „Rozhodnutí o ukládání dat").

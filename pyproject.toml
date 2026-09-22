@@ -20,6 +20,7 @@ csi = ["pymupdf>=1.24"]
 [project.scripts]
 jns-msmt = "jaknastredni.msmt:main"
 jns-cermat-mz = "jaknastredni.cermat_mz:main"
+jns-cermat-jpz = "jaknastredni.cermat_jpz:main"
 
 [tool.setuptools.packages.find]
 include = ["jaknastredni*"]
