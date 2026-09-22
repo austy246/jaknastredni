@@ -158,6 +158,35 @@ def test_join_handles_is_so_rename(new_style_files, old_style_prihlasky_kapacity
     assert r["id_so"] == "so-1"  # zachyceno i když je ve zdrojovém souboru jako IS_SO
 
 
+def test_file_with_all_blank_id_sof_warns_but_vysledky_still_wins(new_style_files, tmp_path, caplog):
+    """Ověřeno živě na PZ2025_kolo2_skolobory_prihlasky.xlsx: CERMAT občas vydá
+    soubor, kde je ID_SOF prázdné úplně ve všech řádcích (vlastní datová chyba
+    zdroje). Neškodné, dokud vysledky.xlsx (nadmnožina sloupců) nese stejné
+    metriky, ale musí se to aspoň zalogovat, ne jen tiše ignorovat."""
+    rok, kolo = 2026, 1
+    rows = [_vysledky_row("sof-1", "so-1", rok, kolo)]
+    prihlasky_bez_id_sof = tmp_path / "prihlasky_bez_id_sof.xlsx"
+    _build(prihlasky_bez_id_sof, rows, PRIHLASKY_EXTRA)
+
+    wb = openpyxl.load_workbook(prihlasky_bez_id_sof)
+    ws = wb.active
+    header = [c.value for c in ws[1]]
+    id_sof_col = header.index("ID_SOF") + 1
+    for r in range(2, ws.max_row + 1):
+        # ws.cell(value=None) je no-op v openpyxl (None = "hodnota nezadána"),
+        # nutno smazat přímo přes .value.
+        ws.cell(row=r, column=id_sof_col).value = None
+    wb.save(prihlasky_bez_id_sof)
+
+    paths = {"vysledky": new_style_files["vysledky"], "prihlasky": prihlasky_bez_id_sof}
+    with caplog.at_level("WARNING"):
+        rows_out = list(cermat_jpz.parse(paths))
+    r = next(r for r in rows_out if r["id_sof"] == "sof-1")
+    assert r["kapacita"] == 30  # z vysledky.xlsx, i když prihlasky.xlsx nepřispělo ničím
+    assert r["prihlasky_celkem"] == 282
+    assert "prázdné ID_SOF" in caplog.text
+
+
 def test_vysledky_only_still_works(new_style_files):
     """Kdyby prihlasky/kapacita chyběly (např. 404), vysledky.xlsx samo o
     sobě obsahuje všechny požadované sloupce (je jejich nadmnožinou)."""

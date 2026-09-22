@@ -280,6 +280,19 @@ formátu JPZ a od maturity, kde je na 2. řádku kvůli sloučenému titulku) �
   `ID_SOF` spolehlivější než `ID_SO`/`(REDIZO, KKOV, ROČNÍK, ROK, KOLO)`
   navržené v zadání, a navíc obchází drift `ID_SO`/`IS_SO` popsaný výše.
   **Volba pro `cermat_jpz.py`: join přes `ID_SOF`.**
+- **Ověřeno živě 22. 9. 2026 na všech 6 kombinacích rok×kolo (2024–2026):**
+  hlavičky, počty řádků (27 289 celkem, souhlasí s README) i shoda `ID_SOF`
+  mezi soubory jsou v pořádku — **kromě jedné výjimky**:
+  `PZ2025_kolo2_skolobory_prihlasky.xlsx` má `ID_SOF` prázdné úplně ve
+  všech 2698 řádcích (vlastní datová chyba na straně CERMAT, ne formátová
+  změna — `_kapacity.xlsx` a `_vysledky.xlsx` za totéž rok/kolo mají
+  `ID_SOF` v pořádku). Neškodné pro výsledná data, protože `_vysledky.xlsx`
+  je nadmnožina sloupců a zpracovává se jako poslední (viz výše) — všech
+  2698 řádků se přesto naimportuje se stejnými hodnotami
+  `KAPACITA`/`PŘIHLÁŠKY CELKEM`, jaké by dodalo funkční `_prihlasky.xlsx`.
+  `cermat_jpz.parse()` na tenhle případ (soubor s daty, kde se ale nespojil
+  ani jeden řádek) teď loguje `WARNING`, aby případný budoucí výskyt u
+  souboru bez záložní nadmnožiny nezůstal tichý.
 - **Klíč `(izo, kod_kkov, rocnik, rok, kolo)` navržený v `docs/datovy-model.md`
   není v reálných datech jednoznačný.** Na souboru `PZ2024_kolo1_..._vysledky.xlsx`
   má 532 z 6262 řádků (8,5 %) duplicitní `(IZO, KKOV, ROČNÍK, ROK, KOLO)`;

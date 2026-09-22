@@ -240,10 +240,12 @@ def parse(paths: dict[str, Path]) -> Iterator[Row]:
             colmap = _COLMAPS[soubor]
 
             n_rows = 0
+            n_bez_id_sof = 0
             for row in rows_iter:
                 n_rows += 1
                 id_sof = row[idx["ID_SOF"]]
                 if id_sof is None:
+                    n_bez_id_sof += 1
                     continue
                 entry = merged.setdefault(id_sof, {"id_sof": id_sof, "id_so": None})
                 entry["izo"] = _izo(row[idx["IZO"]])
@@ -263,6 +265,16 @@ def parse(paths: dict[str, Path]) -> Iterator[Row]:
                         entry[dbcol] = _num(row[idx[hdr]])
             if n_rows == 0:
                 log.warning("%s: list je prázdný (0 řádků dat), přeskakuji", path)
+            elif n_bez_id_sof == n_rows:
+                # Ověřeno živě na PZ2025_kolo2_skolobory_prihlasky.xlsx: CERMAT občas
+                # vydá soubor, kde má ID_SOF prázdné úplně ve všech řádcích (vlastní
+                # datová chyba na jejich straně). Neškodné, dokud vysledky.xlsx (nadmnožina
+                # sloupců, viz modulový docstring) nese stejné metriky a spojí se správně
+                # — ale je to tichá ztráta dat, pokud by se to stalo souboru, který nadmnožinu
+                # nemá, proto aspoň zalogovat.
+                log.warning("%s: všech %d řádků má prázdné ID_SOF, žádný se nespojil "
+                            "(vlastní datová chyba zdroje - ověřit dopad, viz vysledky.xlsx)",
+                            path, n_rows)
         finally:
             wb.close()
 

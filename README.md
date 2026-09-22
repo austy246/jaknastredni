@@ -483,8 +483,15 @@ karta to napíše. Žádné neprůhledné „skóre obtížnosti" jako u agregá
 
 - Oficiální číselník druhů škol (AKDT) pro spolehlivý filtr SŠ/konzervatoř.
 - Licence otevřených dat ČŠI a podmínky užití infoabsolvent.cz.
-- Konzistence hlaviček CERMAT souborů v neověřených letech (JPZ 2024–2025,
-  MZ 2018–2025) — ověřit před ostrým importem.
+- ~~Konzistence hlaviček CERMAT souborů v neověřených letech (JPZ 2024–2025,
+  MZ 2018–2025) — ověřit před ostrým importem.~~ Ověřeno živě 22. 9. 2026:
+  všech 24 souborů MZ (2015–2026) a všech 6 kombinací rok×kolo JPZ nového
+  formátu (2024–2026) se naparsovalo bez chyby se shodnými počty řádků jako
+  v `data/raw/` (žádný soubor se od stažení nezměnil, ověřeno SHA-256/
+  bytovou shodou). Jediná zjištěná odchylka: `PZ2025_kolo2_..._prihlasky.xlsx`
+  má prázdné `ID_SOF` ve všech řádcích (datová chyba CERMAT, ne formátová
+  změna) — neškodné, `_vysledky.xlsx` je nadmnožina, viz
+  `docs/research/cermat.md`.
 - Struktura sekcí v ČŠI PDF napříč šablonami různých let.
 - Body 11 a 12 (výkonové ukazatele MŠMT/ÚIV, PID/Golemio GTFS) jsou zatím
   jen nápady bez ověření stažením — než se implementují, potřebují stejný
