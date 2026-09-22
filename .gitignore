@@ -1,7 +1,9 @@
-# data
-data/
-*.db
+# data: data/jaknastredni.db a stažené soubory v data/raw/ se verzují v repu
+# (rozhodnutí viz README.md, sekce Rozhodnutí o ukládání dat); ignorujeme jen
+# přechodné soubory SQLite.
 *.db-journal
+*.db-wal
+*.db-shm
 
 # python
 __pycache__/

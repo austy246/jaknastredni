@@ -10,20 +10,52 @@ kvalita, maturitní výsledky, uplatnění absolventů apod.).
   zprávy jsou v [`docs/research/`](docs/research/).
 - Datový model je navržený v [`docs/datovy-model.md`](docs/datovy-model.md),
   schéma SQLite v [`jaknastredni/schema.sql`](jaknastredni/schema.sql).
-- První importér (rejstřík MŠMT) funguje, viz níže.
+- Importér rejstříku MŠMT funguje, viz níže.
+- Importér maturitních výsledků CERMAT (`jaknastredni/cermat_mz.py`) funguje
+  pro roky 2015–2026, viz níže.
 
 ## Rychlý start
 
 ```bash
 pip install -e ".[dev]"
-python -m jaknastredni.msmt --db data/jaknastredni.db   # stáhne pražský snapshot a naimportuje
+python -m jaknastredni.msmt --db data/jaknastredni.db                        # stáhne pražský snapshot a naimportuje
+python -m jaknastredni.cermat_mz --db data/jaknastredni.db --roky 2015-2026 --obdobi jap  # maturitní výsledky
 python -m pytest
 ```
 
 Výsledkem je `data/jaknastredni.db` s 1044 organizacemi, 2434 školami
 a zařízeními a 219 středními školami (`druh = 'C00'`); pohled
-`v_stredni_skola` je nejrychlejší cesta k přehledu. Stažený surový soubor
-zůstává v `data/raw/msmt/` s datem výstupu v názvu.
+`v_stredni_skola` je nejrychlejší cesta k přehledu. Tabulka `maturita`
+obsahuje maturitní výsledky po školách za roky 2015–2026. Stažené surové
+soubory zůstávají v `data/raw/msmt/` a `data/raw/cermat/` s rokem/datem
+výstupu v názvu.
+
+## Rozhodnutí o vývoji a ukládání dat
+
+- **Vývoj přímo v `main`.** Import CERMAT maturity (viz níže) byl na
+  explicitní žádost vlastníka repa vyvíjen a commitnut přímo do větve
+  `main`, ne přes samostatnou feature větev a pull request.
+- **Stažené soubory i výsledná databáze se verzují v repu.** Na rozdíl od
+  původního záměru (`data/` jen lokálně, `.gitignore`d) bylo na explicitní
+  žádost rozhodnuto ukládat do gitu i `data/jaknastredni.db` a syrové
+  soubory `data/raw/**`. `.gitignore` teď vynechává jen přechodné soubory
+  SQLite (`*.db-journal`, `*.db-wal`, `*.db-shm`). Důsledek: repo poroste s
+  každým dalším importérem/ročníkem (jen maturitní XLSX 2015–2026 mají
+  dohromady cca 50 MB) — pokud to začne vadit, řešením je Git LFS nebo návrat
+  k `.gitignore`, ne mazání historie.
+- **Tabulka `maturita` nemá cizí klíč na `organizace(redizo)`.** CERMAT
+  zahrnuje i školy mimo Prahu a mezitím zaniklé školy, které v rejstříku
+  MŠMT nejsou. Filtrování na Prahu se dělá JOINem v dotazech, případně
+  přepínačem `--jen-praha` při importu (omezí se na REDIZO, která už jsou
+  v `organizace`).
+- **Sloupce CERMAT XLSX se mapují podle názvu v hlavičce, ne podle pozice.**
+  Napříč roky 2015–2026 se mění počet úvodních ID sloupců (0–2), ale názvy a
+  pořadí sloupců od `TŘÍDĚNÍ` dál jsou stabilní — podrobně
+  [`docs/research/cermat.md`](docs/research/cermat.md), oddíl 12.
+- **Hodnota `"-"` v CERMAT datech = žádný uchazeč, ukládá se jako `NULL`**,
+  ne jako 0 (0 by znamenalo "nikdo neuspěl", ne "nikdo se nepřihlásil").
+- **Testovací fixtury se generují v testu přes `openpyxl`**, ne jako binární
+  `.xlsx` v repu — viz `tests/test_cermat_mz.py`.
 
 ## Klíčové identifikátory
 
@@ -211,9 +243,13 @@ JPZ). Rejstřík MŠMT je referenční množina.
 
 1. ~~**Import rejstříku MŠMT**~~ hotovo (`jaknastredni/msmt.py`), zbývá
    ověřit číselník druhů (`C00` vs. `E00`).
-2. **Import CERMAT XLSX**: maturita 2015–2026 (jeden parser), JPZ 2024–2026
-   (nový formát, 3 soubory × 2 kola × rok), JPZ 2017–2023 (starý formát,
-   jen pro trendy na úrovni skupiny oborů). Klíč REDIZO (+ KKOV od 2024).
+2. **Import CERMAT XLSX**:
+   - ~~maturita 2015–2026 (jeden parser)~~ hotovo
+     (`jaknastredni/cermat_mz.py`, tabulka `maturita`).
+   - JPZ 2024–2026 (nový formát, 3 soubory × 2 kola × rok) — další v pořadí,
+     tabulka `prijimaci_rizeni`, klíč IZO + KKOV (prefix `izo_` odstranit).
+   - JPZ 2017–2023 (starý formát, jen pro trendy na úrovni skupiny oborů,
+     klíč REDIZO).
 3. **Import ČŠI CSV** → seznam inspekcí per REDIZO; PDF stahovat jen pro
    školy na užším seznamu a extrahovat sekci „Závěry".
 4. **Scraper infoabsolvent.cz** (211 detailů, 1 req/s) pro přijímací
