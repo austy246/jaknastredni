@@ -13,3 +13,6 @@ __pycache__/
 .pytest_cache/
 dist/
 build/
+
+# harness-managed scratch space (subagent git worktrees, local tool state)
+.claude/
