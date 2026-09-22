@@ -39,15 +39,14 @@ organizace (REDIZO) ──< zrizovatel
 organizace ────┼──< jpz_skupina        (CERMAT JPZ 2017–2023, rok × skupina oborů)       [hotovo]
                ├──< maturita           (CERMAT MZ 2015+, rok × období × SMO16 × předmět) [hotovo]
                ├──< inspekce           (ČŠI, datum × PDF)                                [hotovo]
-               └──< web_profil         (infoabsolvent [hotovo] / Atlas [plán], datum scrapování)
+               └──< web_profil         (infoabsolvent [hotovo] / Atlas [hotovo], datum scrapování)
 ```
 
 Plné čáry jsou implementované (importéry MŠMT, CERMAT maturita, CERMAT JPZ
-2017–2023 a nový formát 2024+, ČŠI a infoabsolvent.cz), hranaté závorky
-označují tabulky navržené pro další importéry. CERMAT do roku 2023,
-maturita a ČŠI inspekce nemají IZO, proto se váží na organizaci (REDIZO),
-ne na školu; JPZ 2024+ IZO má, ale bez cizího klíče na `skola(izo)` (viz
-níže).
+2017–2023 a nový formát 2024+, ČŠI, infoabsolvent.cz a atlasskolstvi.cz).
+CERMAT do roku 2023, maturita a ČŠI inspekce nemají IZO, proto se váží na
+organizaci (REDIZO), ne na školu; JPZ 2024+ IZO má, ale bez cizího klíče na
+`skola(izo)` (viz níže).
 
 ## Implementované tabulky (MŠMT)
 
@@ -115,27 +114,51 @@ extrakce textu (sekce „Závěry", „Silné stránky" apod.) zůstává budouc
 pro užší seznam škol. Zdroj: [`research/csi.md`](research/csi.md).
 
 ### `web_profil` — scrapovaný doplňkový profil školy
-Klíč `(redizo, zdroj, stazeno)`; `zdroj = 'infoabsolvent'` (Atlas školství
-zůstává neimplementovaný, viz README bod 4/Otevřené otázky — do stejné
-tabulky by šel doplnit se `zdroj = 'atlas'`). Sloupec `data` je JSON objekt
-s poli, která rejstřík MŠMT nemá: vybavení a nabídka školy, velikost školy,
-ubytování/stravování, přístup k PC/internetu mimo výuku, den otevřených
-dveří, cizí jazyky (za celou školu), poznámka SŠ, kontakt (www/e-mail/
-telefon), odkaz na ČŠI zprávy, a pole `obory[]` — pro každou kombinaci
-KKOV × zaměření/ŠVP: délka a forma studia, počet povinných jazyků a jejich
-seznam, `loni_prihlaseni`/`loni_plan_prijmout` (pozor: infoabsolvent
-zveřejňuje jen loňský PLÁN přijmout, ne skutečný počet přijatých — na
-rozdíl od Atlasu), `letos_plan_prijmout`, zda se koná přijímací zkouška,
-roční školné, možnost studia pro ZP, podrobnosti přijímacího řízení
-(`prijimaci_rizeni`: jednotná/ústní/písemná/talentová/praktická zkouška,
-jiná kritéria, termíny) a poznámky k oboru. Bez cizího klíče na
-`organizace` (stejný důvod jako `maturita`). Adresa, okres, typ školy a
-jméno zřizovatele se z infoabsolventu záměrně nevytahují — jsou
-redundantní vůči `organizace`/`misto_vyuky`/`zrizovatel`; žádné osobní
-údaje nad rámec toho, co už ukládá MŠMT (`organizace.reditel_jmeno`), se
-neukládají. Zdroj:
-[`research/atlas-infoabsolvent.md`](research/atlas-infoabsolvent.md),
+Klíč `(redizo, zdroj, stazeno)`; `zdroj` je `'infoabsolvent'` nebo `'atlas'`
+(dva nezávislé řádky pro stejné REDIZO/den, klíč obsahuje zdroj). Sloupec
+`data` je JSON objekt, jehož schéma se mezi zdroji liší (dokumentováno
+v modulovém docstringu příslušného importéru) — obecně pole, která rejstřík
+MŠMT nemá.
+
+**`zdroj = 'infoabsolvent'`** (`jaknastredni/infoabsolvent.py`): vybavení a
+nabídka školy, velikost školy, ubytování/stravování, přístup k PC/internetu
+mimo výuku, den otevřených dveří, cizí jazyky (za celou školu), poznámka SŠ,
+kontakt (www/e-mail/telefon), odkaz na ČŠI zprávy, a pole `obory[]` — pro
+každou kombinaci KKOV × zaměření/ŠVP: délka a forma studia, počet povinných
+jazyků a jejich seznam, `loni_prihlaseni`/`loni_plan_prijmout` (pozor:
+infoabsolvent zveřejňuje jen loňský PLÁN přijmout, ne skutečný počet
+přijatých — na rozdíl od Atlasu), `letos_plan_prijmout`, zda se koná
+přijímací zkouška, roční školné, možnost studia pro ZP, podrobnosti
+přijímacího řízení (`prijimaci_rizeni`: jednotná/ústní/písemná/talentová/
+praktická zkouška, jiná kritéria, termíny) a poznámky k oboru. Adresa,
+okres, typ školy a jméno zřizovatele se z infoabsolventu záměrně
+nevytahují — jsou redundantní vůči `organizace`/`misto_vyuky`/`zrizovatel`.
+Zdroj: [`research/atlas-infoabsolvent.md`](research/atlas-infoabsolvent.md),
 oddíl 2. Stav po běhu 22. 9. 2026: 211/211 pražských SŠ, 743 řádků oborů.
+
+**`zdroj = 'atlas'`** (`jaknastredni/atlas.py`): dny otevřených dveří,
+doplňující informace (volný text), cizí jazyky, ubytování, stravování, a
+pole `obory[]` — pro každý obor: název + KKOV kód, typ ukončení (maturitní
+zkouška/výuční list), délka studia, `planovany_pocet_prijmout` (plán
+přijmout na příští rok), **`loni_prihlaseni`/`loni_prijati`** (na rozdíl od
+infoabsolventu jde o **skutečný** loňský počet přijatých, ne jen plán —
+jediné místo v projektu, kde je toto číslo k dispozici zdarma, viz README
+bod 4), přijímací zkoušky (předměty), `plp`/`ozp` (bool), a
+`doporuceny_prospech` (float) — pole, které žádný jiný ověřený zdroj v
+projektu nemá. Adresa, IČ, ředitel/ka, zřizovatel a kontakty se z Atlasu
+záměrně nevytahují ze stejného důvodu jako u infoabsolventu. Placená
+statistika JPZ/maturit u maturitních oborů (odkaz "Statistika",
+`?obor=...`) se nikdy nestahuje ani neparsuje — viz modulový docstring
+`atlas.py` a docs/research/atlas-infoabsolvent.md, oddíl 1.4 a 3 (bod 1).
+Atlas nemá REDIZO v URL (na rozdíl od infoabsolventu) — čte se z textu
+detailu školy, interní ID Atlasu v URL seznamu (`/ss{id}-slug`) se
+nepoužívá jako klíč. Zdroj:
+[`research/atlas-infoabsolvent.md`](research/atlas-infoabsolvent.md),
+oddíl 1. **Implementováno, doposud nespuštěno na produkčních datech.**
+
+Bez cizího klíče na `organizace` u obou zdrojů (stejný důvod jako
+`maturita`). Žádné osobní údaje nad rámec toho, co už ukládá MŠMT
+(`organizace.reditel_jmeno`), se v žádném z obou zdrojů neukládají.
 
 ### `prijimaci_rizeni` — CERMAT JPZ, nový formát 2024+
 Klíč `(izo, kod_kkov, rocnik, rok, kolo, zamereni_oboru, forma_vzdelavani,
@@ -157,9 +180,10 @@ oddíly 6, 13.
 ## Plánované tabulky (návrh)
 
 Všechny tabulky navržené v tomto dokumentu jsou nyní implementované (viz
-sekci výše). Jediné zbývající plánované rozšíření je doplnění Atlasu
-školství jako druhého zdroje (`zdroj = 'atlas'`) do existující tabulky
-`web_profil`.
+sekci výše), včetně Atlasu školství jako druhého zdroje (`zdroj = 'atlas'`)
+do existující tabulky `web_profil` (`jaknastredni/atlas.py`) — implementován,
+doposud nespuštěn na produkčních datech (viz README bod 4). Žádné další
+plánované rozšíření datového modelu aktuálně není otevřené.
 
 ## Spojování zdrojů
 
@@ -170,7 +194,7 @@ sekci výše). Jediné zbývající plánované rozšíření je doplnění Atla
 | CERMAT maturita | `redizo` | obor jen jako SMO16 |
 | ČŠI | `redizo` | filtr na Prahu přes JOIN s `organizace` |
 | infoabsolvent | `redizo` z URL | |
-| Atlas školství | `redizo` z detailu | interní ID v URL není REDIZO |
+| Atlas školství | `redizo` z detailu | interní ID v URL (`/ss{id}-slug`) není REDIZO, čte se z textu detailu (`atlas.py`) |
 
 ## Otevřené body
 

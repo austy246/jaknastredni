@@ -29,7 +29,7 @@ def test_fetch_all_calls_every_source_with_expected_ranges(monkeypatch, tmp_path
                          lambda rok, kolo, soubor, raw_dir: calls["jpz_new"].append((rok, kolo, soubor)))
     monkeypatch.setattr(fetch_all.csi, "download", lambda raw_dir: calls.__setitem__("csi", calls["csi"] + 1))
 
-    fetch_all.fetch_all(tmp_path, rok_do=2026, skip_infoabsolvent=True)
+    fetch_all.fetch_all(tmp_path, rok_do=2026, skip_infoabsolvent=True, skip_atlas=True)
 
     assert calls["msmt"] == 1
     assert calls["csi"] == 1
@@ -51,5 +51,35 @@ def test_fetch_all_skip_infoabsolvent(monkeypatch, tmp_path):
     monkeypatch.setattr(fetch_all.infoabsolvent, "check_robots_allows", lambda *a, **kw: called.append("robots"))
     monkeypatch.setattr(fetch_all.infoabsolvent, "fetch_raw", lambda *a, **kw: called.append("fetch_raw"))
 
-    fetch_all.fetch_all(tmp_path, rok_do=2015, skip_infoabsolvent=True)
+    fetch_all.fetch_all(tmp_path, rok_do=2015, skip_infoabsolvent=True, skip_atlas=True)
     assert called == []
+
+
+def test_fetch_all_skip_atlas(monkeypatch, tmp_path):
+    for mod, name in [(fetch_all.msmt, "download"), (fetch_all.cermat_mz, "download"),
+                       (fetch_all.cermat_jpz_old, "download"), (fetch_all.cermat_jpz, "download"),
+                       (fetch_all.csi, "download")]:
+        monkeypatch.setattr(mod, name, lambda *a, **kw: None)
+
+    called = []
+    monkeypatch.setattr(fetch_all.atlas, "check_robots_allows", lambda *a, **kw: called.append("robots"))
+    monkeypatch.setattr(fetch_all.atlas, "fetch_raw", lambda *a, **kw: called.append("fetch_raw"))
+
+    fetch_all.fetch_all(tmp_path, rok_do=2015, skip_infoabsolvent=True, skip_atlas=True)
+    assert called == []
+
+
+def test_fetch_all_calls_atlas_when_not_skipped(monkeypatch, tmp_path):
+    for mod, name in [(fetch_all.msmt, "download"), (fetch_all.cermat_mz, "download"),
+                       (fetch_all.cermat_jpz_old, "download"), (fetch_all.cermat_jpz, "download"),
+                       (fetch_all.csi, "download")]:
+        monkeypatch.setattr(mod, name, lambda *a, **kw: None)
+    monkeypatch.setattr(fetch_all.infoabsolvent, "check_robots_allows", lambda *a, **kw: None)
+    monkeypatch.setattr(fetch_all.infoabsolvent, "fetch_raw", lambda *a, **kw: None)
+
+    called = []
+    monkeypatch.setattr(fetch_all.atlas, "check_robots_allows", lambda *a, **kw: called.append("robots"))
+    monkeypatch.setattr(fetch_all.atlas, "fetch_raw", lambda *a, **kw: called.append("fetch_raw"))
+
+    fetch_all.fetch_all(tmp_path, rok_do=2015, skip_infoabsolvent=False, skip_atlas=False)
+    assert called == ["robots", "fetch_raw"]

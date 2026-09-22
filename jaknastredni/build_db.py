@@ -20,7 +20,7 @@ import re
 import sys
 from pathlib import Path
 
-from . import cermat_jpz, cermat_jpz_old, cermat_mz, csi, db, infoabsolvent, msmt
+from . import atlas, cermat_jpz, cermat_jpz_old, cermat_mz, csi, db, infoabsolvent, msmt
 
 log = logging.getLogger(__name__)
 
@@ -95,6 +95,10 @@ def _build_infoabsolvent(conn, raw_dir: Path) -> None:
     log.info("infoabsolvent: %s", infoabsolvent.import_from_local(conn, raw_dir / "infoabsolvent"))
 
 
+def _build_atlas(conn, raw_dir: Path) -> None:
+    log.info("atlas: %s", atlas.import_from_local(conn, raw_dir / "atlas"))
+
+
 def build_all(conn, raw_dir: Path) -> None:
     _build_msmt(conn, raw_dir)
     _build_maturita(conn, raw_dir)
@@ -102,6 +106,7 @@ def build_all(conn, raw_dir: Path) -> None:
     _build_jpz_novy(conn, raw_dir)
     _build_csi(conn, raw_dir)
     _build_infoabsolvent(conn, raw_dir)
+    _build_atlas(conn, raw_dir)
 
 
 def main(argv: list[str] | None = None) -> int:
