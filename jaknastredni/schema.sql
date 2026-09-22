@@ -206,6 +206,96 @@ CREATE TABLE IF NOT EXISTS web_profil (
 );
 CREATE INDEX IF NOT EXISTS ix_web_profil_redizo ON web_profil(redizo);
 
+-- Výsledky jednotné přijímací zkoušky (CERMAT JPZ, nový formát 2024+).
+-- Jeden řádek = škola (IZO) × obor (KKOV) × zaměření × forma × délka ×
+-- jazyk studia × ročník (ZŠ, ze kterého se hlásí) × rok × kolo. Bez cizího
+-- klíče na skola(izo)/organizace(redizo) — stejný důvod jako u `maturita`:
+-- CERMAT zahrnuje i školy mimo Prahu a mezitím zaniklé; filtr na Prahu se
+-- dělá JOINem v dotazech, nebo `--jen-praha` při importu.
+-- Klíč (izo, kod_kkov, rocnik, rok, kolo) sám o sobě NENÍ jednoznačný — školy
+-- nabízející víc zaměření/forem/délek/jazyků pod jedním KKOV mají víc řádků
+-- (ověřeno na reálných datech 2024–2026, ~2 % řádků), proto je rozšířený o
+-- zamereni_oboru, forma_vzdelavani, delka_studia, jazyk_studia — stejný
+-- princip jako u tabulky `obor`. Podrobně: docs/research/cermat.md, oddíl 13.
+CREATE TABLE IF NOT EXISTS prijimaci_rizeni (
+    izo                             TEXT    NOT NULL,
+    kod_kkov                        TEXT    NOT NULL,
+    rocnik                          INTEGER NOT NULL,
+    rok                             INTEGER NOT NULL,
+    kolo                            INTEGER NOT NULL,
+    zamereni_oboru                  TEXT    NOT NULL DEFAULT '',
+    forma_vzdelavani                TEXT    NOT NULL,
+    delka_studia                    TEXT    NOT NULL,
+    jazyk_studia                    TEXT    NOT NULL,
+    redizo                          TEXT    NOT NULL,
+    id_so                           TEXT,       -- CERMAT UUID nabídky (sdílené mezi zaměřeními); u prihlasky/kapacity 2024-2025 přejmenováno na IS_SO, viz cermat.md odd. 13
+    id_sof                          TEXT,       -- CERMAT UUID řádku (zaměření); ověřeno jako spolehlivý spojovací klíč mezi vysledky/prihlasky/kapacity
+    kapacita                        INTEGER,
+    index_poptavky                  REAL,       -- PŘIHLÁŠKY CELKEM / KAPACITA
+    prihlasky_celkem                INTEGER,
+    prihlasky_priorita_1            INTEGER,
+    prihlasky_priorita_2            INTEGER,
+    prihlasky_priorita_3            INTEGER,
+    prihlasky_priorita_4            INTEGER,
+    prihlasky_priorita_5            INTEGER,
+    prijati                         INTEGER,
+    prijati_priorita_1              INTEGER,
+    prijati_priorita_2              INTEGER,
+    prijati_priorita_3              INTEGER,
+    prijati_priorita_4              INTEGER,
+    prijati_priorita_5              INTEGER,
+    konali_cjma                     INTEGER,    -- konali ČJ i MA (všichni přihlášení)
+    konali_cj                       INTEGER,
+    konali_ma                       INTEGER,
+    skor_prumer_cjma                REAL,       -- % skór, všichni přihlášení
+    skor_prumer_cj                  REAL,
+    skor_prumer_ma                  REAL,
+    skor_min_cjma                   REAL,
+    skor_min_cj                     REAL,
+    skor_min_ma                     REAL,
+    skor_max_cjma                   REAL,
+    skor_max_cj                     REAL,
+    skor_max_ma                     REAL,
+    percentil_prumer_cjma           REAL,
+    percentil_prumer_cj             REAL,
+    percentil_prumer_ma             REAL,
+    percentil_min_cjma              REAL,
+    percentil_min_cj                REAL,
+    percentil_min_ma                REAL,
+    percentil_max_cjma              REAL,
+    percentil_max_cj                REAL,
+    percentil_max_ma                REAL,
+    konali_prijati_cjma             INTEGER,    -- totéž, jen za přijaté uchazeče
+    konali_prijati_cj               INTEGER,
+    konali_prijati_ma               INTEGER,
+    skor_prijati_prumer_cjma        REAL,
+    skor_prijati_prumer_cj          REAL,
+    skor_prijati_prumer_ma          REAL,
+    skor_prijati_min_cjma           REAL,
+    skor_prijati_min_cj             REAL,
+    skor_prijati_min_ma             REAL,
+    skor_prijati_max_cjma           REAL,
+    skor_prijati_max_cj             REAL,
+    skor_prijati_max_ma             REAL,
+    percentil_prijati_prumer_cjma   REAL,
+    percentil_prijati_prumer_cj     REAL,
+    percentil_prijati_prumer_ma     REAL,
+    percentil_prijati_min_cjma      REAL,
+    percentil_prijati_min_cj        REAL,
+    percentil_prijati_min_ma        REAL,
+    percentil_prijati_max_cjma      REAL,
+    percentil_prijati_max_cj        REAL,
+    percentil_prijati_max_ma        REAL,
+    neprijati_vyssi_priorita        INTEGER,    -- nepřijat, přijat na vyšší prioritu
+    neprijati_nedostatecna_kapacita INTEGER,
+    neprijati_nesplneni_podminek    INTEGER,
+    neprijati_vzdal_se              INTEGER,
+    PRIMARY KEY (izo, kod_kkov, rocnik, rok, kolo, zamereni_oboru, forma_vzdelavani, delka_studia, jazyk_studia)
+);
+CREATE INDEX IF NOT EXISTS ix_prijimaci_rizeni_izo    ON prijimaci_rizeni(izo);
+CREATE INDEX IF NOT EXISTS ix_prijimaci_rizeni_redizo ON prijimaci_rizeni(redizo);
+CREATE INDEX IF NOT EXISTS ix_prijimaci_rizeni_kkov   ON prijimaci_rizeni(kod_kkov);
+
 -- Pohled: střední školy s organizací (nejčastější dotaz).
 CREATE VIEW IF NOT EXISTS v_stredni_skola AS
 SELECT s.izo, s.redizo, o.nazev AS organizace, s.nazev AS skola, s.druh,

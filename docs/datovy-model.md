@@ -31,7 +31,7 @@ organizace (REDIZO) ──< zrizovatel
                │      ──< misto_vyuky
                │      ──< obor (KKOV, forma, délka)
                │
-               ├──< prijimaci_rizeni   (CERMAT JPZ 2024+, rok × kolo × KKOV × ročník)   [plán]
+               ├──< prijimaci_rizeni   (CERMAT JPZ 2024+, rok × kolo × KKOV × ročník)   [hotovo]
 organizace ────┼──< jpz_skupina        (CERMAT JPZ 2017–2023, rok × skupina oborů)       [hotovo]
                ├──< maturita           (CERMAT MZ 2015+, rok × období × SMO16 × předmět) [hotovo]
                ├──< inspekce           (ČŠI, datum × PDF)                                [hotovo]
@@ -39,9 +39,11 @@ organizace ────┼──< jpz_skupina        (CERMAT JPZ 2017–2023, ro
 ```
 
 Plné čáry jsou implementované (importéry MŠMT, CERMAT maturita, CERMAT JPZ
-2017–2023, ČŠI a infoabsolvent.cz), hranaté závorky označují tabulky
-navržené pro další importéry. CERMAT do roku 2023, maturita a ČŠI inspekce
-nemají IZO, proto se váží na organizaci (REDIZO), ne na školu.
+2017–2023 a nový formát 2024+, ČŠI a infoabsolvent.cz), hranaté závorky
+označují tabulky navržené pro další importéry. CERMAT do roku 2023,
+maturita a ČŠI inspekce nemají IZO, proto se váží na organizaci (REDIZO),
+ne na školu; JPZ 2024+ IZO má, ale bez cizího klíče na `skola(izo)` (viz
+níže).
 
 ## Implementované tabulky (MŠMT)
 
@@ -68,7 +70,7 @@ Stav po importu pražského snapshotu z 22. 9. 2026:
 | střední školy (`C00`) | 219 |
 | aktivní obory na SŠ | 779 (190 různých KKOV) |
 
-## Implementované tabulky (CERMAT maturita, JPZ 2017–2023, ČŠI, infoabsolvent.cz)
+## Implementované tabulky (CERMAT, ČŠI, infoabsolvent.cz)
 
 ### `maturita` — CERMAT MZ 2015+
 Klíč `(redizo, rok, obdobi, smo16, predmet)`; `obdobi` je `j` (jarní) nebo
@@ -131,24 +133,35 @@ neukládají. Zdroj:
 [`research/atlas-infoabsolvent.md`](research/atlas-infoabsolvent.md),
 oddíl 2. Stav po běhu 22. 9. 2026: 211/211 pražských SŠ, 743 řádků oborů.
 
+### `prijimaci_rizeni` — CERMAT JPZ, nový formát 2024+
+Klíč `(izo, kod_kkov, rocnik, rok, kolo, zamereni_oboru, forma_vzdelavani,
+delka_studia, jazyk_studia)` — plánovaný kratší klíč `(izo, kod_kkov,
+rocnik, rok, kolo)` se v reálných datech ukázal jako nejednoznačný (školy
+nabízející víc zaměření/forem pod jedním KKOV), proto rozšířeno stejně jako
+u tabulky `obor`. Sloupce z `_vysledky.xlsx` spojené s `_kapacity` a
+`_prihlasky` přes `ID_SOF` (spolehlivější než navržené `ID_SO`, které je
+navíc v letech 2024–2025 u `_kapacity`/`_prihlasky` přejmenované na
+`IS_SO`): kapacita, index poptávky, přihlášky celkem a podle priority 1–5, přijatí a
+podle priority 1–5, konali ČJ/MA, % skór a percentil (průměr/min/max)
+zvlášť za všechny přihlášené a za přijaté, důvody nepřijetí (přijat na
+vyšší prioritu / nedostatečná kapacita / nesplnění podmínek / vzdal se
+přijetí). Stejně jako `maturita` bez cizího klíče na `skola(izo)` —
+CERMAT zahrnuje i školy mimo Prahu a zaniklé; filtr na Prahu přes JOIN
+nebo `--jen-praha`. Zdroj: [`research/cermat.md`](research/cermat.md),
+oddíly 6, 13.
+
 ## Plánované tabulky (návrh)
 
-### `prijimaci_rizeni` — CERMAT JPZ, nový formát 2024+
-Klíč `(izo, kod_kkov, rocnik, rok, kolo)`. Sloupce z `_vysledky.xlsx`
-spojené s `_kapacity` a `_prihlasky` přes `ID_SO`: kapacita, index poptávky,
-přihlášky celkem a podle priority 1–5, přijatí, konali ČJ/MA, % skór a
-percentil (průměr/min/max) zvlášť za všechny a za přijaté, důvody nepřijetí.
-Zdroj: [`research/cermat.md`](research/cermat.md), oddíl 6.
-
-`jpz_skupina`, `inspekce` a `web_profil` jsou od teď implementované, viz
-sekci výše; u `web_profil` zůstává plánované jen případné doplnění Atlasu
-školství jako druhého zdroje (`zdroj = 'atlas'`) do stejné tabulky.
+Všechny tabulky navržené v tomto dokumentu jsou nyní implementované (viz
+sekci výše). Jediné zbývající plánované rozšíření je doplnění Atlasu
+školství jako druhého zdroje (`zdroj = 'atlas'`) do existující tabulky
+`web_profil`.
 
 ## Spojování zdrojů
 
 | Zdroj | Klíč | Poznámka |
 |---|---|---|
-| CERMAT JPZ 2024+ | `izo` + `kkov` | IZO má prefix `izo_`, před spojením odstranit |
+| CERMAT JPZ 2024+ | `izo` + `kkov` | IZO má prefix `izo_`, před spojením odstranit; víc zaměření/forem pod jedním KKOV, viz `prijimaci_rizeni` výše |
 | CERMAT JPZ ≤2023 | `redizo` | obor jen jako skupina |
 | CERMAT maturita | `redizo` | obor jen jako SMO16 |
 | ČŠI | `redizo` | filtr na Prahu přes JOIN s `organizace` |
