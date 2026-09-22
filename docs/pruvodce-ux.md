@@ -565,6 +565,78 @@ Dvě věci, které prototyp ukazuje a CLI ne:
 - **Pás šance** s rozmytým koncem — vizuální připomínka, že je to odhad
   s nejistotou, ne naměřená hodnota.
 
+### Ladicí výpis
+
+Karta ukazuje závěr, ne vstup. Když pořadí nesedí očekávání („proč je ta
+druhá škola výš, když první sedí líp na zaměření?"), není z čeho poznat,
+jestli je chyba v datech, v pravidlech, nebo v očekávání — a hádat se o tom
+bez čísel nemá cenu. Proto je pod výsledkem rozbalovací **Ladicí výpis** se
+třemi částmi:
+
+1. **Zadaný profil** ve tvaru, který bere `pruvodce.Profil.z_json`. Uloží se
+   jako `profil.json` a `python -m jaknastredni.pruvodce --profil profil.json`
+   musí vydat **totéž pořadí**. Tím se spor „web říká něco jiného než CLI"
+   rozhodne za deset vteřin. Pozor na `skor_cj`/`skor_ma`: do profilu jdou
+   **bez** zlepšení, to jede vedle jako `zlepseni_bodu` — `Profil.skor` si ho
+   přičítá samo a jinak by se započítalo dvakrát.
+2. **Pořadí a rozpad skóre** — tabulka všech nabídek, co prošly filtrem,
+   se složkami 0–1 i s tím, **kolik ze 100 bodů** složka po započtení váhy
+   dala. To druhé číslo je to podstatné: holá hodnota 0–1 svádí číst složku
+   s vahou 1,0 stejně jako složku s vahou 3,0.
+3. **Konkrétní škola** — syrová data jejích nabídek včetně těch, které
+   filtrem neprošly, a u každé **důvod** (`duvodFiltru`). Tady se pozná
+   rozdíl mezi „průvodce to spočítal špatně" a „škola to nikam nenapsala",
+   což je u zaměření (heuristika nad volným textem) ta nejčastější otázka.
+
+Stejné funkce jsou i v konzoli jako `window.JNS` (`JNS.stav`, `JNS.ohodnot()`,
+`JNS.duvodFiltru(n)`, `JNS.profil()`, `JNS.prekresli()`).
+
+### Ověření webu proti Pythonu
+
+Tvrzení „stránka čte konstanty z dat, takže se od `pruvodce.py` nemůže
+rozejít" **neplatilo**: konstanty sedí, ale port se rozešel v tom, co
+vlastně počítá. Nalezeno a opraveno najednou:
+
+| co | web dělal | Python dělá |
+| --- | --- | --- |
+| složka `jazyk` | nepočítala se vůbec, váha 1,0 ale zůstala ve jmenovateli | `_skore_jazyk` |
+| složka `typ` | surová preference (pásmo ~0,75, neřídila nic) | normalizace proti kandidátům, `_normalizuj` |
+| priorita „hodně jazyků" | počítala jazyky do složky `prostredi` | zdvojnásobuje složku `jazyk` (`PRIORITY`) |
+| jazyk ve filtru | tvrdý filtr vždy | tvrdý jen na `jazyk_povinny` |
+| obory bez JPZ | podíl jako přijato/posouzeno | podíl **vážený roky** (`ROKY_JPZ`) |
+| vzorek na kartě | celkový vzorek nabídky | vzorek v okolí ±`OKNO_PASMA` |
+
+Dvě poslední se daly opravit jen v exportu — `bez_jpz` proto nese i hotový
+vážený podíl a `fit` ke každému pásmu i jeho počet.
+
+Regresi hlídají testy `test_web_*` v `tests/test_pruvodce.py` (čtou
+`index.html` jako text a hlídají, že se na žádnou složku nezapomnělo).
+Na shodu **čísel** je tenhle skript — pustí obě implementace na stejných
+profilech a porovná skóre, složky i pořadí:
+
+```bash
+npm install playwright        # stránka se otevírá z file://, server netřeba
+python -m jaknastredni.export_web --db data/jaknastredni.db -o web/data.js
+node - <<'EOF' > js.json
+import { chromium } from 'playwright';
+const profily = [{ trida: 9, oblasti_zajmu: ['it'], zamereni: ['programovani'] }];
+const b = await chromium.launch(); const pg = await b.newPage();
+await pg.goto('file://' + process.cwd() + '/web/index.html');
+await pg.waitForFunction(() => window.JNS !== undefined);
+const out = [];
+for (const pr of profily) out.push(await pg.evaluate((pr) => {
+  Object.assign(window.JNS.stav, { trida: pr.trida, oblasti: pr.oblasti_zajmu || [],
+                                   zamereni: pr.zamereni || [] });
+  return window.JNS.ohodnot().map(x => ({ izo: x.n.izo, kkov: x.n.kod_kkov,
+                                          skore: +x.skore.toFixed(4) }));
+}, pr));
+await b.close(); console.log(JSON.stringify(out));
+EOF
+```
+
+Výsledek se porovná s `pruvodce.ohodnot(Profil.z_json(profil), nabidky)`.
+Rozdíl ve skóre nad 0,02 bodu je chyba v portu, ne zaokrouhlení.
+
 ## Další kroky
 
 1. **Plnohodnotné webové UI.** Prototyp je jednostránkový a ukazuje všechny

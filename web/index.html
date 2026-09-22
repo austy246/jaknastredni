@@ -198,6 +198,42 @@
   .prazdne .role { font-family: Archivo, sans-serif; font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; display: block; margin-bottom: 4px; }
 
   .rada { background: var(--accent-soft); border-left: 3px solid var(--accent); padding: 12px 16px; margin-top: 18px; font-size: .92rem; }
+
+  /* Ladicí výpis — záměrně střízlivý, není to část průvodce. */
+  .ladeni { background: var(--surface); border: 1px dashed var(--line-strong); margin-top: 28px; font-size: .86rem; }
+  .ladeni > summary { padding: 12px 16px; cursor: pointer; font-family: Archivo, sans-serif; font-weight: 600; }
+  .ladeni > summary::marker { color: var(--ink-faint); }
+  .ladeni-telo { padding: 0 16px 16px; display: grid; gap: 18px; }
+  /* Položka gridu má implicitně min-width: auto, takže ji dlouhý
+     `<code>` s příkazem roztáhne a s ní celou stránku. Na mobilu to
+     znamená vodorovné posouvání úplně všeho, ne jen té tabulky. */
+  .ladeni-telo > div { min-width: 0; }
+  .ladeni h4 { margin: 0 0 6px; font-size: .88rem; }
+  .ladeni code { overflow-wrap: anywhere; }
+  .ladeni pre {
+    margin: 0; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--line);
+    font-family: "IBM Plex Mono", monospace; font-size: .76rem; line-height: 1.5;
+    overflow-x: auto; white-space: pre; max-height: 360px; overflow-y: auto;
+  }
+  .ladeni-lista { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+  .ladeni button {
+    font: inherit; font-size: .78rem; padding: 4px 10px; cursor: pointer;
+    background: var(--surface-2); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius);
+  }
+  .ladeni input[type="search"] {
+    font: inherit; font-size: .82rem; padding: 5px 8px; flex: 1 1 220px; min-width: 0;
+    background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius);
+  }
+  .ladeni table { border-collapse: collapse; font-size: .74rem; font-family: "IBM Plex Mono", monospace; }
+  .ladeni th, .ladeni td { border: 1px solid var(--line); padding: 3px 6px; text-align: right; white-space: nowrap; }
+  .ladeni th { background: var(--surface-2); font-weight: 500; position: sticky; top: 0; z-index: 1; }
+  /* Název školy se musí zalamovat, jinak vytlačí složky skóre mimo obrazovku
+     — a kvůli nim se tabulka otevírá. */
+  .ladeni td.jmeno, .ladeni th.jmeno { text-align: left; white-space: normal; width: 200px; max-width: 200px; }
+  .ladeni .tabulka-obal { overflow: auto; max-height: 420px; border: 1px solid var(--line); }
+  .ladeni tr.sledovana td { background: var(--accent-soft); }
+  .ladeni .vyrazena { color: var(--risk); }
+  .ladeni .hint { margin-bottom: 8px; }
   .rada b { font-weight: 600; }
 
   footer.paticka { margin-top: 48px; border-top: 1px solid var(--line); padding-top: 16px; font-size: .82rem; color: var(--ink-faint); display: grid; gap: 6px; }
@@ -310,7 +346,11 @@
 
     <div class="q">
       <header><span class="cislo">9</span><h3>Chceš mít jistotu konkrétního jazyka?</h3></header>
+      <p class="hint">Jazyk normálně jen váží. Jako tvrdý filtr vyhazuje třetinu nabídky a mění
+        3 z 5 škol v pětici — na otázku, která vypadá jako detail, je to moc. Zapni ho, jen
+        když na jazyku opravdu trváš.</p>
       <div class="chips" id="q-jazyk"></div>
+      <div class="chips" id="q-jazyk-povinny"></div>
     </div>
 
     <div class="q">
@@ -361,6 +401,50 @@
     <div class="karty" id="portfolio"></div>
   </section>
 
+  <details class="ladeni" id="ladeni">
+    <summary>Ladicí výpis — co do průvodce doopravdy vstoupilo</summary>
+    <div class="ladeni-telo">
+      <p class="hint">Tohle není část průvodce, je to kontrolní výpis. Když pořadí vypadá
+        divně, zkopírujte odsud profil i tabulku — z nich se dá výpočet zopakovat řádek
+        po řádku v <code>jaknastredni/pruvodce.py</code> a zjistit, jestli je chyba
+        v datech, v pravidlech, nebo v očekávání.</p>
+
+      <div>
+        <h4>1. Zadaný profil</h4>
+        <p class="hint">Přesně ve tvaru, který bere <code>pruvodce.Profil.z_json</code>. Ulož jako
+          <code>profil.json</code> a spusť
+          <code>python -m jaknastredni.pruvodce --db data/jaknastredni.db --profil profil.json</code>
+          — musí vyjít totéž pořadí jako tady.</p>
+        <div class="ladeni-lista">
+          <button type="button" id="ladeni-kopiruj-profil">Zkopírovat profil</button>
+          <span class="hint" id="ladeni-kopie-stav"></span>
+        </div>
+        <pre id="ladeni-profil"></pre>
+      </div>
+
+      <div>
+        <h4>2. Pořadí a rozpad skóre</h4>
+        <p class="hint">Všechny nabídky, které prošly filtrem, od nejlepší. Sloupce jsou složky
+          skóre 0–1 <em>před</em> vynásobením vahou; <code>body</code> je, kolik z výsledných
+          100 bodů složka po započtení váhy dala. Váhy jsou v hlavičce.</p>
+        <div class="tabulka-obal"><table id="ladeni-tabulka"></table></div>
+      </div>
+
+      <div>
+        <h4>3. Konkrétní škola — syrová data</h4>
+        <p class="hint">Napište část názvu (např. <code>Ječná</code>, <code>Úžlabin</code>).
+          Ukáže se všechno, co o jejích nabídkách víme, včetně těch, které filtrem neprošly,
+          a u každé důvod. Tady se pozná rozdíl mezi „průvodce to spočítal špatně" a
+          „škola to nikam nenapsala".</p>
+        <div class="ladeni-lista">
+          <input type="search" id="ladeni-hledej" placeholder="část názvu školy…" autocomplete="off">
+          <button type="button" id="ladeni-kopiruj-skoly">Zkopírovat výpis</button>
+        </div>
+        <pre id="ladeni-skoly"></pre>
+      </div>
+    </div>
+  </details>
+
   <footer class="paticka">
     <p><b>Data:</b> rejstřík škol MŠMT (stav 22. 9. 2026) · CERMAT — výsledky
       jednotné přijímací zkoušky 2024–2026 a maturity 2015–2026 · Česká školní
@@ -381,7 +465,9 @@
       <a href="https://github.com/austy246/jaknastredni" target="_blank" rel="noopener">github.com/austy246/jaknastredni</a>.
       Návrh je v <code>docs/pruvodce-ux.md</code>, zdrojem pravdy o hodnocení je
       <code>jaknastredni/pruvodce.py</code> — tahle stránka čte jeho konstanty
-      z <code>data.js</code>, takže se od něj nemůže rozejít.
+      z <code>data.js</code>, ale vzorec má opsaný v JavaScriptu, takže se
+      rozejít <b>může</b>. Ladicí výpis níž proto vydá zadaný profil ve tvaru,
+      který <code>pruvodce.py</code> spustí, a obě pořadí se dají porovnat.
       Našli jste chybu? <a href="https://github.com/austy246/jaknastredni/issues" target="_blank" rel="noopener">Založte issue</a>.</p>
     <p id="stav-dat"></p>
   </footer>
@@ -397,8 +483,13 @@
   var NAB = D.nabidky;
 
   // ---- stav formuláře ----
+  // `skorCj`/`skorMa` jsou % skór **už se zlepšením** (to, s čím počítá
+  // `sancePrijeti`); `bodyCj`/`bodyMa` jsou syrové body z 50, jak je uchazeč
+  // zadal. Ladicí výpis musí posílat do Pythonu ty syrové — `Profil.skor`
+  // si `zlepseni_bodu` přičítá sám a jinak by se započítalo dvakrát.
   var stav = { trida: 9, oblasti: [], zamereni: [], obvody: [], skorCj: null, skorMa: null,
-               prospech: null, skolneMax: null, jazyk: null, priority: [],
+               bodyCj: null, bodyMa: null,
+               prospech: null, skolneMax: null, jazyk: null, jazykPovinny: false, priority: [],
                talentove: false, zlepseni: 0,
                osobnostni: { po_skole: null, rozhodnuto: null, praxe: null },
                priprava: { priprava_ted: null, hodin_tydne: null, kurz: null } };
@@ -453,7 +544,10 @@
   function empiricka(n, skor) {
     if (n.bez_jpz && (skor == null || n.bez_jpz_prevazuje)) {
       // Obor, kde se o přijetí nerozhoduje jednotnou zkouškou (výuční list).
-      return { podil: n.bez_jpz[0] / n.bez_jpz[1], prijato: n.bez_jpz[0],
+      // `bez_jpz` = [přijato, posouzeno, podíl vážený roky]. Podíl se **nesmí**
+      // počítat jako přijato/posouzeno — Python váží novější ročníky výš
+      // (ROKY_JPZ) a rozdíl dělal až 7 procentních bodů šance.
+      return { podil: n.bez_jpz[2], prijato: n.bez_jpz[0],
                vzorek: n.bez_jpz[1], vaha: n.bez_jpz[1], bezJpz: true };
     }
     if (!n.fit || skor == null) return null;
@@ -463,8 +557,16 @@
     var s = Math.max(pasma[0], Math.min(skor, pasma[pasma.length - 1]));
     var moje = pasma[0];
     for (var i = 0; i < pasma.length; i++) if (pasma[i] <= s) moje = pasma[i];
-    var podil = n.fit[String(moje)];
-    return { podil: podil, prijato: Math.round(podil * n.fit_n), vzorek: n.fit_n,
+    var podil = n.fit[String(moje)][0];
+    // Vzorek „v okolí" (±OKNO_PASMA) je jen do věty na kartě, na číslo vliv
+    // nemá — vážení i smrštění jedou z celkového vzorku `fit_n`. Bez něj web
+    // tvrdil, že na uchazeče s podobným skórem měří celý vzorek nabídky.
+    var vOkoli = 0;
+    pasma.forEach(function (pa) {
+      if (pa >= moje - K.okno_pasma && pa <= moje + K.okno_pasma) vOkoli += n.fit[String(pa)][1];
+    });
+    vOkoli = Math.max(vOkoli, 1);
+    return { podil: podil, prijato: Math.round(podil * vOkoli), vzorek: vOkoli,
              vaha: n.fit_n, bezJpz: false };
   }
 
@@ -476,10 +578,10 @@
     if (emp) {
       var kotva = modelova != null ? modelova : emp.podil;
       var p = (emp.podil * emp.vaha + K.smrsteni * kotva) / (emp.vaha + K.smrsteni);
-      var kde = emp.bezJpz ? "obor bez jednotné zkoušky"
-                           : "±" + K.okno_pasma + " b., 1. kola 2024–2026";
+      var kde = emp.bezJpz ? "bez jednotné zkoušky" : "±" + K.okno_pasma + " b.";
       return { p: omez(p), stred: o ? o.stred : undefined,
-               zdroj: "naměřeno na " + emp.vzorek + " uchazečích (" + kde + ")" };
+               zdroj: "naměřeno: přijato " + emp.prijato + " z " + emp.vzorek
+                      + " uchazečů s podobným skórem (" + kde + ", 1. kola 2024–2026)" };
     }
     if (modelova != null) {
       return { p: modelova, zdroj: "z hranice přijetí " + Math.round(o.stred) + "/200 b.",
@@ -543,25 +645,41 @@
     if (!n.jazyky) return false;
     return new RegExp("(^|[\\s,(])" + jazyk + "($|[\\s,)])").test(n.jazyky);
   }
-  function projdeFiltrem(n) {
-    if (n.trida_prihlasky !== stav.trida) return false;
-    if (n.jen_pro_zp || n.typ === "C") return false;
+  // Vrací `null`, když nabídka filtrem projde, jinak **větu, proč neprošla**.
+  // Ladicí výpis se bez toho neobejde: „proč tam ta škola není" je otázka,
+  // kterou si u výsledku klade každý, a mlčící `false` na ni neodpoví.
+  function duvodFiltru(n) {
+    if (n.trida_prihlasky !== stav.trida)
+      return "hlásí se z " + n.trida_prihlasky + ". třídy, ty z " + stav.trida + ". (otázka 1)";
+    if (n.jen_pro_zp) return "škola je zřízená pro žáky se zdravotním postižením";
+    if (n.typ === "C") return "praktická škola — předpokládá doporučení poradenského zařízení";
     // Talentovka je jiná vstupní brána, ne nižší laťka — bez vyžádání ven.
-    if (n.talentova_zkouska && !stav.talentove) return false;
+    if (n.talentova_zkouska && !stav.talentove)
+      return "obor s talentovou zkouškou (zapni je v otázce 12)";
     if (stav.oblasti.length) {
       var o = oblastiOboru(n.kod_kkov);
-      if (!stav.oblasti.some(function (x) { return o.indexOf(x) >= 0; })) return false;
+      if (!stav.oblasti.some(function (x) { return o.indexOf(x) >= 0; }))
+        return "obor patří do oblastí " + (o.length ? o.map(function (k) {
+          return C.oblasti[k].popis; }).join(", ") : "(do žádné)") + ", ty jsi zaškrtl jiné (otázka 3)";
     }
     if (stav.skolneMax != null) {
       // Chybějící školné se nesmí brát jako nula: PORG má u gymnázia
       // 199 100 Kč, ale u jiného oboru v datech nic. U veřejného
       // zřizovatele je neuvedené školné bezpečně nula, u soukromého neznámá.
-      if (n.skolne != null) { if (n.skolne > stav.skolneMax) return false; }
-      else if (!n.zrizovatel_verejny) return false;
+      if (n.skolne != null) {
+        if (n.skolne > stav.skolneMax)
+          return "školné " + mezera(n.skolne) + " Kč je nad tvým stropem " + mezera(stav.skolneMax) + " Kč";
+      } else if (!n.zrizovatel_verejny) {
+        return "soukromá/církevní škola bez údaje o školném — do stropu se nevejde neznámá";
+      }
     }
-    if (stav.jazyk && !uciJazyk(n, stav.jazyk)) return false;
-    return true;
+    // Jazyk je tvrdý filtr jen na vyžádání — jinak se o něj stará složka
+    // skóre `jazyk` (Python: Profil.jazyk_povinny, pruvodce._skore_jazyk).
+    if (stav.jazyk && stav.jazykPovinny && !uciJazyk(n, stav.jazyk))
+      return "škola neučí jazyk " + stav.jazyk + " a trváš na něm (otázka 9)";
+    return null;
   }
+  function projdeFiltrem(n) { return duvodFiltru(n) === null; }
   function vahy() {
     var v = {};
     for (var k in K.slozky_skore) v[k] = K.slozky_skore[k];
@@ -572,13 +690,29 @@
     if (!pole.length) return null;
     return pole.reduce(function (a, b) { return a + b; }, 0) / pole.length;
   }
+  // Python: pruvodce._normalizuj — roztáhne hodnotu na 0–1 podle rozsahu,
+  // který je mezi kandidáty k mání.
+  function normalizuj(hodnota, dolni, horni) {
+    return horni <= dolni ? 0.5 : (hodnota - dolni) / (horni - dolni);
+  }
+  function preferenceTypu_(preference, n) {
+    return preference[n.typ] !== undefined ? preference[n.typ] : 0.5;
+  }
+  // Python: pruvodce._skore_jazyk. Bez požadavku je složka neutrální,
+  // chybějící údaj se netrestá plnou vahou, ale ani neodměňuje.
+  function skoreJazyk(n) {
+    if (!stav.jazyk) return 0.5;
+    if (!n.jazyky) return 0.4;
+    return uciJazyk(n, stav.jazyk) ? 1 : 0.15;
+  }
   function skoreProstredi(n) {
     var vyb = (n.vybaveni || "").toLowerCase(), s = [];
+    // Pozor: priorita `jazyky` sem **nepatří** — zdvojnásobuje složku `jazyk`
+    // (viz PRIORITY v pruvodce.py), ne prostředí. Dokud web žádnou složku
+    // `jazyk` neměl, počítal počet jazyků sem a na priority „hodně jazyků"
+    // dával jiné pořadí než Python.
     stav.priority.slice(0, 3).forEach(function (p) {
-      if (p === "jazyky") {
-        var pocet = n.pocet_jazyku || (n.jazyky ? n.jazyky.split(",").length : 0);
-        s.push(Math.min(1, pocet / 3));
-      } else if (p === "maly_kolektiv") {
+      if (p === "maly_kolektiv") {
         if (n.velikost_skoly) s.push(Math.min(1, Math.max(0, (600 - n.velikost_skoly) / 500)));
       } else if (p === "sport") {
         s.push(/hřišt|tělocvičn|sportovn|bazén/.test(vyb) ? 1 : 0.2);
@@ -599,13 +733,21 @@
     var dolni = perc.length ? Math.min.apply(null, perc) : 0;
     var horni = perc.length ? Math.max.apply(null, perc) : 100;
     var preference = preferenceTypu();
+    // Preference typu se — stejně jako kvalita — normalizuje proti tomu, co
+    // prošlo filtrem. Surové hodnoty se mačkají do pásma kolem 0,75 (průměr
+    // ze tří tabulek táhne ke středu) a složka pak prakticky nic neřídí.
+    // Python to dělá v `ohodnot` přes `_normalizuj`; než to sem přibylo,
+    // web s nejvyšší vahou (3,0) počítal jinak než pruvodce.py.
+    var hodnotyTypu = vybrane.map(function (n) { return preferenceTypu_(preference, n); });
+    var typDolni = Math.min.apply(null, hodnotyTypu);
+    var typHorni = Math.max.apply(null, hodnotyTypu);
     var v = vahy(), soucetVah = 0;
     for (var k in v) soucetVah += v[k];
 
     return vybrane.map(function (n) {
       var s = sancePrijeti(n, skor);
       var slozky = {};
-      slozky.typ = preference[n.typ] !== undefined ? preference[n.typ] : 0.5;
+      slozky.typ = normalizuj(preferenceTypu_(preference, n), typDolni, typHorni);
 
       if (!stav.oblasti.length) slozky.zajem = 0.5;
       else {
@@ -644,6 +786,7 @@
       else slozky.cena = Math.max(0, 1 - n.skolne / Math.max(stav.skolneMax || 60000, 1)) * 0.8;
 
       slozky.prostredi = skoreProstredi(n);
+      slozky.jazyk = skoreJazyk(n);
 
       var skore = 0;
       for (var kk in slozky) skore += slozky[kk] * v[kk];
@@ -956,10 +1099,13 @@
     stav.priority = zaskrtnute("priority").slice(0, 3);
     var jaz = zaskrtnute("jazyk")[0];
     stav.jazyk = jaz || null;
+    stav.jazykPovinny = !!zaskrtnute("jazyk_povinny")[0];
     var sk = zaskrtnute("skolne")[0];
     stav.skolneMax = (sk === undefined || sk === "") ? null : Number(sk);
     // Uchazeč zadává body z 50, CERMAT počítá % skór 0–100 na předmět.
     var bodyCj = cislo("skor-cj", 0, 50), bodyMa = cislo("skor-ma", 0, 50);
+    stav.bodyCj = bodyCj;
+    stav.bodyMa = bodyMa;
     stav.zlepseni = cislo("zlepseni", 0, 20) || 0;
     document.getElementById("zlepseni-popis").textContent = "+" + stav.zlepseni;
     vykresliNavrh();
@@ -1055,6 +1201,174 @@
     return out;
   }
 
+  // ---- ladicí výpis ----
+  //
+  // Průvodce je osm složek skóre, dvě normalizace a šest tvrdých filtrů nad
+  // daty ze čtyř zdrojů. Když z toho vypadne pořadí, které uživateli nesedí,
+  // není z čeho poznat proč: karta ukazuje závěr, ne vstup. Tenhle výpis
+  // ukazuje vstup — profil ve tvaru, který sní `pruvodce.Profil.z_json`
+  // (takže jde výpočet zopakovat v Pythonu), rozpad skóre po složkách
+  // i s vahami, a syrová data konkrétní školy včetně důvodu, proč případně
+  // vypadla z filtru.
+
+  // Profil ve tvaru `pruvodce.Profil` — klíče se musí jmenovat jako pole
+  // dataclassy, jinak `z_json` skončí na „neznámá pole profilu".
+  // Hlídá to test `test_web_profil_ma_jen_pole_profilu`.
+  function profilProPython() {
+    var p = {
+      trida: stav.trida,
+      oblasti_zajmu: stav.oblasti.slice(),
+      zamereni: stav.zamereni.slice(),
+      obvody: stav.obvody.slice(),
+      priority: stav.priority.slice(0, 3),
+      talentove: stav.talentove,
+      // Body z 50 -> % skór 0–100 na předmět, jak je počítá CERMAT.
+      // Bez zlepšení: to jde vedle jako `zlepseni_bodu`.
+      skor_cj: stav.bodyCj == null ? null : stav.bodyCj / 50 * 100,
+      skor_ma: stav.bodyMa == null ? null : stav.bodyMa / 50 * 100,
+      zlepseni_bodu: stav.zlepseni,
+      prospech: stav.prospech,
+      skolne_max: stav.skolneMax,
+      jazyk: stav.jazyk,
+      jazyk_povinny: stav.jazykPovinny,
+      po_skole: stav.osobnostni.po_skole,
+      rozhodnuto: stav.osobnostni.rozhodnuto,
+      praxe: stav.osobnostni.praxe,
+      priprava_ted: stav.priprava.priprava_ted,
+      hodin_tydne: stav.priprava.hodin_tydne,
+      kurz: stav.priprava.kurz
+    };
+    return p;
+  }
+
+  var LADENI_SLOZKY = ["zajem", "typ", "dosazitelnost", "kvalita", "blizkost", "cena", "prostredi", "jazyk"];
+
+  function vykresliLadeni(vysledky) {
+    var box = document.getElementById("ladeni");
+    if (!box) return;
+    document.getElementById("ladeni-profil").textContent =
+      JSON.stringify(profilProPython(), null, 2);
+    vykresliLadeniTabulku(vysledky);
+    vykresliLadeniSkoly();
+  }
+
+  function vykresliLadeniTabulku(vysledky) {
+    var tab = document.getElementById("ladeni-tabulka");
+    tab.textContent = "";
+    var v = vahy(), soucetVah = 0;
+    for (var k in v) soucetVah += v[k];
+
+    var hlava = tab.insertRow();
+    ["#", "skóre", "šance"].forEach(function (t) { hlava.appendChild(el("th", null, t)); });
+    hlava.appendChild(el("th", "jmeno", "škola"));
+    hlava.appendChild(el("th", "jmeno", "obor"));
+    hlava.appendChild(el("th", null, "zaměření"));
+    LADENI_SLOZKY.forEach(function (s) {
+      hlava.appendChild(el("th", null, s + " ×" + v[s]));
+    });
+
+    if (!vysledky.length) {
+      var prazdny = tab.insertRow();
+      var td = prazdny.insertCell();
+      td.colSpan = 6 + LADENI_SLOZKY.length;
+      td.className = "jmeno";
+      td.textContent = "Filtrem neprošla ani jedna nabídka.";
+      return;
+    }
+
+    vysledky.forEach(function (vys, i) {
+      var r = tab.insertRow();
+      r.appendChild(el("td", null, String(i + 1)));
+      r.appendChild(el("td", null, vys.skore.toFixed(1)));
+      r.appendChild(el("td", null, vys.sance == null ? "—" : Math.round(vys.sance * 100) + " %"));
+      r.appendChild(el("td", "jmeno", vys.n.organizace));
+      r.appendChild(el("td", "jmeno", vys.n.kod_kkov + " " + oborPlny(vys.n)));
+      r.appendChild(el("td", null, urovenZamereni(vys.n)));
+      LADENI_SLOZKY.forEach(function (s) {
+        var h = vys.slozky[s];
+        // Kolik ze 100 bodů složka dala — teprve tohle je srovnatelné napříč
+        // složkami; holá hodnota 0–1 svádí k tomu číst váhu 1,0 jako váhu 3,0.
+        var body = 100 * h * v[s] / soucetVah;
+        r.appendChild(el("td", null, h.toFixed(2) + " (" + body.toFixed(1) + ")"));
+      });
+    });
+  }
+
+  // Pole nabídky, která do výpisu školy patří — všechno, co vstupuje do
+  // filtru nebo do skóre, plus to, z čeho se poznává zaměření.
+  var LADENI_POLE = ["izo", "redizo", "kod_kkov", "obor", "zamereni_nazev", "svp", "typ",
+                     "trida_prihlasky", "obvody", "adresa", "zrizovatel_verejny", "jen_pro_zp",
+                     "zamereni_kody", "zamereni_skoly", "talentova_zkouska", "skolne",
+                     "hranice", "poptavka", "kapacita", "prihlasky", "prijati", "rok_prijimacek",
+                     "fit", "fit_n", "bez_jpz", "bez_jpz_prevazuje", "pasma_sdileno",
+                     "maturita_percentil", "maturita_uspesnost", "maturita_rok", "posun",
+                     "doporuceny_prospech", "plan_prijmout", "loni_prihlaseni", "loni_prijati",
+                     "jazyky", "pocet_jazyku", "velikost_skoly", "vybaveni", "www"];
+
+  function vykresliLadeniSkoly() {
+    var cil = document.getElementById("ladeni-skoly");
+    var dotaz = (document.getElementById("ladeni-hledej").value || "").trim().toLowerCase();
+    if (!dotaz) {
+      cil.textContent = "Napiš část názvu školy.";
+      return;
+    }
+    var nalezene = NAB.filter(function (n) {
+      return ((n.organizace || "") + " " + (n.skola || "") + " " + (n.adresa || ""))
+        .toLowerCase().indexOf(dotaz) >= 0;
+    });
+    if (!nalezene.length) {
+      cil.textContent = "Nic, co by v názvu nebo adrese obsahovalo „" + dotaz + "“.";
+      return;
+    }
+    // Ohodnocení se počítá jednou pro celou nabídku, ne pro nalezené — skóre
+    // závisí na normalizaci proti všem kandidátům, takže samostatně spočítané
+    // číslo by neodpovídalo tomu v pořadí.
+    var vsechny = ohodnot(), podleKlice = {};
+    vsechny.forEach(function (v, i) {
+      podleKlice[v.n.izo + "|" + v.n.kod_kkov + "|" + (v.n.zamereni_nazev || "")] = { v: v, poradi: i + 1 };
+    });
+    var hledane = hledanaZamereni();
+    var radky = nalezene.map(function (n) {
+      var klic = n.izo + "|" + n.kod_kkov + "|" + (n.zamereni_nazev || "");
+      var zaznam = podleKlice[klic], duvod = duvodFiltru(n);
+      var out = [];
+      out.push("=== " + n.organizace + " — " + n.kod_kkov + " " + oborPlny(n) + " ===");
+      if (duvod) out.push("  VYŘAZENO FILTREM: " + duvod);
+      else if (zaznam) out.push("  pořadí " + zaznam.poradi + " z " + vsechny.length
+                                + ", skóre " + zaznam.v.skore.toFixed(1)
+                                + ", šance " + (zaznam.v.sance == null ? "—" : Math.round(zaznam.v.sance * 100) + " %"));
+      if (zaznam) {
+        out.push("  složky: " + LADENI_SLOZKY.map(function (s) {
+          return s + "=" + zaznam.v.slozky[s].toFixed(3);
+        }).join(" "));
+      }
+      out.push("  úroveň zaměření: " + urovenZamereni(n)
+               + " (× " + K.shoda_zamereni[urovenZamereni(n)] + " na složku zájmu)"
+               + (hledane.length ? ", hledáš: " + hledane.join(", ") : ", nic nehledáš"));
+      LADENI_POLE.forEach(function (pole) {
+        if (n[pole] === undefined || n[pole] === null) return;
+        var h = n[pole];
+        out.push("  " + pole + ": " + (typeof h === "object" ? JSON.stringify(h) : String(h)));
+      });
+      return out.join("\n");
+    });
+    cil.textContent = radky.join("\n\n");
+  }
+
+  function zkopiruj(text, hlaska) {
+    var stavEl = document.getElementById("ladeni-kopie-stav");
+    function hotovo(t) { if (stavEl) { stavEl.textContent = t; setTimeout(function () { stavEl.textContent = ""; }, 2500); } }
+    // `navigator.clipboard` neexistuje na file:// ani na http bez TLS —
+    // a právě tam se prototyp nejčastěji otevírá. Bez záložní cesty by
+    // tlačítko u půlky lidí jen tiše nedělalo nic.
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { hotovo(hlaska); },
+                                              function () { hotovo("Zkopírovat se nepodařilo — označ text myší."); });
+      return;
+    }
+    hotovo("Schránka není dostupná — označ text myší a zkopíruj ručně.");
+  }
+
   var PRAZDNE = {
     sen: "Na všechno, co ti sedí, máš velkou šanci — zkus rozšířit filtr (další obory, celá Praha) a mířit výš.",
     realisticka: "Mezi nabídkami není nic se střední šancí — buď máš na všechno, nebo je všechno hodně nad tvoje skóre.",
@@ -1086,6 +1400,8 @@
         pf.appendChild(p);
       }
     });
+
+    vykresliLadeni(vysledky);
   }
 
   // ---- inicializace ----
@@ -1140,6 +1456,10 @@
     { hodnota: "I", popis: "Italština" }, { hodnota: "", popis: "Nezáleží", vychozi: true }
   ], "radio", "jazyk", zmena);
 
+  chips("q-jazyk-povinny", [{ hodnota: "", popis: "Jazyk jen zvýhodni", vychozi: true },
+                            { hodnota: "ano", popis: "Bez toho jazyka školu nechci" }],
+        "radio", "jazyk_povinny", zmena);
+
   // Pozor na "zlepseni": bez posluchače byl posuvník úplně mrtvý — hýbal se,
   // ale výsledek se nepřekresloval.
   ["skor-cj", "skor-ma", "prospech", "zlepseni"].forEach(function (id) {
@@ -1152,6 +1472,20 @@
       "Porovná se s doporučeným prospěchem školy — ten zná jen Atlas školství, "
       + "jehož scraper zatím není v databázi. Do té doby otázka výsledek neovlivní.";
   }
+
+  document.getElementById("ladeni-hledej").addEventListener("input", vykresliLadeniSkoly);
+  document.getElementById("ladeni-kopiruj-profil").addEventListener("click", function () {
+    zkopiruj(document.getElementById("ladeni-profil").textContent, "Profil zkopírován.");
+  });
+  document.getElementById("ladeni-kopiruj-skoly").addEventListener("click", function () {
+    zkopiruj(document.getElementById("ladeni-skoly").textContent, "Výpis zkopírován.");
+  });
+
+  // Stejné funkce i do konzole — ladit přes `copy(JNS.ohodnot())` je rychlejší
+  // než klikat, a hlavně se tím dá stránka ověřit skriptem proti Pythonu.
+  window.JNS = { stav: stav, nabidky: NAB, konstanty: K, ciselniky: C,
+                 ohodnot: ohodnot, duvodFiltru: duvodFiltru, profil: profilProPython,
+                 urovenZamereni: urovenZamereni, vahy: vahy, prekresli: zmena };
 
   vykresliTerminy();
   vykresliStavDat();

@@ -8,6 +8,7 @@ importéry (% skór 0–200, REDIZO jako text s vedoucí nulou, školné v Kč).
 """
 from __future__ import annotations
 
+import re
 import json
 
 import pytest
@@ -913,3 +914,104 @@ def test_sdilena_namerena_krivka_se_prizna(conn):
     v = next(v for v in pruvodce.ohodnot(profil, list(it.values()))
              if v.nabidka.zamereni_nazev == "sítě")
     assert any("za celý obor" in x for x in v.varovani), v.varovani
+
+
+# --------------------------------------------------------------------------
+# web/index.html — smlouva mezi Pythonem a webovým prototypem
+# --------------------------------------------------------------------------
+#
+# Stránka je ruční port `ohodnot()` do JavaScriptu. Konstanty si sice čte
+# z `data.js`, takže se nemůže rozejít ve **vahách** — ale rozešla se
+# v tom, co vlastně počítá: složka `jazyk` v ní chyběla úplně (její váha
+# přitom zůstala ve jmenovateli), `typ` se nenormalizoval proti kandidátům
+# a priorita „hodně jazyků" zdvojnásobovala jinou složku než v Pythonu.
+# Žádný test to nechytil, protože testy sahají jen na Python.
+#
+# Následující testy čtou `web/index.html` jako text. Je to hrubé, ale chytí
+# přesně tu třídu chyb, která tu nastala: složka, na kterou se v portu
+# zapomnělo. Na čísla je tu ověřovací skript v `docs/pruvodce-ux.md`
+# (oddíl „Webový prototyp"), který pouští obě implementace proti sobě.
+
+@pytest.fixture(scope="module")
+def web_js() -> str:
+    from pathlib import Path
+    return (Path(__file__).resolve().parent.parent / "web" / "index.html").read_text(encoding="utf-8")
+
+
+def test_web_pocita_vsechny_slozky_skore(web_js):
+    """Každá složka z SLOZKY_SKORE musí mít ve webu přiřazení `slozky.X = …`.
+
+    Chybějící složka se nepozná podle výjimky — skóre se jen tiše dělí
+    součtem **všech** vah, takže vyjde nižší a pořadí se posune.
+    """
+    for slozka in pruvodce.SLOZKY_SKORE:
+        assert f"slozky.{slozka} =" in web_js, (
+            f"web/index.html nepočítá složku „{slozka}“, ale její váha "
+            f"{pruvodce.SLOZKY_SKORE[slozka]} je ve jmenovateli skóre")
+
+
+def test_web_neresi_prioritu_jazyku_v_prostredi(web_js):
+    """Priorita `jazyky` zdvojnásobuje složku `jazyk`, ne `prostredi`."""
+    assert pruvodce.PRIORITY["jazyky"][1] == "jazyk"
+    prostredi = web_js.split("function skoreProstredi(")[1].split("\n  }")[0]
+    assert '"jazyky"' not in prostredi, (
+        "skoreProstredi() ve webu sahá na prioritu `jazyky` — ta patří do složky `jazyk`")
+
+
+def test_web_ladeni_posila_jen_pole_profilu(web_js):
+    """Ladicí výpis slibuje profil pro `Profil.z_json` — ať to je pravda.
+
+    Kdyby v něm byl klíč, který `Profil` nezná, uživatel by zkopírovaný
+    profil vložil do Pythonu a dostal „neznámá pole profilu“ místo výsledku.
+    """
+    telo = web_js.split("function profilProPython()")[1].split("return p;")[0]
+    klice = set(re.findall(r"^\s{6}(\w+):", telo, re.MULTILINE))
+    assert klice, "nepodařilo se z profilProPython() vyčíst klíče"
+    neznama = klice - set(pruvodce.Profil.__dataclass_fields__)
+    assert not neznama, f"ladicí výpis posílá pole, která Profil nezná: {sorted(neznama)}"
+    # A naopak: to, na co se formulář ptá, se musí do profilu dostat.
+    assert {"trida", "oblasti_zajmu", "zamereni", "skor_cj", "skor_ma",
+            "zlepseni_bodu", "priority", "jazyk"} <= klice
+
+
+def test_web_ladeni_nevynechava_zadnou_slozku(web_js):
+    """Tabulka v ladicím výpisu musí ukazovat všechny složky skóre."""
+    seznam = web_js.split("var LADENI_SLOZKY = [")[1].split("]")[0]
+    assert set(re.findall(r'"(\w+)"', seznam)) == set(pruvodce.SLOZKY_SKORE)
+
+
+def test_export_bez_jpz_nese_podil_vazeny_roky(conn):
+    """Podíl u oborů bez JPZ se váží roky — z holých součtů ho nejde složit.
+
+    Web si ho dřív počítal jako přijato/posouzeno a lišil se od Pythonu
+    (SPŠE Ječná, elektrotechnika: 0,33 proti 0,40 šance).
+    """
+    _skola(conn, "600000009", "100000009", "Učňovská bez JPZ", "Praha 9")
+    _obor(conn, "100000009", "26-52-H/01", "Elektromechanik")
+    # 2024 (váha 1): 1 z 10. 2026 (váha 3): 9 z 10. Nevážený podíl je 0,5,
+    # vážený (1·1 + 9·3) / (10·1 + 10·3) = 28/40 = 0,7.
+    for rok, prijato in [(2024, 1), (2026, 9)]:
+        _pasmo(conn, "600000009", "26-52-H/01", rok, pruvodce.PASMO_BEZ_JPZ,
+               prijato, kapacita_ne=10 - prijato)
+
+    podle_izo = {n["izo"]: n for n in export_web.export(conn)["nabidky"]}
+    prijato, posouzeno, podil = podle_izo["100000009"]["bez_jpz"]
+    assert (prijato, posouzeno) == (10, 20)
+    assert podil == pytest.approx(0.7)
+    # A je to totéž číslo, se kterým počítá pruvodce.py.
+    nab = {n.izo: n for n in pruvodce.nacti_nabidky(conn)}["100000009"]
+    assert pruvodce._empiricka_sance(nab, None)[0] == pytest.approx(podil)
+
+
+def test_export_nese_ke_kazdemu_pasmu_i_vzorek(conn):
+    """`fit` musí nést i počty, jinak web nespočítá vzorek „v okolí“."""
+    _skola(conn, "600000010", "100000010", "Gymnázium s pásmy", "Praha 9")
+    _obor(conn, "100000010", "79-41-K/41", "Gymnázium")
+    for pasmo_od in range(60, 200, 10):
+        prijato = pasmo_od // 20            # roste s pásmem, ať je křivka monotonní
+        _pasmo(conn, "600000010", "79-41-K/41", 2026, pasmo_od,
+               prijato, kapacita_ne=10 - prijato)
+    fit = {n["izo"]: n for n in export_web.export(conn)["nabidky"]}["100000010"]["fit"]
+    for pasmo, hodnota in fit.items():
+        podil, vzorek = hodnota
+        assert 0.0 <= podil <= 1.0 and vzorek == 10, (pasmo, hodnota)

@@ -58,15 +58,22 @@ def nabidka_do_dictu(nab: pruvodce.Nabidka) -> dict[str, Any]:
     vyhlazena = pruvodce._monotonni_pasma(nab.pasma) if nab.pasma else {}
     celkem = sum(n for _p, n in vyhlazena.values())
     if vyhlazena and celkem >= pruvodce.MIN_VZOREK:
-        d["fit"] = {str(pasmo): round(podil, 4) for pasmo, (podil, _n) in sorted(vyhlazena.items())}
+        # Ke každému pásmu jde i jeho vzorek: bez něj web nemá z čeho spočítat
+        # „kolik uchazečů s podobným skórem" (okolí ±OKNO_PASMA) a musel by
+        # místo toho hlásit celkový vzorek nabídky — tedy jiné číslo, než
+        # ukáže `pruvodce.py` na tomtéž profilu.
+        d["fit"] = {str(pasmo): [round(podil, 4), n] for pasmo, (podil, n) in sorted(vyhlazena.items())}
         d["fit_n"] = celkem
-    bez_jpz = nab.pasma.get(pruvodce.PASMO_BEZ_JPZ) if nab.pasma else None
-    if bez_jpz:
-        prijato = sum(p for p, _n in bez_jpz.values())
-        posouzeno = sum(n for _p, n in bez_jpz.values())
-        if posouzeno:
-            d["bez_jpz"] = [prijato, posouzeno]
-            d["bez_jpz_prevazuje"] = pruvodce._prevazuje_bez_jpz(nab)
+    # Obory bez jednotné zkoušky. Podíl se **váží roky** (`ROKY_JPZ`), takže
+    # ho nejde poskládat z holých součtů — musí ven spočítaný. Bere se
+    # rovnou z `_empiricka_sance`, ať má vážení jednu implementaci; dokud si
+    # ho JavaScript počítal z totálů sám, lišil se web od Pythonu až o 7
+    # procentních bodů šance (SPŠE Ječná, elektrotechnika: 0,33 vs 0,40).
+    emp = pruvodce._empiricka_sance(nab, None) if nab.pasma else None
+    if emp is not None:
+        podil, prijato, posouzeno, _celkem = emp
+        d["bez_jpz"] = [prijato, posouzeno, round(podil, 6)]
+        d["bez_jpz_prevazuje"] = pruvodce._prevazuje_bez_jpz(nab)
     return {k: v for k, v in d.items() if not _prazdne(v)}
 
 
