@@ -3,6 +3,10 @@
 - **Vyvíjej přímo ve větvi `main`.** Tenhle projekt zatím nepoužívá feature
   větve ani pull requesty — commituj a pushuj rovnou do `main`, pokud
   vlastník repa výslovně neřekne jinak pro konkrétní úkol.
+- **Na konci session musí být vše commitnuté a pushnuté do `main`.**
+  Neukončuj session s necommitnutými změnami ani s commity, které jsou jen
+  lokální — pushni je, ať v `main` na originu vždy odpovídá aktuální stav
+  práce.
 - Databáze `data/jaknastredni.db` se **neverzuje v gitu** (viz `.gitignore`
   a README, sekce "Rozhodnutí o vývoji a ukládání dat") — je 100%
   reprodukovatelná z `data/raw/` skriptem `python -m jaknastredni.build_db`.
