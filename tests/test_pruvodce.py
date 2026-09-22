@@ -341,3 +341,22 @@ def test_portfolio_nedava_tri_prihlasky_na_jednu_skolu(conn):
     trojice = pruvodce.portfolio(pruvodce.ohodnot(profil, pruvodce.nacti_nabidky(conn)))
     redizo = [v.nabidka.redizo for v in trojice.values() if v]
     assert len(redizo) == len(set(redizo))
+
+
+# --------------------------------------------------------------------------
+# Export pro webový prototyp
+# --------------------------------------------------------------------------
+
+def test_export_web_nese_nabidky_i_konstanty(conn):
+    from jaknastredni import export_web
+
+    data = export_web.export(conn)
+    assert len(data["nabidky"]) == 4
+    # Web nemá mít konstanty opsané u sebe — čte je z exportu.
+    assert data["konstanty"]["slozky_skore"] == pruvodce.SLOZKY_SKORE
+    assert data["konstanty"]["sigma_zaklad"] == pruvodce.SIGMA_ZAKLAD
+    assert set(data["ciselniky"]["oblasti"]) == set(oblasti.OBLASTI)
+    # Prázdná pole se vynechávají, ať soubor zbytečně neroste.
+    ucnak = next(n for n in data["nabidky"] if n["redizo"] == "600000004")
+    assert "hranice" not in ucnak and "skolne" not in ucnak
+    assert ucnak["kod_kkov"] == "23-51-H/01"

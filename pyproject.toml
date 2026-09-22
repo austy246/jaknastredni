@@ -33,6 +33,7 @@ jns-cermat-jpz = "jaknastredni.cermat_jpz:main"
 jns-fetch = "jaknastredni.fetch_all:main"
 jns-build = "jaknastredni.build_db:main"
 jns-pruvodce = "jaknastredni.pruvodce:main"
+jns-export-web = "jaknastredni.export_web:main"
 
 [tool.setuptools.packages.find]
 include = ["jaknastredni*"]

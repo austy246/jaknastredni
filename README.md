@@ -26,6 +26,7 @@ kvalita, maturitní výsledky, uplatnění absolventů apod.).
 - Nad hotovou databází běží **průvodce výběrem školy**
   (`jaknastredni/pruvodce.py`) — z odpovědí uchazeče vybere 5 nejlepších
   nabídek a návrh tří přihlášek, viz níže a [`docs/pruvodce-ux.md`](docs/pruvodce-ux.md).
+  Klikací prototyp průvodce je `web/index.html`.
 
 ## Rychlý start
 
@@ -385,6 +386,17 @@ vážené skóre shody ze šesti složek (`zajem`, `dosazitelnost`, `kvalita`,
 - **návrh tří přihlášek** rozložený podle rizika (sen / realistická /
   jistota) — od roku 2024 se podávají tři přihlášky a pořadí priorit se
   nevyplatí taktizovat, což průvodce uživateli říká natvrdo.
+
+Klikací prototyp je `web/index.html` (statická stránka, žádný server) —
+data si bere z `web/data.js`, který se generuje z databáze:
+
+```bash
+python -m jaknastredni.export_web --db data/jaknastredni.db -o web/data.js
+```
+
+Soubor `web/data.js` se neverzuje (odvozený artefakt, stejně jako databáze).
+Zdrojem pravdy o hodnocení zůstává `pruvodce.py` — export do dat přibaluje
+i jeho konstanty, takže je web čte a nemá je opsané u sebe.
 
 **Šance na přijetí** se počítá ze zveřejněného minimálního % skóru přijatých
 (`prijimaci_rizeni.skor_prijati_min_cjma`, 2024+) jako normální rozdělení

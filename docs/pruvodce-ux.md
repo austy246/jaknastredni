@@ -281,11 +281,45 @@ oborová pole v poli `obory`) — **až scraper přistane, ověřit, že názvy
 `loni_prijati` a `doporuceny_prospech` sedí**, jinak stačí upravit
 `_doplnit_obor()`.
 
+## Webový prototyp
+
+`web/index.html` je klikací verze návrhu — jedna statická stránka bez
+serveru, všech devět otázek pod sebou a **výsledek se překresluje při každé
+změně** (včetně počtu vyhovujících nabídek v hlavičce, takže je vidět, jak
+se trychtýř zužuje). Data a konstanty si bere z `web/data.js`, který
+generuje:
+
+```bash
+python -m jaknastredni.export_web --db data/jaknastredni.db -o web/data.js
+```
+
+`web/data.js` se **neverzuje** (odvozený artefakt, stejně jako databáze —
+viz README, „Rozhodnutí o vývoji a ukládání dat"); stránka se otevře i
+přímo z disku, proto je to `window.JNS_DATA = {…}`, ne čistý JSON.
+
+Zdrojem pravdy o hodnocení zůstává `pruvodce.py`. Export proto do dat
+přibaluje i **všechny konstanty** (váhy složek, σ, pásma portfolia, oblasti
+zájmu, typy vzdělání) a JavaScript je čte odtamtud — změna váhy v Pythonu
+se po přegenerování projeví i ve webu. Duplikovaný zůstává jen tvar vzorce
+(~150 řádků v `index.html`); při změně logiky hodnocení je potřeba upravit
+obojí.
+
+Dvě věci, které prototyp ukazuje a CLI ne:
+
+- **Osa 0–200 bodů** pod každou kartou: hranice přijetí za jednotlivé roky
+  jako svislé značky a skór uchazeče červeně. Tři čísla v řadě vedle sebe
+  řeknou o stabilitě školy víc než průměr a je hned vidět, jestli uchazeč
+  stojí nad hranicí, nebo v pásmu, kde o tom rozhodne vlastní kritérium
+  školy.
+- **Pás šance** s rozmytým koncem — vizuální připomínka, že je to odhad
+  s nejistotou, ne naměřená hodnota.
+
 ## Další kroky
 
-1. **Webové UI.** CLI je referenční průchod; skutečné UX je jednostránkový
-   průvodce s progress barem a možností kdykoli přeskočit. `--json` výstup
-   je přesně to, co takový frontend potřebuje.
+1. **Plnohodnotné webové UI.** Prototyp je jednostránkový a ukazuje všechny
+   otázky naráz; ostrá verze by měla mít průchod po krocích s možností
+   kdykoli přeskočit a sdílitelný odkaz na výsledek. `--json` výstup CLI je
+   přesně to, co takový frontend potřebuje.
 2. **Srovnávací pohled** pro 2–3 vybrané školy vedle sebe (tabulka let,
    hranice, maturity) — to, co si uživatel stejně dělá ručně v Excelu.
 3. **Dojezd MHD** (GTFS) — největší jednotlivé zlepšení kvality výsledku.

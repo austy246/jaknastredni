@@ -1,0 +1,825 @@
+<title>Kam na střední</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #eef1f4;
+    --surface: #ffffff;
+    --surface-2: #e4e9ee;
+    --ink: #131a21;
+    --ink-muted: #56636f;
+    --ink-faint: #7f8b96;
+    --line: #cfd7de;
+    --line-strong: #9fadb9;
+    --accent: #14507d;
+    --accent-soft: #dbe7f1;
+    --good: #1b6b4c;
+    --warn: #8a5a10;
+    --risk: #9c2f22;
+    --risk-soft: #f3dedb;
+    --radius: 3px;
+    --gutter: 20px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0e1319;
+      --surface: #161d25;
+      --surface-2: #1e2731;
+      --ink: #e4eaf0;
+      --ink-muted: #a3b0bc;
+      --ink-faint: #7d8a97;
+      --line: #2b3641;
+      --line-strong: #44525f;
+      --accent: #74aede;
+      --accent-soft: #1b2c3d;
+      --good: #63bd93;
+      --warn: #d9a75a;
+      --risk: #e08a7d;
+      --risk-soft: #34211f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0e1319;
+    --surface: #161d25;
+    --surface-2: #1e2731;
+    --ink: #e4eaf0;
+    --ink-muted: #a3b0bc;
+    --ink-faint: #7d8a97;
+    --line: #2b3641;
+    --line-strong: #44525f;
+    --accent: #74aede;
+    --accent-soft: #1b2c3d;
+    --good: #63bd93;
+    --warn: #d9a75a;
+    --risk: #e08a7d;
+    --risk-soft: #34211f;
+  }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding-inline: var(--gutter); padding-block: 0 64px; }
+
+  h1, h2, h3 { font-family: Archivo, "Helvetica Neue", Arial, sans-serif; font-weight: 700; text-wrap: balance; margin: 0; }
+  h1 { font-size: 1.5rem; letter-spacing: -0.01em; }
+  h2 { font-size: 1.15rem; letter-spacing: -0.005em; }
+  h3 { font-size: 1rem; }
+  .eyebrow {
+    font-family: Archivo, sans-serif; font-size: .7rem; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint);
+  }
+  .num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  /* --- hlavička s živým počtem --- */
+  header.top {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+    background: var(--surface); border-bottom: 1px solid var(--line-strong);
+  }
+  .top-in {
+    max-width: 960px; margin: 0 auto; padding-inline: var(--gutter); padding-block: 10px;
+    display: flex; gap: 16px; align-items: baseline; justify-content: space-between; flex-wrap: wrap;
+  }
+  .top-in p { margin: 0; color: var(--ink-muted); font-size: .85rem; }
+  .pocet { font-size: .9rem; color: var(--ink-muted); white-space: nowrap; }
+  .pocet b { font-family: "IBM Plex Mono", monospace; font-size: 1.35rem; color: var(--accent); font-weight: 500; }
+
+  .intro { padding-block: 24px 8px; max-width: 62ch; }
+  .intro p { color: var(--ink-muted); margin: 8px 0 0; }
+
+  /* --- otázky --- */
+  .otazky { display: grid; gap: 2px; background: var(--line); border: 1px solid var(--line); margin-block: 24px; }
+  .q { background: var(--surface); padding: 16px 18px; display: grid; gap: 10px; }
+  .q > header { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .q h3 { font-size: .98rem; }
+  .q .cislo {
+    font-family: "IBM Plex Mono", monospace; font-size: .78rem; color: var(--surface);
+    background: var(--ink-faint); width: 1.6em; height: 1.6em; display: grid; place-items: center; flex: none;
+  }
+  .q .povinne { font-size: .72rem; color: var(--risk); font-family: Archivo, sans-serif; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  .hint { font-size: .82rem; color: var(--ink-faint); margin: 0; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { position: relative; }
+  .chip input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .chip span {
+    display: block; border: 1px solid var(--line-strong); border-radius: var(--radius);
+    padding: 5px 11px; font-size: .88rem; background: var(--surface); color: var(--ink-muted);
+    transition: background .12s, color .12s, border-color .12s;
+  }
+  .chip input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
+  .chip input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .chip input:checked + span { color: #fff; }
+
+  .radky { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-end; }
+  .pole { display: grid; gap: 4px; }
+  .pole label { font-size: .8rem; color: var(--ink-muted); }
+  .pole input[type="number"], .pole select {
+    font: inherit; font-family: "IBM Plex Mono", monospace; padding: 6px 8px; width: 7.5em;
+    border: 1px solid var(--line-strong); border-radius: var(--radius);
+    background: var(--surface); color: var(--ink);
+  }
+  .pole select { font-family: "Source Sans 3", sans-serif; width: auto; }
+  .soucet { font-size: .85rem; color: var(--ink-muted); }
+  .soucet b { font-family: "IBM Plex Mono", monospace; color: var(--ink); }
+
+  /* --- výsledky --- */
+  section.vysledky { margin-block: 40px 0; }
+  .sekce-hlava { display: flex; gap: 12px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; border-bottom: 2px solid var(--ink); padding-bottom: 6px; margin-bottom: 4px; }
+  .poznamky { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+  .poznamky li { font-size: .87rem; color: var(--warn); border-left: 3px solid var(--warn); padding-left: 10px; }
+
+  .karty { display: grid; gap: 14px; margin-top: 18px; }
+  .karta { background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--accent); padding: 16px 18px; display: grid; gap: 12px; }
+  .karta.sen { border-top-color: var(--risk); }
+  .karta.realisticka { border-top-color: var(--warn); }
+  .karta.jistota { border-top-color: var(--good); }
+  .karta-hlava { display: grid; gap: 3px; }
+  .karta-hlava .role { font-family: Archivo, sans-serif; font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+  .sen .role { color: var(--risk); } .realisticka .role { color: var(--warn); } .jistota .role { color: var(--good); }
+  .karta-hlava h3 { line-height: 1.3; }
+  .obor { color: var(--ink-muted); font-size: .92rem; }
+  .misto { color: var(--ink-faint); font-size: .85rem; }
+  .misto a { color: var(--accent); }
+
+  .metriky { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; border-block: 1px solid var(--line); padding-block: 12px; }
+  .metrika { display: grid; gap: 2px; }
+  .metrika .popis { font-size: .74rem; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .06em; font-family: Archivo, sans-serif; font-weight: 600; }
+  .metrika .hodnota { font-family: "IBM Plex Mono", monospace; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+  .metrika .detail { font-size: .78rem; color: var(--ink-faint); }
+
+  /* pás šance: gradient ukazuje, že odhad je nejistý */
+  .sance-pas { height: 7px; background: var(--surface-2); position: relative; overflow: hidden; }
+  .sance-pas i { position: absolute; inset-block: 0; left: 0; display: block; background: linear-gradient(90deg, var(--accent), var(--accent) 70%, color-mix(in srgb, var(--accent) 35%, transparent)); }
+
+  /* osa bodů 0–200 s hranicemi po letech a skórem uchazeče */
+  .osa { display: grid; gap: 6px; }
+  .osa-plocha { position: relative; height: 58px; background: var(--surface-2); }
+  .osa-plocha .rok { position: absolute; inset-block: 0; width: 2px; background: var(--line-strong); }
+  /* Hranice sousedních let bývají jen pár bodů od sebe, proto popisky
+     střídají tři výšky — jinak se překryjí. */
+  .osa-plocha .rok b {
+    position: absolute; left: 4px; transform: translateY(-50%);
+    font-family: "IBM Plex Mono", monospace; font-size: .62rem; font-weight: 400;
+    color: var(--ink-muted); white-space: nowrap; background: var(--surface-2); padding-inline: 2px;
+  }
+  .osa-plocha .rok:nth-of-type(1) b { top: 25%; }
+  .osa-plocha .rok:nth-of-type(2) b { top: 50%; }
+  .osa-plocha .rok:nth-of-type(3) b { top: 75%; }
+  .osa-plocha .ja { position: absolute; inset-block: 0; width: 3px; background: var(--risk); }
+  .osa-plocha .ja b {
+    position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+    font-family: Archivo, sans-serif; font-size: .64rem; font-weight: 700; color: var(--risk); white-space: nowrap;
+  }
+  .osa-popis { display: flex; justify-content: space-between; gap: 12px; font-family: "IBM Plex Mono", monospace; font-size: .68rem; color: var(--ink-faint); }
+  .osa-popis span:nth-child(2) { text-align: center; }
+
+  ul.duvody, ul.varovani { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: .88rem; }
+  ul.duvody li::before { content: "+"; color: var(--good); font-family: "IBM Plex Mono", monospace; margin-right: .5em; }
+  ul.varovani li::before { content: "!"; color: var(--risk); font-family: "IBM Plex Mono", monospace; margin-right: .5em; }
+  ul.varovani li { color: var(--ink-muted); }
+  .akce { display: flex; gap: 14px; flex-wrap: wrap; font-size: .85rem; }
+  .akce a { color: var(--accent); }
+  .akce span { color: var(--ink-faint); }
+
+  .prazdne { background: var(--surface); border: 1px dashed var(--line-strong); padding: 16px 18px; color: var(--ink-muted); font-size: .9rem; }
+  .prazdne .role { font-family: Archivo, sans-serif; font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; display: block; margin-bottom: 4px; }
+
+  .rada { background: var(--accent-soft); border-left: 3px solid var(--accent); padding: 12px 16px; margin-top: 18px; font-size: .92rem; }
+  .rada b { font-weight: 600; }
+
+  footer.paticka { margin-top: 48px; border-top: 1px solid var(--line); padding-top: 16px; font-size: .82rem; color: var(--ink-faint); display: grid; gap: 6px; }
+  footer.paticka a { color: var(--accent); }
+  code { font-family: "IBM Plex Mono", monospace; font-size: .92em; }
+
+  @media (max-width: 560px) {
+    .metriky { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+    h1 { font-size: 1.25rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<header class="top">
+  <div class="top-in">
+    <h1>Kam na střední</h1>
+    <p class="pocet">vyhovuje <b id="pocet">–</b> z 623 nabídek</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="intro">
+    <p class="eyebrow">Prototyp průvodce · pražské střední školy</p>
+    <p>Devět otázek, z nichž povinná je jen první. Každá odpověď hned mění
+      seznam nahoře. Počítá se z otevřených dat MŠMT, CERMAT, ČŠI a
+      infoabsolvent.cz — u každého čísla je napsané, odkud je.</p>
+  </div>
+
+  <form class="otazky" id="form">
+    <div class="q">
+      <header><span class="cislo">1</span><h3>Ze které třídy se hlásíš?</h3><span class="povinne">Povinné</span></header>
+      <div class="chips" id="q-trida"></div>
+    </div>
+
+    <div class="q">
+      <header><span class="cislo">2</span><h3>Jaký typ vzdělání tě zajímá?</h3></header>
+      <p class="hint">Nic nezaškrtnuto = všechny typy.</p>
+      <div class="chips" id="q-typy"></div>
+    </div>
+
+    <div class="q">
+      <header><span class="cislo">3</span><h3>Které oblasti tě baví?</h3></header>
+      <p class="hint">Obor může patřit do víc oblastí — filtr radši nabídne víc, než aby ho schoval.</p>
+      <div class="chips" id="q-oblasti"></div>
+    </div>
+
+    <div class="q">
+      <header><span class="cislo">4</span><h3>Kde by to mělo být?</h3></header>
+      <p class="hint">Nefiltruje, jen zvýhodní. Sousední městská část dostane půl bodu — dojezd MHD zatím v datech nemáme.</p>
+      <div class="chips" id="q-obvody"></div>
+    </div>
+
+    <div class="q">
+      <header><span class="cislo">5</span><h3>Jak ti vyjdou přijímačky?</h3></header>
+      <p class="hint">Očekávaný % skór za každý předmět (třeba z přijímaček nanečisto). Prázdné = nevím.</p>
+      <div class="radky">
+        <div class="pole"><label for="skor-cj">Český jazyk (0–100)</label><input type="number" id="skor-cj" min="0" max="100" step="1" placeholder="—"></div>
+        <div class="pole"><label for="skor-ma">Matematika (0–100)</label><input type="number" id="skor-ma" min="0" max="100" step="1" placeholder="—"></div>
+        <p class="soucet" id="soucet">Celkem <b>—</b> z 200 bodů</p>
+      </div>
+    </div>
+
+    <div class="q">
+      <header><span class="cislo">6</span><h3>Jaký máš průměr na vysvědčení?</h3></header>
+      <p class="hint" id="prospech-hint">Porovná se s doporučeným prospěchem školy.</p>
+      <div class="radky">
+        <div class="pole"><label for="prospech">Průměr (1,0–5,0)</label><input type="number" id="prospech" min="1" max="5" step="0.1" placeholder="—"></div>
+      </div>
+    </div>
+
+    <div class="q">
+      <header><span class="cislo">7</span><h3>Kolik můžete dát za školné?</h3></header>
+      <div class="chips" id="q-skolne"></div>
+    </div>
+
+    <div class="q">
+      <header><span class="cislo">8</span><h3>Co je pro tebe nejdůležitější?</h3></header>
+      <p class="hint">Vyber až tři. Nemění, co se zobrazí, ale v jakém pořadí — zvolená priorita zdvojnásobí váhu své složky skóre.</p>
+      <div class="chips" id="q-priority"></div>
+    </div>
+
+    <div class="q">
+      <header><span class="cislo">9</span><h3>Chceš mít jistotu konkrétního jazyka?</h3></header>
+      <div class="chips" id="q-jazyk"></div>
+    </div>
+  </form>
+
+  <section class="vysledky">
+    <div class="sekce-hlava">
+      <h2>Pět nejlepších nabídek</h2>
+      <span class="eyebrow">Nejvýš jedna od každé školy</span>
+    </div>
+    <ul class="poznamky" id="poznamky"></ul>
+    <div class="karty" id="top5"></div>
+  </section>
+
+  <section class="vysledky">
+    <div class="sekce-hlava">
+      <h2>Návrh tří přihlášek</h2>
+      <span class="eyebrow">Sen · realistická · jistota</span>
+    </div>
+    <div class="rada">
+      <b>Pořadí priorit vyplň podle toho, kam opravdu chceš.</b> Od roku 2024
+      rozhoduje centrální algoritmus a sen na prvním místě ti nikdy nesníží
+      šanci na druhou a třetí volbu. Riziko rozkládá skladba přihlášek, ne jejich pořadí.
+    </div>
+    <div class="karty" id="portfolio"></div>
+  </section>
+
+  <footer class="paticka">
+    <p><b>Data:</b> rejstřík škol MŠMT (stav 22. 9. 2026) · CERMAT — výsledky
+      jednotné přijímací zkoušky 2024–2026 a maturity 2015–2026 · Česká školní
+      inspekce · infoabsolvent.cz (NPI ČR).</p>
+    <p><b>Hranice přijetí</b> je minimální % skór posledního přijatého uchazeče,
+      který zveřejňuje CERMAT. Šance je normální rozdělení kolem očekávané
+      hranice; nejistota (σ = 18 až 32 bodů) vychází z naměřeného meziročního
+      rozptylu hranic. Stoprocentní jistota neexistuje — škola si k jednotné
+      zkoušce přidává vlastní kritéria, která ve veřejných datech nejsou.</p>
+    <p>Prototyp k návrhu <code>docs/pruvodce-ux.md</code>; zdrojem pravdy o
+      hodnocení je <code>jaknastredni/pruvodce.py</code>, tahle stránka čte jeho
+      konstanty z <code>data.js</code>.</p>
+  </footer>
+</div>
+
+<script src="data.js"></script>
+<script>
+(function () {
+  "use strict";
+  var D = window.JNS_DATA;
+  var K = D.konstanty, C = D.ciselniky;
+  var NAB = D.nabidky;
+
+  // ---- stav formuláře ----
+  var stav = { trida: 9, typy: [], oblasti: [], obvody: [], skorCj: null, skorMa: null,
+               prospech: null, skolneMax: null, jazyk: null, priority: [] };
+
+  // ---- pomocné ----
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function cisla(obj) {           // {"2024": 150} -> {2024: 150}
+    var out = {};
+    for (var k in obj) out[Number(k)] = obj[k];
+    return out;
+  }
+  function posledni(obj) {
+    var roky = Object.keys(obj).map(Number);
+    return roky.length ? obj[Math.max.apply(null, roky)] : null;
+  }
+  function erf(x) {               // Abramowitz–Stegun 7.1.26
+    var s = x < 0 ? -1 : 1, a = Math.abs(x);
+    var t = 1 / (1 + 0.3275911 * a);
+    var y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t
+                  - 0.284496736) * t + 0.254829592) * t * Math.exp(-a * a);
+    return s * y;
+  }
+  function normCdf(z) { return 0.5 * (1 + erf(z / Math.SQRT2)); }
+  function omez(p, d, h) { return Math.max(d === undefined ? 0.03 : d, Math.min(h === undefined ? 0.97 : h, p)); }
+  function mezera(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
+
+  // ---- šance na přijetí (port sance_prijeti z pruvodce.py) ----
+  function odhadHranice(n) {
+    var h = cisla(n.hranice || {}), roky = Object.keys(h).map(Number).filter(function (r) { return K.roky_jpz[r]; });
+    if (!roky.length) return null;
+    var vahy = 0, soucet = 0;
+    roky.forEach(function (r) { vahy += K.roky_jpz[r]; soucet += h[r] * K.roky_jpz[r]; });
+    var stred = soucet / vahy;
+    if (roky.length === 1) return { stred: stred, sigma: K.sigma_jeden_rok };
+    var hodnoty = roky.map(function (r) { return h[r]; });
+    var rozpeti = Math.max.apply(null, hodnoty) - Math.min.apply(null, hodnoty);
+    return { stred: stred, sigma: Math.min(Math.max(K.sigma_zaklad, rozpeti), K.sigma_max) };
+  }
+  function sanceZPoptavky(p) {
+    var pasma = [[0.9, 0.92], [1.2, 0.80], [2.0, 0.60], [4.0, 0.35]];
+    for (var i = 0; i < pasma.length; i++) if (p <= pasma[i][0]) return pasma[i][1];
+    return 0.18;
+  }
+  function sancePrijeti(n, skor) {
+    var o = odhadHranice(n);
+    if (o && skor != null) {
+      return { p: omez(normCdf((skor - o.stred) / o.sigma)),
+               zdroj: "z hranice přijetí " + Math.round(o.stred) + "/200 b.",
+               stred: o.stred };
+    }
+    var poptavka = posledni(cisla(n.poptavka || {}));
+    if (poptavka != null) {
+      var z = sanceZPoptavky(poptavka);
+      if (skor != null) z += (skor - 110) / 400;
+      return { p: omez(z), zdroj: "z poměru přihlášek ku kapacitě (" + poptavka.toFixed(1) + "×)" };
+    }
+    if (n.loni_prihlaseni && (n.loni_prijati || n.plan_prijmout)) {
+      var pomer = n.loni_prihlaseni / (n.loni_prijati || n.plan_prijmout);
+      return { p: omez(sanceZPoptavky(pomer)), zdroj: "z loňského poměru přihlášek (" + pomer.toFixed(1) + "×)" };
+    }
+    return { p: null, zdroj: n.plan_prijmout ? "obor bez jednotné zkoušky — šanci z dat neodhadneme"
+                                             : "chybí data o přijímacím řízení" };
+  }
+
+  // ---- filtry a skóre (port projde_filtrem / ohodnot) ----
+  function oblastiOboru(kkov) {
+    var sk = kkov.slice(0, 2), out = [];
+    for (var k in C.oblasti) if (C.oblasti[k].skupiny.indexOf(sk) >= 0) out.push(k);
+    return out;
+  }
+  function uciJazyk(n, jazyk) {
+    if (!n.jazyky) return false;
+    return new RegExp("(^|[\\s,(])" + jazyk + "($|[\\s,)])").test(n.jazyky);
+  }
+  function projdeFiltrem(n) {
+    if (n.trida_prihlasky !== stav.trida) return false;
+    if (n.jen_pro_zp || n.typ === "C") return false;
+    if (stav.typy.length && stav.typy.indexOf(n.typ) < 0) return false;
+    if (stav.oblasti.length) {
+      var o = oblastiOboru(n.kod_kkov);
+      if (!stav.oblasti.some(function (x) { return o.indexOf(x) >= 0; })) return false;
+    }
+    if (stav.skolneMax != null && (n.skolne || 0) > stav.skolneMax) return false;
+    if (stav.jazyk && !uciJazyk(n, stav.jazyk)) return false;
+    return true;
+  }
+  function vahy() {
+    var v = {};
+    for (var k in K.slozky_skore) v[k] = K.slozky_skore[k];
+    stav.priority.slice(0, 3).forEach(function (p) { v[K.priority[p].slozka] *= 2; });
+    return v;
+  }
+  function prumer(pole) {
+    if (!pole.length) return null;
+    return pole.reduce(function (a, b) { return a + b; }, 0) / pole.length;
+  }
+  function skoreProstredi(n) {
+    var vyb = (n.vybaveni || "").toLowerCase(), s = [];
+    stav.priority.slice(0, 3).forEach(function (p) {
+      if (p === "jazyky") {
+        var pocet = n.pocet_jazyku || (n.jazyky ? n.jazyky.split(",").length : 0);
+        s.push(Math.min(1, pocet / 3));
+      } else if (p === "maly_kolektiv") {
+        if (n.velikost_skoly) s.push(Math.min(1, Math.max(0, (600 - n.velikost_skoly) / 500)));
+      } else if (p === "sport") {
+        s.push(/hřišt|tělocvičn|sportovn|bazén/.test(vyb) ? 1 : 0.2);
+      } else if (p === "umeni") {
+        s.push(/uměleck|ateliér|hudebn|divadeln/.test(vyb) ? 1 : 0.2);
+      } else if (p === "praxe") {
+        s.push(["H", "E", "L0"].indexOf(n.typ) >= 0 ? 1 : (n.typ === "M" ? 0.6 : 0.2));
+      }
+    });
+    var p = prumer(s);
+    return p == null ? 0.5 : p;
+  }
+  function ohodnot() {
+    var vybrane = NAB.filter(projdeFiltrem);
+    if (!vybrane.length) return [];
+    var skor = (stav.skorCj != null && stav.skorMa != null) ? stav.skorCj + stav.skorMa : null;
+    var perc = vybrane.map(function (n) { return n.maturita_percentil; }).filter(function (x) { return x != null; });
+    var dolni = perc.length ? Math.min.apply(null, perc) : 0;
+    var horni = perc.length ? Math.max.apply(null, perc) : 100;
+    var v = vahy(), soucetVah = 0;
+    for (var k in v) soucetVah += v[k];
+
+    return vybrane.map(function (n) {
+      var s = sancePrijeti(n, skor);
+      var slozky = {};
+
+      if (!stav.oblasti.length) slozky.zajem = 0.5;
+      else {
+        var vse = oblastiOboru(n.kod_kkov);
+        var shoda = vse.filter(function (x) { return stav.oblasti.indexOf(x) >= 0; });
+        slozky.zajem = shoda.length ? Math.min(1, 0.6 + 0.4 * shoda.length / Math.max(vse.length, 1)) : 0;
+      }
+
+      var dos = s.p == null ? 0.4 : Math.min(1, s.p / 0.4);
+      if (stav.prospech != null && n.doporuceny_prospech != null) {
+        var rozdil = stav.prospech - n.doporuceny_prospech;
+        if (rozdil > 0) dos *= Math.max(0.4, 1 - rozdil / 2);
+      }
+      slozky.dosazitelnost = dos;
+
+      var kval = [];
+      if (n.maturita_percentil != null && horni > dolni) kval.push((n.maturita_percentil - dolni) / (horni - dolni));
+      if (n.maturita_uspesnost != null) kval.push(Math.min(1, Math.max(0, (n.maturita_uspesnost - 70) / 30)));
+      if (n.posun != null) kval.push(Math.min(1, Math.max(0, (n.posun + 10) / 20)));
+      slozky.kvalita = kval.length ? prumer(kval) : 0.5;
+
+      if (!stav.obvody.length) slozky.blizkost = 0.5;
+      else {
+        var obv = n.obvody || [];
+        if (obv.some(function (o) { return stav.obvody.indexOf(o) >= 0; })) slozky.blizkost = 1;
+        else {
+          var sousedi = [];
+          stav.obvody.forEach(function (o) { sousedi = sousedi.concat(C.sousedni_obvody[o] || []); });
+          slozky.blizkost = obv.some(function (o) { return sousedi.indexOf(o) >= 0; }) ? 0.6 : 0.2;
+        }
+      }
+
+      if (n.skolne == null) slozky.cena = 0.5;
+      else if (n.skolne === 0) slozky.cena = 1;
+      else slozky.cena = Math.max(0, 1 - n.skolne / Math.max(stav.skolneMax || 60000, 1)) * 0.8;
+
+      slozky.prostredi = skoreProstredi(n);
+
+      var skore = 0;
+      for (var kk in slozky) skore += slozky[kk] * v[kk];
+      return { n: n, skore: 100 * skore / soucetVah, slozky: slozky, sance: s.p, zdroj: s.zdroj, hranice: s.stred };
+    }).sort(function (a, b) { return b.skore - a.skore; });
+  }
+
+  function vyberTop(vysledky, pocet) {
+    var out = [], pouzite = {};
+    for (var i = 0; i < vysledky.length && out.length < pocet; i++) {
+      var r = vysledky[i].n.redizo;
+      if (pouzite[r]) continue;
+      pouzite[r] = 1;
+      out.push(vysledky[i]);
+    }
+    return out;
+  }
+  function portfolio(vysledky) {
+    var out = {}, pouzite = {};
+    Object.keys(K.pasma_portfolia).forEach(function (role) {
+      var pasmo = K.pasma_portfolia[role];
+      var kand = vysledky.filter(function (v) {
+        return v.sance != null && v.sance >= pasmo[0] && v.sance < pasmo[1] && !pouzite[v.n.redizo];
+      });
+      var nej = null;
+      kand.forEach(function (v) { if (!nej || v.skore > nej.skore) nej = v; });
+      if (nej) pouzite[nej.n.redizo] = 1;
+      out[role] = nej;
+    });
+    return out;
+  }
+
+  // ---- texty na kartě ----
+  function duvody(v) {
+    var n = v.n, out = [];
+    if (stav.oblasti.length && v.slozky.zajem > 0) {
+      var vse = oblastiOboru(n.kod_kkov).filter(function (x) { return stav.oblasti.indexOf(x) >= 0; });
+      out.push("Obor patří do: " + vse.map(function (k) { return C.oblasti[k].popis; }).join(", "));
+    }
+    if (stav.prospech != null && n.doporuceny_prospech != null && stav.prospech <= n.doporuceny_prospech)
+      out.push("Tvůj průměr " + stav.prospech.toFixed(1) + " vyhovuje doporučenému prospěchu " + n.doporuceny_prospech.toFixed(1));
+    if (stav.obvody.length) {
+      var shoda = (n.obvody || []).filter(function (o) { return stav.obvody.indexOf(o) >= 0; });
+      if (shoda.length) out.push("Je v preferované části: " + shoda.join(", "));
+    }
+    if (n.skolne === 0) out.push("Bez školného");
+    else if (n.skolne) out.push("Školné " + mezera(n.skolne) + " Kč/rok");
+    if (n.maturita_uspesnost != null)
+      out.push("Maturitu složí " + Math.round(n.maturita_uspesnost) + " % žáků školy (průměr 3 let)");
+    if (n.posun != null && n.posun > 2)
+      out.push("Žáci se za studium posunuli o " + (n.posun > 0 ? "+" : "") + Math.round(n.posun)
+               + " percentilu (přijímačky " + n.posun_roky[0] + " → maturita " + n.posun_roky[1] + ", celá škola)");
+    if (n.velikost_skoly) out.push("Velikost školy zhruba " + n.velikost_skoly + " žáků");
+    return out;
+  }
+  function varovani(v) {
+    var n = v.n, h = cisla(n.hranice || {}), roky = Object.keys(h).map(Number), out = [];
+    if (v.sance == null) out.push("Šanci na přijetí nejde z dat odhadnout — u oboru chybí výsledky JPZ.");
+    else if (!roky.length) out.push("Škola nevykázala hranici přijetí, šance je jen odhad z poměru přihlášek ku kapacitě.");
+    else if (roky.length === 1) out.push("Hranice přijetí je známá jen za jeden rok — odhad je nejistý.");
+    if (roky.length >= 2) {
+      var hodnoty = roky.map(function (r) { return h[r]; });
+      var rozpeti = Math.max.apply(null, hodnoty) - Math.min.apply(null, hodnoty);
+      if (rozpeti >= 25) out.push("Hranice přijetí mezi roky skáče o " + Math.round(rozpeti) + " bodů.");
+    }
+    if (stav.prospech != null && n.doporuceny_prospech != null && stav.prospech > n.doporuceny_prospech)
+      out.push("Škola doporučuje průměr do " + n.doporuceny_prospech.toFixed(1) + ", ty máš "
+               + stav.prospech.toFixed(1) + " — není to podmínka, ale body za prospěch ztratíš.");
+    if (n.dalsi_kriteria) out.push("Škola přidává vlastní kritéria: " + n.dalsi_kriteria);
+    if (n.talentova_zkouska) out.push("Obor má talentovou zkoušku — přihláška se podává dřív (do 30. 11.).");
+    if (n.skolni_zkousky && n.skolni_zkousky.length) out.push("Škola má navíc: " + n.skolni_zkousky.join(", "));
+    if (n.maturita_uspesnost == null && C.typy[n.typ] && C.typy[n.typ].maturita)
+      out.push("Škola nemá v datech CERMAT maturitní výsledky (malá škola nebo nový obor).");
+    if (n.inspekce_datum && n.inspekce_datum < "2019-01-01")
+      out.push("Poslední inspekce ČŠI je z " + n.inspekce_datum + " — starší než 7 let.");
+    return out;
+  }
+
+  // ---- vykreslení karty ----
+  function karta(v, role) {
+    var n = v.n;
+    var k = el("article", "karta" + (role ? " " + role : ""));
+    var hlava = el("div", "karta-hlava");
+    if (role) hlava.appendChild(el("span", "role", { sen: "Sen", realisticka: "Realistická volba", jistota: "Jistota" }[role]));
+    hlava.appendChild(el("h3", null, n.organizace));
+    hlava.appendChild(el("p", "obor", n.obor + " · " + n.kod_kkov + " · " + (C.typy[n.typ] ? C.typy[n.typ].popis : "")));
+    var misto = el("p", "misto");
+    misto.appendChild(document.createTextNode(n.adresa + ", " + (n.obvody || []).join(", ")));
+    if (n.www) {
+      misto.appendChild(document.createTextNode(" · "));
+      var a = el("a", null, "web školy");
+      a.href = n.www; a.target = "_blank"; a.rel = "noopener";
+      misto.appendChild(a);
+    }
+    hlava.appendChild(misto);
+    k.appendChild(hlava);
+
+    var m = el("div", "metriky");
+    m.appendChild(metrika("Shoda s profilem", Math.round(v.skore) + "/100", null));
+    var sanceText = v.sance == null ? "—" : Math.round(v.sance * 100) + " %";
+    var msance = metrika("Šance na přijetí", sanceText, v.zdroj);
+    if (v.sance != null) {
+      var pas = el("div", "sance-pas"), vypln = el("i");
+      vypln.style.width = Math.round(v.sance * 100) + "%";
+      pas.appendChild(vypln);
+      msance.insertBefore(pas, msance.querySelector(".detail"));
+    }
+    m.appendChild(msance);
+    if (n.kapacita && n.prihlasky)
+      m.appendChild(metrika("Zájem 2026", n.prihlasky + " na " + n.kapacita, "přihlášek na míst"
+        + (n.prijati ? ", přijato " + n.prijati : "")));
+    else if (n.plan_prijmout)
+      m.appendChild(metrika("Plán přijmout", String(n.plan_prijmout), "žáků letos"));
+    m.appendChild(metrika("Školné", n.skolne ? mezera(n.skolne) + " Kč" : (n.skolne === 0 ? "0 Kč" : "—"),
+                          n.skolne ? "ročně" : (n.skolne === 0 ? "bez školného" : "údaj chybí")));
+    k.appendChild(m);
+
+    var h = cisla(n.hranice || {});
+    if (Object.keys(h).length) k.appendChild(osa(h));
+
+    var d = duvody(v);
+    if (d.length) {
+      var ul = el("ul", "duvody");
+      d.forEach(function (t) { ul.appendChild(el("li", null, t)); });
+      k.appendChild(ul);
+    }
+    var w = varovani(v);
+    if (w.length) {
+      var ulw = el("ul", "varovani");
+      w.forEach(function (t) { ulw.appendChild(el("li", null, t)); });
+      k.appendChild(ulw);
+    }
+
+    var akce = el("div", "akce");
+    if (n.dod) akce.appendChild(el("span", null, "Den otevřených dveří: " + n.dod));
+    if (n.prihlasky_do) akce.appendChild(el("span", null, "Přihláška do: " + n.prihlasky_do));
+    if (n.inspekce_url) {
+      var ai = el("a", null, "Inspekční zprávy ČŠI");
+      ai.href = n.inspekce_url; ai.target = "_blank"; ai.rel = "noopener";
+      akce.appendChild(ai);
+    }
+    if (akce.childNodes.length) k.appendChild(akce);
+    return k;
+  }
+  function metrika(popis, hodnota, detail) {
+    var d = el("div", "metrika");
+    d.appendChild(el("span", "popis", popis));
+    d.appendChild(el("span", "hodnota num", hodnota));
+    d.appendChild(el("span", "detail", detail || ""));
+    return d;
+  }
+  function osa(h) {
+    var box = el("div", "osa");
+    var plocha = el("div", "osa-plocha");
+    Object.keys(h).map(Number).sort().forEach(function (rok) {
+      var pozice = Math.max(0, Math.min(99, h[rok] / 200 * 100));
+      var t = el("span", "rok");
+      t.style.left = pozice + "%";
+      var popisek = el("b", null, rok + ": " + Math.round(h[rok]));
+      if (pozice > 62) { popisek.style.left = "auto"; popisek.style.right = "4px"; }
+      t.appendChild(popisek);
+      plocha.appendChild(t);
+    });
+    var skor = (stav.skorCj != null && stav.skorMa != null) ? stav.skorCj + stav.skorMa : null;
+    if (skor != null) {
+      var ja = el("span", "ja");
+      ja.style.left = Math.max(0, Math.min(99, skor / 200 * 100)) + "%";
+      ja.appendChild(el("b", null, "ty: " + skor));
+      plocha.appendChild(ja);
+    }
+    box.appendChild(plocha);
+    var popis = el("div", "osa-popis");
+    popis.appendChild(el("span", null, "0 b."));
+    popis.appendChild(el("span", null, "hranice přijetí po letech (ČJ + MA, 0–200 b.)"));
+    popis.appendChild(el("span", null, "200 b."));
+    box.appendChild(popis);
+    return box;
+  }
+
+  // ---- formulář ----
+  function chips(kam, polozky, typ, jmeno, onZmena) {
+    var box = document.getElementById(kam);
+    box.textContent = "";
+    polozky.forEach(function (p, i) {
+      var l = el("label", "chip");
+      var inp = document.createElement("input");
+      inp.type = typ; inp.name = jmeno; inp.value = p.hodnota;
+      inp.id = jmeno + "-" + i;
+      if (p.vychozi) inp.checked = true;
+      inp.addEventListener("change", onZmena);
+      l.appendChild(inp);
+      l.appendChild(el("span", null, p.popis));
+      box.appendChild(l);
+    });
+  }
+  function zaskrtnute(jmeno) {
+    return Array.prototype.map.call(
+      document.querySelectorAll('input[name="' + jmeno + '"]:checked'),
+      function (i) { return i.value; });
+  }
+  function postavTypy() {
+    var polozky = [];
+    for (var kod in C.typy) {
+      var t = C.typy[kod];
+      if (t.trida === stav.trida && kod !== "L5" && kod !== "N" && kod !== "C")
+        polozky.push({ hodnota: kod, popis: t.popis.charAt(0).toUpperCase() + t.popis.slice(1) });
+    }
+    chips("q-typy", polozky, "checkbox", "typy", zmena);
+  }
+
+  function zmena() {
+    stav.typy = zaskrtnute("typy");
+    stav.oblasti = zaskrtnute("oblasti");
+    stav.obvody = zaskrtnute("obvody");
+    stav.priority = zaskrtnute("priority").slice(0, 3);
+    var jaz = zaskrtnute("jazyk")[0];
+    stav.jazyk = jaz || null;
+    var sk = zaskrtnute("skolne")[0];
+    stav.skolneMax = (sk === undefined || sk === "") ? null : Number(sk);
+    stav.skorCj = cislo("skor-cj", 0, 100);
+    stav.skorMa = cislo("skor-ma", 0, 100);
+    stav.prospech = cislo("prospech", 1, 5);
+    var soucet = document.querySelector("#soucet b");
+    soucet.textContent = (stav.skorCj != null && stav.skorMa != null) ? (stav.skorCj + stav.skorMa) : "—";
+    vykresli();
+  }
+  function cislo(id, min, max) {
+    var v = document.getElementById(id).value;
+    if (v === "") return null;
+    var n = Number(v);
+    return isNaN(n) ? null : Math.max(min, Math.min(max, n));
+  }
+  function zmenaTridy(e) {
+    stav.trida = Number(e.target.value);
+    postavTypy();
+    zmena();
+  }
+
+  function poznamky(vysledky) {
+    var out = [];
+    if (!vysledky.length) return ["Žádná nabídka neprošla filtrem — zkus ubrat podmínky."];
+    if (stav.obvody.length && !vysledky.some(function (v) {
+      return (v.n.obvody || []).some(function (o) { return stav.obvody.indexOf(o) >= 0; });
+    })) out.push("V " + stav.obvody.join(", ") + " nic, co by odpovídalo ostatním podmínkám, není — ukazuju nejbližší okolí.");
+    if (stav.skorCj == null || stav.skorMa == null)
+      out.push("Bez očekávaného skóru z přijímaček je šance jen hrubý odhad z poměru přihlášek — vyplň otázku 5.");
+    var bez = vysledky.filter(function (v) { return v.sance == null; }).length;
+    if (bez) out.push("U " + bez + " z " + vysledky.length + " vyhovujících nabídek nejsou data o přijímacím řízení (obory bez jednotné zkoušky) — šance se u nich neodhaduje.");
+    return out;
+  }
+
+  var PRAZDNE = {
+    sen: "Na všechno, co ti sedí, máš velkou šanci — zkus rozšířit filtr (další obory, celá Praha) a mířit výš.",
+    realisticka: "Mezi nabídkami není nic se střední šancí — buď máš na všechno, nebo je všechno hodně nad tvoje skóre.",
+    jistota: "Nic, kam by tě vzali skoro jistě — přidej záložní obor, jinak hrozí 2. kolo."
+  };
+  var ROLE_POPIS = { sen: "Sen", realisticka: "Realistická volba", jistota: "Jistota" };
+
+  function vykresli() {
+    var vysledky = ohodnot();
+    document.getElementById("pocet").textContent = vysledky.length;
+
+    var ul = document.getElementById("poznamky");
+    ul.textContent = "";
+    poznamky(vysledky).forEach(function (t) { ul.appendChild(el("li", null, t)); });
+
+    var top = document.getElementById("top5");
+    top.textContent = "";
+    vyberTop(vysledky, 5).forEach(function (v) { top.appendChild(karta(v)); });
+
+    var pf = document.getElementById("portfolio");
+    pf.textContent = "";
+    var trojice = portfolio(vysledky);
+    Object.keys(K.pasma_portfolia).forEach(function (role) {
+      if (trojice[role]) pf.appendChild(karta(trojice[role], role));
+      else {
+        var p = el("div", "prazdne");
+        p.appendChild(el("span", "role", ROLE_POPIS[role]));
+        p.appendChild(document.createTextNode(PRAZDNE[role]));
+        pf.appendChild(p);
+      }
+    });
+  }
+
+  // ---- inicializace ----
+  chips("q-trida", [
+    { hodnota: "5", popis: "5. třída — osmiletá gymnázia" },
+    { hodnota: "7", popis: "7. třída — šestiletá gymnázia" },
+    { hodnota: "9", popis: "9. třída — všechno ostatní", vychozi: true }
+  ], "radio", "trida", zmenaTridy);
+
+  chips("q-oblasti", Object.keys(C.oblasti).map(function (k) {
+    return { hodnota: k, popis: C.oblasti[k].popis };
+  }), "checkbox", "oblasti", zmena);
+
+  var obvody = [];
+  for (var i = 1; i <= 10; i++) obvody.push({ hodnota: "Praha " + i, popis: "Praha " + i });
+  chips("q-obvody", obvody, "checkbox", "obvody", zmena);
+
+  chips("q-skolne", [
+    { hodnota: "0", popis: "Jen bez školného" },
+    { hodnota: "30000", popis: "Do 30 000 Kč/rok" },
+    { hodnota: "80000", popis: "Do 80 000 Kč/rok" },
+    { hodnota: "", popis: "Nerozhoduje", vychozi: true }
+  ], "radio", "skolne", zmena);
+
+  chips("q-priority", Object.keys(K.priority).map(function (k) {
+    return { hodnota: k, popis: K.priority[k].popis };
+  }), "checkbox", "priority", zmena);
+
+  chips("q-jazyk", [
+    { hodnota: "N", popis: "Němčina" }, { hodnota: "Š", popis: "Španělština" },
+    { hodnota: "F", popis: "Francouzština" }, { hodnota: "R", popis: "Ruština" },
+    { hodnota: "I", popis: "Italština" }, { hodnota: "", popis: "Nezáleží", vychozi: true }
+  ], "radio", "jazyk", zmena);
+
+  ["skor-cj", "skor-ma", "prospech"].forEach(function (id) {
+    document.getElementById(id).addEventListener("input", zmena);
+  });
+
+  // Doporučený prospěch zná jen Atlas školství; dokud scraper nedoběhl, řekni to.
+  if (!NAB.some(function (n) { return n.doporuceny_prospech != null; })) {
+    document.getElementById("prospech-hint").textContent =
+      "Porovná se s doporučeným prospěchem školy — ten zná jen Atlas školství, "
+      + "jehož scraper se právě dodělává. Do té doby otázka výsledek neovlivní.";
+  }
+
+  postavTypy();
+  zmena();
+})();
+</script>

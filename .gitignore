@@ -18,3 +18,8 @@ build/
 
 # harness-managed scratch space (subagent git worktrees, local tool state)
 .claude/
+
+# Data pro webový prototyp jsou odvozená z databáze (viz jaknastredni/export_web.py),
+# generují se jedním příkazem a mají stovky kB minifikovaného JSONu na jednom řádku
+# — do gitu nepatří ze stejného důvodu jako *.db.
+web/data.js
