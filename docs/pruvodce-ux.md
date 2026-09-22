@@ -41,7 +41,7 @@ než holé „90 %".
 
 ## Průchod otázkami
 
-Patnáct otázek, z toho **povinná jediná** (první). Každá další jen zužuje;
+Patnáct otázek a jedna doplňující (5b), z toho **povinná jediná** (první). Každá další jen zužuje;
 kdo nic nevyplní, dostane pětici škol s nejlepšími maturitními výsledky,
 kam se dá dostat. Pořadí je od nejvíc rozhodujícího filtru k nejjemnějšímu,
 aby se dalo kdykoli odejít s rozumným výsledkem.
@@ -53,6 +53,7 @@ aby se dalo kdykoli odejít s rozumným výsledkem.
 | 3 | Víš už, čemu se chceš věnovat? | výběr | skóre `typ` | — |
 | 4 | Kolik chceš praxe? | výběr | skóre `typ` | — |
 | 5 | Které oblasti tě baví? (12 oblastí) | víc možností | tvrdý filtr + skóre `zajem` | první dvojčíslí KKOV → `oblasti.OBLASTI` |
+| 5b | A co konkrétně z toho? | víc možností | skóre `zajem` | názvy ŠVP a popisy škol → `oblasti.ZAMERENI` |
 | 6 | Kde bydlíš? (Praha 1–22) | víc možností | skóre `blizkost` | `obvod_prahy` + `misto_vyuky`, přes `MC_NA_OBVOD` |
 | 7 | Body z přijímaček nanečisto (ČJ, MA) | 2× číslo 0–50 | šance na přijetí | `prijimacky_pasmo` |
 | 8 | Průměr na vysvědčení | číslo 1–5 | skóre `dosazitelnost` | `doporuceny_prospech` (Atlas školství) |
@@ -379,6 +380,58 @@ se záměrně opakují ve víc oblastech:
 | Gastronomie, hotelnictví, cestovní ruch | 65, 29 |
 | Příroda, zemědělství, ekologie | 16, 41, 43, 28 |
 
+## Zaměření uvnitř oboru
+
+Kód KKOV je na rozhodování hrubý. Pod `18-20-M/01` (Informační technologie)
+učí v Praze desítky škol a každá něco jiného:
+
+| Škola | Název ŠVP | Co o tom píše ve svém popisu |
+|---|---|---|
+| SPŠE Ječná | Programování a digitální technologie | „robotické laboratoře, síťové učebny s vlastními servery", certifikáty Cisco a Oracle |
+| SPŠE V Úžlabině | Informační technologie | „správce serverových služeb operačních systémů a počítačových sítí"; volitelné specializace programování, web, herní grafika, kyberbezpečnost |
+
+Rozdíl, podle kterého se uchazeč rozhoduje, je **jen v těchhle textech** —
+v žádném číselníku není. Proto se zaměření hledá klíčovými slovy
+(`oblasti.ZAMERENI`, 28 zaměření) ve čtyřech polích: název oboru z rejstříku,
+`svp_nazev` (infoabsolvent), `zamereni_oboru` (CERMAT) a volný popis školy
+(`doplnujici_informace` z Atlasu, `vybaveni_a_nabidka` z infoabsolventu).
+
+**Je to heuristika, ne číselník**, a průvodce to nesmí vydávat za fakt.
+Rozlišuje proto dvě síly důkazu a kartě to napíše:
+
+| Úroveň | Kdy | Násobí skóre `zajem` | Věta na kartě |
+|---|---|---|---|
+| `obor` | zaměření sedí na texty **o oboru** (název, ŠVP, zaměření z CERMATu) | ×1,0 | „Sedí na tvoje zaměření (…) — ŠVP …" |
+| `skola` | sedí jen na volný popis **celé školy** | ×0,9 | „Škola … uvádí ve svém popisu, ale u tohohle oboru to doložené nemáme" |
+| `nevime` | o oboru nevíme nic bližšího | ×0,8 | „O bližším zaměření tohohle oboru nemáme data" |
+| `jine` | obor **má** rozpoznané zaměření a je jiné | ×0,6 | „Pozor: obor je podle popisu spíš …" |
+
+Popis školy váží míň schválně: platí pro všechny její obory dohromady, takže
+z Úžlabiny vyjde dvanáct zaměření včetně sportu (z „sportovní kurzy") a
+společenských věd (z popisu gymnázia). Jako důkaz o konkrétním oboru je to
+slabé — ale pořád je to jediné místo, kde se ta síťařina dá vyčíst.
+
+V pražské nabídce (623 nabídek) má **346 rozpoznané zaměření u oboru**, 252
+jen z popisu školy a 25 ani to. Otázka není mrtvá: ze 46 kombinací
+oblast × zaměření jich **36 (78 %) změní aspoň jednu školu v pětici**.
+
+Zaměření nic nefiltruje, jen přeskládá pořadí — a počítá se jen tehdy, když
+patří k některé ze zvolených oblastí (`Profil.hledana_zamereni`).
+
+### Co tahle cesta neumí
+
+- **Naměřenou šanci rozlišit po zaměření.** Soubory uchazečů CERMATu nesou
+  jen REDIZO + KKOV, zaměření v nich není — `prijimacky_pasmo` je proto
+  sdílené a Ječná „programování" i Ječná „automatizace" dostanou v rámci
+  jednoho KKOV tutéž křivku.
+- **Hranici přijetí rozlišit po zaměření.** To už data unesou
+  (`prijimaci_rizeni.zamereni_oboru`), ale `_doplnit_prijimacky()` je
+  slévá váženým průměrem do jedné nabídky. U 73 pražských nabídek je pod
+  jedním KKOV víc zaměření a **u 26 z nich se hranice liší o 15 bodů a víc**
+  — Gymnázium Na Pražačce má „Všeobecné" 146, „Německý jazyk" 130 a
+  „Výtvarná výchova" 62, průměr 113 nesedí ani na jedno. Viz „Další kroky".
+- **Co škola nenapsala.** Slovník vzorů pozná jen to, co je v textu.
+
 ## Co návrh zatím neumí
 
 - **Dojezdovou dobu MHD.** Nejžádanější údaj, který nemáme — místo něj je
@@ -482,3 +535,15 @@ Dvě věci, které prototyp ukazuje a CLI ne:
    v užším výběru, ne pro všech 219.
 5. **Kalibrace na skutečnosti.** Až budou známé výsledky 2027, porovnat
    odhad šance s tím, jak to dopadlo, a případně upravit `σ`.
+6. **Nabídka po zaměřeních, ne po KKOV.** Dnešní jednotkou je
+   (IZO × KKOV) a `_doplnit_prijimacky()` přes zaměření slévá hranici
+   váženým průměrem. U 73 pražských nabídek je pod jedním KKOV víc
+   zaměření, u 26 z nich se hranice liší o ≥15 bodů, u 16 o ≥30. Část
+   těch rozdílů přitom **nejsou obsahová zaměření, ale mimopražské
+   pobočky nebo jiný program**: PORG má pod `79-41-K/81` pražské třídy
+   na 146 a 144 bodech, ale Brno 114 a Ostrava 80 → průměr 129
+   podhodnocuje pražskou nabídku; Karlínské gymnázium slévá „Naše škola"
+   (142) s programem „Druhá šance" (22) na 121. Rozdělením nabídky na
+   (IZO × KKOV × zaměření) by to zmizelo — jen naměřená šance
+   (`prijimacky_pasmo`) by zůstala sdílená, protože zaměření v souborech
+   uchazečů není.

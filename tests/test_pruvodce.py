@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from jaknastredni import db, oblasti, pruvodce
+from jaknastredni import db, export_web, oblasti, pruvodce
 
 
 # --------------------------------------------------------------------------
@@ -701,3 +701,128 @@ def test_obor_bez_jpz_ignoruje_skor(conn):
     assert pruvodce._prevazuje_bez_jpz(ucnak)
     assert (pruvodce.sance_prijeti(ucnak, 80)[0]
             == pytest.approx(pruvodce.sance_prijeti(ucnak, 180)[0]))
+
+
+# --------------------------------------------------------------------------
+# Zaměření uvnitř oboru (oblasti.ZAMERENI)
+# --------------------------------------------------------------------------
+
+def test_zamereni_se_najde_v_nazvu_svp_i_v_popisu_skoly():
+    assert "programovani" in oblasti.zamereni_textu("Programování a digitální technologie")
+    assert "site" in oblasti.zamereni_textu(
+        "správce serverových služeb operačních systémů a počítačových sítí")
+    assert oblasti.zamereni_textu(None, "") == ()
+
+
+def test_nabidnou_se_jen_zamereni_ke_zvolenym_oblastem():
+    nabizena = oblasti.zamereni_oblasti(["gastro"])
+    assert "gastronomie" in nabizena
+    assert "programovani" not in nabizena
+    assert oblasti.zamereni_oblasti([]) == ()
+
+
+def _s_popisem(conn, redizo, kod, *, svp=None, popis_skoly=None):
+    """Doplní ke škole webový profil s názvem ŠVP a/nebo popisem školy."""
+    conn.execute(
+        "INSERT INTO web_profil (redizo, zdroj, stazeno, data) VALUES (?,?,?,?)",
+        (redizo, "atlas", "2026-09-22", json.dumps({
+            "doplnujici_informace": popis_skoly,
+            "obory": [{"kod_kkov": kod, "svp_nazev": svp}],
+        }, ensure_ascii=False)),
+    )
+    conn.commit()
+
+
+def test_zamereni_doložené_u_oboru_je_silnejsi_nez_z_popisu_skoly(conn):
+    # Obě školy mají tentýž kód KKOV, ale učí pod ním něco jiného: jedna to
+    # má v názvu ŠVP, druhá jen ve volném popisu školy. Přesně tak se liší
+    # SPŠE Ječná ("Programování a digitální technologie") od SPŠE V Úžlabině.
+    _skola(conn, "600000005", "100000005", "SPŠ S ŠVP", "Praha 9")
+    _obor(conn, "100000005", "18-20-M/01", "Informační technologie")
+    _s_popisem(conn, "600000005", "18-20-M/01", svp="Programování a digitální technologie")
+    _skola(conn, "600000006", "100000006", "SPŠ S popisem", "Praha 9")
+    _obor(conn, "100000006", "18-20-M/01", "Informační technologie")
+    _s_popisem(conn, "600000006", "18-20-M/01",
+               popis_skoly="Žáci se učí spravovat počítačové sítě a programovat.")
+
+    podle_izo = {n.izo: n for n in pruvodce.nacti_nabidky(conn)}
+    s_svp, s_popisem = podle_izo["100000005"], podle_izo["100000006"]
+    assert s_svp.zamereni_kody == ("programovani",)
+    assert "programovani" in s_popisem.zamereni_skoly
+    assert s_popisem.zamereni_kody == ()
+
+    profil = pruvodce.Profil(oblasti_zajmu=["it"], zamereni=["programovani"])
+    assert (pruvodce._skore_zajem(s_svp, profil)
+            > pruvodce._skore_zajem(s_popisem, profil))
+
+
+def test_jine_dolozene_zamereni_srazi_skore_nejvic(conn):
+    _skola(conn, "600000005", "100000005", "SPŠ Programátorská", "Praha 9")
+    _obor(conn, "100000005", "18-20-M/01", "Informační technologie")
+    _s_popisem(conn, "600000005", "18-20-M/01", svp="Programování a vývoj aplikací")
+    # Tentýž obor, ale nic bližšího o něm nevíme: obecný název KKOV na žádné
+    # zaměření nesedí a webový profil škola nemá.
+    _skola(conn, "600000007", "100000007", "SPŠ Bez popisu", "Praha 9")
+    _obor(conn, "100000007", "18-20-M/01", "Informační technologie")
+    podle_izo = {n.izo: n for n in pruvodce.nacti_nabidky(conn)}
+    nab, bez_dat = podle_izo["100000005"], podle_izo["100000007"]
+    assert bez_dat.zamereni_kody == () and bez_dat.zamereni_skoly == ()
+
+    profil = pruvodce.Profil(oblasti_zajmu=["it"], zamereni=["grafika"])
+    assert pruvodce._skore_zajem(nab, profil) < pruvodce._skore_zajem(bez_dat, profil)
+
+
+def test_bez_zvoleneho_zamereni_se_skore_zajmu_nemeni(conn):
+    _skola(conn, "600000005", "100000005", "SPŠ Programátorská", "Praha 9")
+    _obor(conn, "100000005", "18-20-M/01", "Informační technologie")
+    _s_popisem(conn, "600000005", "18-20-M/01", svp="Programování a vývoj aplikací")
+    nab = {n.izo: n for n in pruvodce.nacti_nabidky(conn)}["100000005"]
+    assert pruvodce._skore_zajem(nab, pruvodce.Profil(oblasti_zajmu=["it"])) == 1.0
+
+
+def test_zamereni_mimo_zvolene_oblasti_se_ignoruje(conn):
+    """Profil složený ručně může mít zaměření k oblasti, kterou uchazeč nezvolil."""
+    _skola(conn, "600000005", "100000005", "SPŠ Programátorská", "Praha 9")
+    _obor(conn, "100000005", "18-20-M/01", "Informační technologie")
+    _s_popisem(conn, "600000005", "18-20-M/01", svp="Programování a vývoj aplikací")
+    nab = {n.izo: n for n in pruvodce.nacti_nabidky(conn)}["100000005"]
+    profil = pruvodce.Profil(oblasti_zajmu=["it"], zamereni=["gastronomie"])
+    assert profil.hledana_zamereni == set()
+    assert pruvodce._skore_zajem(nab, profil) == 1.0
+
+
+def test_duvod_rekne_odkud_se_zamereni_vi(conn):
+    _skola(conn, "600000005", "100000005", "SPŠ S popisem", "Praha 9")
+    _obor(conn, "100000005", "18-20-M/01", "Informační technologie")
+    _s_popisem(conn, "600000005", "18-20-M/01",
+               popis_skoly="Studenti spravují počítačové sítě a servery.")
+    nab = {n.izo: n for n in pruvodce.nacti_nabidky(conn)}["100000005"]
+    profil = pruvodce.Profil(oblasti_zajmu=["it"], zamereni=["site"])
+    duvody = pruvodce._duvody_zamereni(nab, profil)
+    assert any("doložené nemáme" in d for d in duvody), duvody
+    # Co zaměření nesedí, patří mezi varování, ne mezi důvody.
+    jiny = pruvodce.Profil(oblasti_zajmu=["it"], zamereni=["gastronomie", "grafika"])
+    assert pruvodce._duvody_zamereni(nab, jiny) == []
+    assert any("nemáme data" in v for v in pruvodce._varovani_zamereni(nab, jiny))
+
+
+def test_export_nese_zamereni_i_ciselnik(conn):
+    _skola(conn, "600000005", "100000005", "SPŠ S ŠVP", "Praha 9")
+    _obor(conn, "100000005", "18-20-M/01", "Informační technologie")
+    _s_popisem(conn, "600000005", "18-20-M/01", svp="Programování a digitální technologie")
+    data = export_web.export(conn)
+    podle_izo = {n["izo"]: n for n in data["nabidky"]}
+    assert podle_izo["100000005"]["zamereni_kody"] == ("programovani",)
+    assert podle_izo["100000005"]["svp"] == "Programování a digitální technologie"
+    # Regulární výrazy na web nepatří, popisky a oblasti ano.
+    ciselnik = data["ciselniky"]["zamereni"]
+    assert set(ciselnik["programovani"]) == {"popis", "oblasti"}
+    assert data["konstanty"]["shoda_zamereni"]["obor"] == 1.0
+
+
+def test_export_vynecha_svp_shodne_s_nazvem_oboru(conn):
+    _skola(conn, "600000005", "100000005", "Gymnázium Bez ŠVP", "Praha 9")
+    _obor(conn, "100000005", "79-41-K/41", "Gymnázium")
+    _s_popisem(conn, "600000005", "79-41-K/41", svp="Gymnázium")
+    podle_izo = {n["izo"]: n for n in export_web.export(conn)["nabidky"]}
+    assert "svp" not in podle_izo["100000005"]

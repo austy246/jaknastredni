@@ -412,10 +412,14 @@ jednotkou je **nabídka = škola × obor** (623 denních nabídek pražských S�
 protože přihláška se podává na obor a všechna čísla (kapacita, poměr
 přihlášek, hranice přijetí) jsou oborová.
 
-Patnáct otázek (povinná jen první — ze které třídy se uchazeč hlásí).
-**Na typ vzdělání se neptá, odvozuje ho** ze tří osobnostních otázek
-(co po škole / máš už jasno / kolik praxe) a ukáže ho nad výsledkem jako
-zjištění. Tvrdé filtry jsou jen čtyři (třída, oblast zájmu, školné,
+Patnáct otázek a jedna doplňující (povinná jen první — ze které třídy se
+uchazeč hlásí). **Na typ vzdělání se neptá, odvozuje ho** ze tří
+osobnostních otázek (co po škole / máš už jasno / kolik praxe) a ukáže ho
+nad výsledkem jako zjištění. Po oblasti zájmu se ptá i na **zaměření uvnitř
+oboru** — kód KKOV je hrubý, pod `18-20-M/01` učí SPŠE Ječná programování
+a SPŠE V Úžlabině správu sítí. Zaměření se hledá klíčovými slovy v názvech
+ŠVP a popisech škol (`oblasti.ZAMERENI`); je to heuristika, takže karta
+vždycky říká, jestli je to doložené u oboru, nebo jen v popisu školy. Tvrdé filtry jsou jen čtyři (třída, oblast zájmu, školné,
 talentovky), zbytek je průhledné vážené skóre shody z osmi složek
 (`zajem`, `typ`, `dosazitelnost`, `kvalita`, `blizkost`, `cena`,
 `prostredi`, `jazyk`). Kdy jsou přijímačky se taky neptá — termíny zná

@@ -167,6 +167,10 @@ class Profil:
     trida: int = 9                       # ze které třídy ZŠ se hlásí (5/7/9)
     typy: list[str] = field(default_factory=list)      # kódy z oblasti.TYPY
     oblasti_zajmu: list[str] = field(default_factory=list)  # klíče oblasti.OBLASTI
+    # Zaměření uvnitř oblasti (klíče oblasti.ZAMERENI) — „baví ho IT" je na
+    # výběr ze 60 IT nabídek pořád hrubé síto, tohle rozliší programování od
+    # sítí nebo herní grafiky. Prázdné = podle zaměření se neřadí.
+    zamereni: list[str] = field(default_factory=list)
     obvody: list[str] = field(default_factory=list)    # 'Praha 6', …
     skor_cj: float | None = None         # očekávaný % skór ČJ (0–100)
     skor_ma: float | None = None         # očekávaný % skór MA (0–100)
@@ -193,6 +197,21 @@ class Profil:
     praxe: str | None = None             # 'hodne' / 'stredne' / 'teorie'
     typy_vyloucene: list[str] = field(default_factory=list)  # co uchazeč nechce
     priority: list[str] = field(default_factory=list)  # klíče PRIORITY, max 3
+
+    @property
+    def hledana_zamereni(self) -> set[str]:
+        """Zvolená zaměření, která patří k některé ze zvolených oblastí.
+
+        Formulář nabízí jen zaměření ke zvoleným oblastem, ale profil se dá
+        poskládat i ručně (a uchazeč si může oblast odškrtnout až potom).
+        Zaměření mimo zvolené oblasti by jinak sráželo obory, na které se
+        vůbec neptá.
+        """
+        if not self.oblasti_zajmu:
+            return set()
+        zvolene = set(self.oblasti_zajmu)
+        return {k for k in self.zamereni
+                if k in oblasti.ZAMERENI and zvolene & set(oblasti.ZAMERENI[k][1])}
 
     @property
     def osobnostni(self) -> dict[str, str | None]:
@@ -251,7 +270,15 @@ class Nabidka:
     # Pozn.: `obor.kapacita` z rejstříku MŠMT se tu záměrně nepoužívá — je to
     # nejvyšší povolený počet žáků oboru přes všechny ročníky (u čtyřletého
     # oboru zhruba 4× roční nábor), ne počet míst pro letošní přijímačky.
-    zamereni: tuple[str, ...] = ()
+    zamereni: tuple[str, ...] = ()       # texty zaměření z CERMATu
+    svp: str | None = None               # název ŠVP (infoabsolvent) — co škola
+                                         # pod obecným kódem KKOV doopravdy učí
+    # Rozpoznaná zaměření (klíče oblasti.ZAMERENI). `zamereni_kody` jsou
+    # z textů **o oboru** (název, ŠVP, zaměření z CERMATu), `zamereni_skoly`
+    # z volného popisu **celé školy** — ten platí pro všechny její obory
+    # dohromady, takže je to slabší signál a skóre ho váží míň.
+    zamereni_kody: tuple[str, ...] = ()
+    zamereni_skoly: tuple[str, ...] = ()
     # Naměřená míra přijetí z CERMAT souborů uchazečů 2024+:
     # pásmo % skóru (dolní mez, -1 = obor bez JPZ) -> rok -> (přijato,
     # věcně posouzeno). Rok se drží zvlášť, aby šel novější vážit výš.
@@ -368,7 +395,26 @@ def nacti_nabidky(conn: sqlite3.Connection) -> list[Nabidka]:
     _doplnit_pasma(conn, nabidky)
     _doplnit_web_profil(conn, nabidky)
     _doplnit_kvalitu(conn, nabidky)
+    _doplnit_zamereni(nabidky)
     return list(nabidky.values())
+
+
+def _doplnit_zamereni(nabidky: dict[tuple[str, str], Nabidka]) -> None:
+    """Dopočítá rozpoznaná zaměření ze všech textů, které o nabídce máme.
+
+    Běží až nakonec, protože skládá dohromady tři zdroje: název oboru
+    z rejstříku, název ŠVP a název oboru z webových profilů (ty doplnil
+    `_doplnit_obor`) a texty zaměření z CERMATu (`_doplnit_prijimacky`).
+
+    Zaměření, které je doložené u oboru, se zároveň škrtne ze slabšího
+    školního seznamu — aby se tentýž signál nezapočítal dvakrát a aby
+    `zamereni_skoly` opravdu znamenalo „škola to uvádí, ale u tohohle
+    oboru to doložené nemáme".
+    """
+    for nab in nabidky.values():
+        nab.zamereni_kody = tuple(sorted(set(nab.zamereni_kody) | set(
+            oblasti.zamereni_textu(nab.obor, nab.svp, *nab.zamereni))))
+        nab.zamereni_skoly = tuple(sorted(set(nab.zamereni_skoly) - set(nab.zamereni_kody)))
 
 
 def _adresa(r: sqlite3.Row) -> str:
@@ -537,6 +583,12 @@ def _doplnit_web_profil(conn: sqlite3.Connection, nabidky: dict[tuple[str, str],
                 nab.zdroje_profilu = (*nab.zdroje_profilu, r["zdroj"])
             nab.velikost_skoly = nab.velikost_skoly or _velikost_skoly(data.get("velikost_skoly"))
             nab.vybaveni = nab.vybaveni or data.get("vybaveni_a_nabidka")
+            # Volný popis školy je jediné místo, kde se dá vyčíst, že se pod
+            # kódem `18-20-M/01` učí zrovna správa sítí — v žádném číselníku
+            # to není. Platí ale pro celou školu, ne pro konkrétní obor.
+            nab.zamereni_skoly = tuple(sorted(set(nab.zamereni_skoly) | set(
+                oblasti.zamereni_textu(data.get("vybaveni_a_nabidka"),
+                                       data.get("doplnujici_informace")))))
             nab.dod = nab.dod or _prvni(data, "den_otevrenych_dveri", "dny_otevrenych_dveri")
             nab.www = nab.www or data.get("www")
             nab.jazyky = nab.jazyky or data.get("cizi_jazyky")
@@ -583,6 +635,11 @@ def _doplnit_obor(nab: Nabidka, o: dict[str, Any]) -> None:
     )
     nab.loni_prihlaseni = nab.loni_prihlaseni or o.get("loni_prihlaseni")
     nab.loni_prijati = nab.loni_prijati or o.get("loni_prijati")
+    nab.svp = nab.svp or o.get("svp_nazev")
+    # Atlas dává ŠVP do závorky za obecný název („Elektrotechnika
+    # (Automatizace a robotika)"), infoabsolvent zvlášť — brát se musí obojí.
+    nab.zamereni_kody = tuple(sorted(set(nab.zamereni_kody) | set(
+        oblasti.zamereni_textu(o.get("nazev_oboru"), o.get("svp_nazev")))))
     nab.pocet_jazyku = nab.pocet_jazyku or o.get("pocet_povinnych_jazyku")
     nab.jazyky = o.get("vyucovane_jazyky") or nab.jazyky
     if nab.doporuceny_prospech is None:
@@ -1080,6 +1137,7 @@ def _normalizuj(hodnota: float, dolni: float, horni: float) -> float:
 
 
 def _skore_zajem(nab: Nabidka, profil: Profil) -> float:
+    """Jak dobře obor sedí na zájem — hrubě oblastí, jemně zaměřením."""
     if not profil.oblasti_zajmu:
         return 0.5
     shoda = set(oblasti.oblasti_oboru(nab.kod_kkov)) & set(profil.oblasti_zajmu)
@@ -1087,7 +1145,37 @@ def _skore_zajem(nab: Nabidka, profil: Profil) -> float:
         return 0.0
     # Obor, který patří do jedné oblasti a ta je zvolená, sedí přesněji než
     # obor rozkročený mezi pět oblastí, z nichž jednu uchazeč zaškrtl.
-    return min(1.0, 0.6 + 0.4 * len(shoda) / max(len(oblasti.oblasti_oboru(nab.kod_kkov)), 1))
+    zaklad = min(1.0, 0.6 + 0.4 * len(shoda) / max(len(oblasti.oblasti_oboru(nab.kod_kkov)), 1))
+    return zaklad * _shoda_zamereni(nab, profil)
+
+
+# Násobek skóre zájmu podle toho, jak doložená je shoda v zaměření. Shoda
+# u oboru nechává skóre být, shoda jen v popisu školy ho srazí jemně
+# (škola to učí, ale u tohohle oboru to doložené nemáme) a doložené **jiné**
+# zaměření hodně — takový obor se jmenuje stejně, ale učí něco jiného.
+SHODA_ZAMERENI = {"obor": 1.0, "skola": 0.9, "nevime": 0.8, "jine": 0.6}
+
+
+def _shoda_zamereni(nab: Nabidka, profil: Profil) -> float:
+    """Kolikrát se skóre zájmu vynásobí podle shody v zaměření (viz SHODA_ZAMERENI).
+
+    Bez zvolených zaměření vrací 1,0 — průvodce se podle nich pak vůbec
+    neřadí a chová se jako dřív.
+    """
+    hledane = profil.hledana_zamereni
+    if not hledane:
+        return 1.0
+    return SHODA_ZAMERENI[_uroven_zamereni(nab, hledane)]
+
+
+def _uroven_zamereni(nab: Nabidka, hledane: set[str]) -> str:
+    if set(nab.zamereni_kody) & hledane:
+        return "obor"
+    if set(nab.zamereni_skoly) & hledane:
+        return "skola"
+    if nab.zamereni_kody:
+        return "jine"
+    return "nevime"
 
 
 def _skore_dosazitelnost(p: float | None, nab: Nabidka, profil: Profil) -> float:
@@ -1172,6 +1260,7 @@ def _duvody(nab: Nabidka, profil: Profil, slozky: dict[str, float], p: float | N
         shoda = set(oblasti.oblasti_oboru(nab.kod_kkov)) & set(profil.oblasti_zajmu)
         popisky = ", ".join(oblasti.OBLASTI[k][0] for k in sorted(shoda))
         out.append(f"Obor patří do: {popisky}")
+    out.extend(_duvody_zamereni(nab, profil))
     if profil.prospech is not None and nab.doporuceny_prospech is not None:
         if profil.prospech <= nab.doporuceny_prospech:
             out.append(
@@ -1199,9 +1288,49 @@ def _duvody(nab: Nabidka, profil: Profil, slozky: dict[str, float], p: float | N
     return out
 
 
+def _popis_zamereni(kody: Iterable[str]) -> str:
+    return ", ".join(oblasti.popis_zamereni(k) for k in sorted(kody))
+
+
+def _duvody_zamereni(nab: Nabidka, profil: Profil) -> list[str]:
+    """Věta o zaměření — a hlavně o tom, odkud se ví.
+
+    Zaměření není v číselníku, vytáhlo se z textů (`oblasti.ZAMERENI`).
+    Uchazeč proto musí na kartě vidět, jestli to má doložené u oboru, jen
+    z popisu školy, nebo vůbec — jinak by heuristiku četl jako fakt.
+    """
+    hledane = profil.hledana_zamereni
+    if not hledane:
+        return [f"Škola u oboru uvádí ŠVP \u201e{nab.svp}\u201c"] if nab.svp and nab.svp != nab.obor else []
+    uroven = _uroven_zamereni(nab, hledane)
+    if uroven == "obor":
+        kde = (f"ŠVP \u201e{nab.svp}\u201c" if nab.svp and nab.svp != nab.obor
+               else "v popisu oboru")
+        return [f"Sedí na tvoje zaměření ({_popis_zamereni(set(nab.zamereni_kody) & hledane)}) — {kde}"]
+    if uroven == "skola":
+        return [f"Škola {_popis_zamereni(set(nab.zamereni_skoly) & hledane)} uvádí ve svém popisu, "
+                f"ale u tohohle oboru to doložené nemáme"]
+    return []       # co zaměření nesedí, patří mezi varování, ne mezi důvody
+
+
+def _varovani_zamereni(nab: Nabidka, profil: Profil) -> list[str]:
+    """Druhá půlka `_duvody_zamereni` — to, co mluví proti."""
+    hledane = profil.hledana_zamereni
+    if not hledane:
+        return []
+    uroven = _uroven_zamereni(nab, hledane)
+    if uroven == "jine":
+        return [f"Obor je podle popisu spíš {_popis_zamereni(nab.zamereni_kody)}, "
+                f"ne to zaměření, které jsi vybral."]
+    if uroven == "nevime":
+        return ["O bližším zaměření tohohle oboru nemáme data — v pořadí je proto "
+                "níž než obory, kde zaměření doložené je."]
+    return []
+
+
 def _varovani(nab: Nabidka, profil: Profil, p: float | None) -> list[str]:
     """Co data neříkají — stejně důležité jako důvody, proč ano."""
-    out: list[str] = []
+    out: list[str] = _varovani_zamereni(nab, profil)
     if p is None:
         out.append("Šanci na přijetí nejde z dat odhadnout — u oboru chybí výsledky JPZ.")
     elif not nab.hranice:
@@ -1426,6 +1555,16 @@ def prubeh_pruvodce() -> Profil:
         vic=True,
     )
 
+    # Doplňující otázka, ne samostatné číslo: nabízí se jen zaměření ke
+    # zvoleným oblastem, takže bez odpovědi na 5) nemá co ukázat. „Baví ho
+    # IT" je pořád 60 pražských nabídek od programování po herní grafiku.
+    nabizena = oblasti.zamereni_oblasti(oblasti_zajmu)
+    zamereni = _zeptej_se_vyber(
+        "5b) A co konkrétně z toho? (Enter = nezáleží, projdeme celou oblast)",
+        [(k, oblasti.ZAMERENI[k][0]) for k in nabizena],
+        vic=True,
+    ) if nabizena else []
+
     mestske_casti = _zeptej_se_vyber(
         "6) Kde bydlíte? (městská část, klidně víc)",
         [(f"Praha {i}", f"Praha {i}") for i in range(1, 23)],
@@ -1484,6 +1623,7 @@ def prubeh_pruvodce() -> Profil:
     return Profil(
         trida=trida,
         oblasti_zajmu=oblasti_zajmu,
+        zamereni=zamereni,
         obvody=obvody,
         skor_cj=skor_cj,
         skor_ma=skor_ma,

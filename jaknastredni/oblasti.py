@@ -22,6 +22,9 @@ jsou tady natvrdo. Ověřeno proti reálným názvům oborů v pražském snapsh
 """
 from __future__ import annotations
 
+import re
+from typing import Iterable
+
 # První dvojčíslí KKOV -> název skupiny oborů vzdělání.
 SKUPINY: dict[str, str] = {
     "16": "Ekologie a ochrana životního prostředí",
@@ -143,6 +146,134 @@ OSOBNOSTNI_OTAZKY: dict[str, tuple[str, dict[str, tuple[str, dict[str, float]]]]
                       "H": 0.1, "E": 0.1, "J": 0.1}),
     }),
 }
+
+
+# Zaměření uvnitř oboru — to, co dva obory se stejným kódem KKOV odlišuje.
+#
+# Kód KKOV je na rozhodování hrubý: `18-20-M/01` (Informační technologie)
+# mají v Praze desítky škol a učí pod ním všechno od programování přes
+# správu sítí po herní grafiku. SPŠE Ječná má pod ním ŠVP „Programování
+# a digitální technologie", SPŠE V Úžlabině ŠVP „Informační technologie"
+# a v popisu školy „správce serverových služeb operačních systémů
+# a počítačových sítí". Rozdíl, podle kterého se uchazeč rozhoduje, je
+# přitom **jen v těchhle textech** — v žádném číselníku není.
+#
+# Proto se zaměření hledá klíčovými slovy v názvu oboru, názvu ŠVP
+# (infoabsolvent), zaměření z CERMATu a v popisu školy. Je to heuristika,
+# ne číselník: co škola do textu nenapsala, průvodce nepozná, a naopak
+# zmínka v popisu školy ještě neznamená, že se to učí zrovna v tomhle
+# oboru (viz `Nabidka.zamereni_skoly`, které se proto váží slabší).
+#
+# (kód) -> (popisek, oblasti zájmu, kde se na zaměření ptáme, regulární výraz)
+ZAMERENI: dict[str, tuple[str, tuple[str, ...], str]] = {
+    # IT a elektro
+    "programovani": ("Programování a vývoj aplikací", ("it",),
+                     r"programov|vývoj (?:aplikac|softwar|her)|softwar|kódování|algoritm"),
+    "site": ("Počítačové sítě, servery, hardware", ("it",),
+             r"počítačov\w* sít|síťov\w* (?:učebn|technolog|infrastrukt|administr)|"
+             r"\bsít[ěí]\b|server|cisco|hardware|správ\w* (?:sít|počítač)"),
+    "kyber": ("Kybernetická bezpečnost", ("it", "pravo"),
+              r"kybernetick|kyberbezpeč|informační bezpečnost|bezpečnost (?:dat|it|informac)"),
+    "web": ("Web a digitální marketing", ("it", "umeni", "ekonomika"),
+            r"webov|tvorb\w* web|internetov\w* aplikac|digitální marketing"),
+    "grafika": ("Grafika, hry, multimédia", ("it", "umeni"),
+                r"herní|počítačov\w* grafik|grafick|\bgame\b|3d|multimédi|animac|"
+                r"vizuální efekt"),
+    "robotika": ("Robotika a automatizace", ("it", "technika"),
+                 r"robotik|robotick|automatizac|mechatronik|řídicí systém|\bplc\b|cnc"),
+    "elektro": ("Elektronika a elektrotechnika", ("it", "technika"),
+                r"elektronik|elektrotechnik|slaboproud|silnoproud|energetik|"
+                r"zabezpečovací|inteligentní budov"),
+    # Technika a řemesla
+    "strojirenstvi": ("Strojírenství a obrábění", ("technika", "remesla"),
+                      r"strojírenst|strojní|obrábě|svařov|zámečn|nástrojař"),
+    "auto": ("Auto, doprava, letectví", ("technika",),
+             r"automobil|motorov\w* vozid|autotronik|autome|dopravn|letec|železnič|logistik"),
+    "stavebnictvi": ("Stavebnictví a architektura", ("remesla", "technika", "umeni"),
+                     r"stavebnict|stavitel|architekt|zedn|instalatér|truhlář|tesař|"
+                     r"geodéz|interiér"),
+    # Ekonomika, právo, služby
+    "ekonomika_ucetnictvi": ("Ekonomika, účetnictví, finance", ("ekonomika",),
+                             r"účetnict|ekonomik|finanč|bankovn|pojišťovnict|daň"),
+    "management": ("Management, podnikání, obchod", ("ekonomika",),
+                   r"management|podnikán|\bbusiness\b|obchodn[íě]|marketing|"
+                   r"personáln|logistik"),
+    "cestovni_ruch": ("Cestovní ruch a hotelnictví", ("gastro", "ekonomika"),
+                      r"cestovní ruch|hotelnict|turism|průvodcovsk"),
+    "gastronomie": ("Vaření, cukrařina, obsluha", ("gastro",),
+                    r"kuchař|číšník|cukrář|pekař|gastronom|barman|řezník|potravinář"),
+    "pravo_verejna_sprava": ("Právo a veřejná správa", ("pravo",),
+                             r"právn|veřejnosprávn|veřejn\w* správ|justič|notář"),
+    "bezpecnost": ("Bezpečnost, policie, záchranáři", ("pravo", "zdravi"),
+                   r"bezpečnostní (?:prac|slož|služb)|policejn|požárn|záchranář|"
+                   r"kriminalistik|ochrana osob"),
+    # Člověk, zdraví, pedagogika
+    "zdravotnictvi": ("Zdravotnictví a laboratoře", ("zdravi",),
+                      r"zdravotnick|ošetřovatel|\bsestr|laboratorn|farmaceut|"
+                      r"asistent zubn|nutriční|masér|fyzioterap"),
+    "socialni": ("Sociální práce a péče", ("pedagogika", "zdravi"),
+                 r"sociáln|pečovatel|charitativ"),
+    "pedagogika_deti": ("Práce s dětmi, předškolní pedagogika", ("pedagogika",),
+                        r"předškoln|pedagogik|vychovatel|učitel|mateřsk\w* škol"),
+    "sport": ("Sport a tělesná výchova", ("zdravi", "vseobecne"),
+              r"sportovn|tělesn\w* (?:výchov|kultur)|atletik|fotbal|hokej|basketbal|"
+              r"volejbal|házen|plaván|triatlon|\brugby\b|trenér"),
+    "krasa": ("Kadeřnictví, kosmetika, péče o vzhled", ("zdravi",),
+              r"kadeřn|kosmetič|kosmetik|vizážist|nehtov|péče o vzhled"),
+    # Humanitní, jazyky, umění
+    "jazyky": ("Jazyky a dvojjazyčné studium", ("humanitni", "vseobecne"),
+               r"jazyk|dvojjazyč|bilingv|anglick\w* (?:program|sekc|výuk)|"
+               r"německ\w* (?:program|sekc|výuk)|španěl|francouz|italsk"),
+    "spolecenske_vedy": ("Společenské vědy, humanitní zaměření", ("humanitni", "vseobecne"),
+                         r"humanitn|společensk\w* věd|filozof|psycholog|historie|"
+                         r"mezinárodní vztah"),
+    "prirodni_vedy": ("Přírodní vědy a matematika", ("vseobecne", "priroda", "it"),
+                      r"přírodovědn|přírodní věd|matematik|fyzik|chemi|biolog|"
+                      r"technick\w* lyceum"),
+    "media": ("Média, žurnalistika, film, foto", ("umeni", "humanitni"),
+              r"žurnalist|mediáln|\bmédi|filmov|fotograf|televizn|reklam|"
+              r"polygraf|tisk"),
+    "umeni_design": ("Výtvarno, design, užité umění", ("umeni",),
+                     r"výtvarn|design|užit\w* umění|uměleckořemesln|restaurov|"
+                     r"malb|sochař|kerami|sklář|šperk|odě[vy]|módn|scénograf"),
+    "hudba_divadlo": ("Hudba, tanec, divadlo", ("umeni",),
+                      r"hudebn|tanečn|divadeln|zpěv|konzervatoř|herect"),
+    # Příroda
+    "priroda_zvirata": ("Příroda, zvířata, zemědělství", ("priroda",),
+                        r"veterin|zeměděl|zahradni|chov|lesnict|ekolog|"
+                        r"životní\w* prostřed|rybář"),
+}
+
+_ZAMERENI_RE: dict[str, "re.Pattern[str]"] = {
+    kod: re.compile(vzor, re.IGNORECASE) for kod, (_p, _o, vzor) in ZAMERENI.items()
+}
+
+
+def zamereni_textu(*texty: str | None) -> tuple[str, ...]:
+    """Kódy zaměření, na která v daných textech sedí klíčová slova.
+
+    Texty se spojí do jednoho a hledá se ve všech najednou — na pořadí ani
+    na tom, ze kterého pole slovo přišlo, nezáleží. Prázdné a None se
+    ignorují, takže jde volat i s poli, která u dané školy chybí.
+    """
+    spojeno = " \n ".join(t for t in texty if t)
+    if not spojeno.strip():
+        return ()
+    return tuple(kod for kod, vzor in _ZAMERENI_RE.items() if vzor.search(spojeno))
+
+
+def zamereni_oblasti(oblasti_zajmu: "Iterable[str]") -> tuple[str, ...]:
+    """Zaměření, na která má smysl se ptát u zvolených oblastí zájmu.
+
+    Formulář nemá uchazeči nabídnout všech 28 zaměření — jen ta, která
+    patří k oblastem, co zaškrtl. Pořadí drží pořadí v `ZAMERENI`.
+    """
+    zvolene = set(oblasti_zajmu)
+    return tuple(kod for kod, (_p, obl, _v) in ZAMERENI.items() if zvolene & set(obl))
+
+
+def popis_zamereni(kod: str) -> str:
+    return ZAMERENI[kod][0] if kod in ZAMERENI else kod
 
 
 def preference_typu(odpovedi: dict[str, str | None]) -> dict[str, float]:

@@ -51,6 +51,10 @@ def nabidka_do_dictu(nab: pruvodce.Nabidka) -> dict[str, Any]:
     d = asdict(nab)
     for pole in VYNECHAT:
         d.pop(pole, None)
+    # ŠVP se na kartě ukazuje jako „co se pod tím obecným kódem doopravdy
+    # učí" — když se jmenuje stejně jako obor, neříká nic a jen zabírá.
+    if d.get("svp") == nab.obor:
+        d.pop("svp", None)
     vyhlazena = pruvodce._monotonni_pasma(nab.pasma) if nab.pasma else {}
     celkem = sum(n for _p, n in vyhlazena.values())
     if vyhlazena and celkem >= pruvodce.MIN_VZOREK:
@@ -92,6 +96,7 @@ def export(conn) -> dict[str, Any]:
             "sigma_jeden_rok": pruvodce.SIGMA_JEDEN_ROK,
             "sigma_max": pruvodce.SIGMA_MAX,
             "smrsteni": pruvodce.SMRSTENI,
+            "shoda_zamereni": pruvodce.SHODA_ZAMERENI,
             "min_vzorek": pruvodce.MIN_VZOREK,
             "okno_pasma": pruvodce.OKNO_PASMA,
             "max_navrh_bodu": pruvodce.MAX_NAVRH_BODU,
@@ -115,6 +120,11 @@ def export(conn) -> dict[str, Any]:
         },
         "ciselniky": {
             "oblasti": {k: {"popis": p, "skupiny": list(s)} for k, (p, s) in oblasti.OBLASTI.items()},
+            # Bez regulárních výrazů: zaměření se rozpoznávají při exportu
+            # (`Nabidka.zamereni_kody`), stránka už dostává hotové kódy
+            # a potřebuje jen popisek a to, u které oblasti se na ně ptát.
+            "zamereni": {k: {"popis": p, "oblasti": list(o)}
+                         for k, (p, o, _vzor) in oblasti.ZAMERENI.items()},
             "typy": {k: {"popis": p, "trida": t, "maturita": m} for k, (p, t, m) in oblasti.TYPY.items()},
             "skupiny": oblasti.SKUPINY,
             "sousedni_obvody": {k: list(v) for k, v in oblasti.SOUSEDNI_OBVODY.items()},

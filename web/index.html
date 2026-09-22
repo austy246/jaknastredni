@@ -99,6 +99,9 @@
   /* --- otázky --- */
   .otazky { display: grid; gap: 2px; background: var(--line); border: 1px solid var(--line); margin-block: 24px; }
   .q { background: var(--surface); padding: 16px 18px; display: grid; gap: 10px; }
+  /* `display: grid` výš přebíjí atribut hidden — bez tohohle řádku by
+     se otázka 3b ukazovala i bez zvolené oblasti, prázdná. */
+  .q[hidden] { display: none; }
   .q > header { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
   .q h3 { font-size: .98rem; }
   .q .cislo {
@@ -253,6 +256,15 @@
       <div class="chips" id="q-oblasti"></div>
     </div>
 
+    <div class="q" id="q-zamereni-box" hidden>
+      <header><span class="cislo">3b</span><h3>A co konkrétně z toho?</h3></header>
+      <p class="hint">Kód oboru je na rozhodování hrubý: pod <code>18-20-M/01</code>
+        učí jedna škola programování, druhá správu sítí. Nabídku skládáme z názvu
+        ŠVP a popisu školy — co škola nenapsala, nepoznáme. Nic nevyfiltruje, jen
+        přeskládá pořadí; prázdné = projdeme celou oblast.</p>
+      <div class="chips" id="q-zamereni"></div>
+    </div>
+
     <div class="q">
       <header><span class="cislo">4</span><h3>Kde by to mělo být?</h3></header>
       <p class="hint">Vyber svoji městskou část (Praha 1–22). Nefiltruje, jen zvýhodní; dojezd MHD zatím v datech nemáme.</p>
@@ -385,7 +397,7 @@
   var NAB = D.nabidky;
 
   // ---- stav formuláře ----
-  var stav = { trida: 9, oblasti: [], obvody: [], skorCj: null, skorMa: null,
+  var stav = { trida: 9, oblasti: [], zamereni: [], obvody: [], skorCj: null, skorMa: null,
                prospech: null, skolneMax: null, jazyk: null, priority: [],
                talentove: false, zlepseni: 0,
                osobnostni: { po_skole: null, rozhodnuto: null, praxe: null },
@@ -495,6 +507,29 @@
     for (var k in C.oblasti) if (C.oblasti[k].skupiny.indexOf(sk) >= 0) out.push(k);
     return out;
   }
+
+  // Zaměření uvnitř oblasti. Python je rozpoznal už při exportu (klíče
+  // `zamereni_kody` u oboru, `zamereni_skoly` z popisu celé školy) — tady
+  // se jen porovnávají, aby stránka nemusela mít slovník vzorů u sebe.
+  function hledanaZamereni() {
+    return stav.zamereni.filter(function (k) {
+      var z = C.zamereni[k];
+      return z && z.oblasti.some(function (o) { return stav.oblasti.indexOf(o) >= 0; });
+    });
+  }
+  function protina(seznam, hledane) {
+    return (seznam || []).filter(function (x) { return hledane.indexOf(x) >= 0; });
+  }
+  function urovenZamereni(n) {
+    var hledane = hledanaZamereni();
+    if (!hledane.length) return "obor";        // neptáme se -> nic nesrážíme
+    if (protina(n.zamereni_kody, hledane).length) return "obor";
+    if (protina(n.zamereni_skoly, hledane).length) return "skola";
+    return (n.zamereni_kody && n.zamereni_kody.length) ? "jine" : "nevime";
+  }
+  function popisZamereni(kody) {
+    return kody.map(function (k) { return C.zamereni[k] ? C.zamereni[k].popis : k; }).join(", ");
+  }
   function uciJazyk(n, jazyk) {
     if (!n.jazyky) return false;
     return new RegExp("(^|[\\s,(])" + jazyk + "($|[\\s,)])").test(n.jazyky);
@@ -568,6 +603,7 @@
         var vse = oblastiOboru(n.kod_kkov);
         var shoda = vse.filter(function (x) { return stav.oblasti.indexOf(x) >= 0; });
         slozky.zajem = shoda.length ? Math.min(1, 0.6 + 0.4 * shoda.length / Math.max(vse.length, 1)) : 0;
+        slozky.zajem *= K.shoda_zamereni[urovenZamereni(n)];
       }
 
       var dos = s.p == null ? 0.4 : Math.min(1, s.p / 0.4);
@@ -648,6 +684,21 @@
       var vse = oblastiOboru(n.kod_kkov).filter(function (x) { return stav.oblasti.indexOf(x) >= 0; });
       out.push("Obor patří do: " + vse.map(function (k) { return C.oblasti[k].popis; }).join(", "));
     }
+    // Zaměření není v číselníku, vytáhlo se z textů — na kartě proto musí být
+    // vidět, jestli je doložené u oboru, jen v popisu školy, nebo vůbec.
+    var hledane = hledanaZamereni();
+    if (hledane.length) {
+      var kde = (n.svp ? "ŠVP \u201e" + n.svp + "\u201c" : "popis oboru");
+      var uroven = urovenZamereni(n);
+      if (uroven === "obor")
+        out.push("Sedí na tvoje zaměření (" + popisZamereni(protina(n.zamereni_kody, hledane)) + ") — " + kde);
+      else if (uroven === "skola")
+        out.push("Škola " + popisZamereni(protina(n.zamereni_skoly, hledane)) +
+                 " uvádí ve svém popisu, ale u tohohle oboru to doložené nemáme");
+      // Co zaměření nesedí, patří mezi varování (viz varovani()).
+    } else if (n.svp) {
+      out.push("Škola u oboru uvádí ŠVP \u201e" + n.svp + "\u201c");
+    }
     if (stav.prospech != null && n.doporuceny_prospech != null && stav.prospech <= n.doporuceny_prospech)
       out.push("Tvůj průměr " + stav.prospech.toFixed(1) + " vyhovuje doporučenému prospěchu " + n.doporuceny_prospech.toFixed(1));
     if (stav.obvody.length) {
@@ -666,6 +717,16 @@
   }
   function varovani(v) {
     var n = v.n, h = cisla(n.hranice || {}), roky = Object.keys(h).map(Number), out = [];
+    var hledaneZ = hledanaZamereni();
+    if (hledaneZ.length) {
+      var urovenZ = urovenZamereni(n);
+      if (urovenZ === "jine")
+        out.push("Obor je podle popisu spíš " + popisZamereni(n.zamereni_kody) +
+                 ", ne to zaměření, které jsi vybral.");
+      else if (urovenZ === "nevime")
+        out.push("O bližším zaměření tohohle oboru nemáme data — v pořadí je proto " +
+                 "níž než obory, kde zaměření doložené je.");
+    }
     if (v.sance == null) out.push("Šanci na přijetí nejde z dat odhadnout — u oboru chybí výsledky JPZ.");
     else if (!roky.length) out.push("Škola nevykázala hranici přijetí, šance je jen odhad z poměru přihlášek ku kapacitě.");
     else if (roky.length === 1) out.push("Hranice přijetí je známá jen za jeden rok — odhad je nejistý.");
@@ -810,6 +871,24 @@
       box.appendChild(l);
     });
   }
+  // Nabídka zaměření se odvíjí od zaškrtnutých oblastí, takže se musí
+  // překreslovat za běhu. Překreslení ale zahodí zaškrtnutí, proto se dělá
+  // jen když se seznam opravdu změnil — a co v novém seznamu zůstalo,
+  // se zaškrtne zpátky.
+  var zamereniVykreslena = null;
+  function vykresliZamereni() {
+    var nabizena = Object.keys(C.zamereni).filter(function (k) {
+      return C.zamereni[k].oblasti.some(function (o) { return stav.oblasti.indexOf(o) >= 0; });
+    });
+    var box = document.getElementById("q-zamereni-box");
+    box.hidden = !nabizena.length;
+    if (zamereniVykreslena === nabizena.join(",")) return;
+    zamereniVykreslena = nabizena.join(",");
+    var drive = zaskrtnute("zamereni");
+    chips("q-zamereni", nabizena.map(function (k) {
+      return { hodnota: k, popis: C.zamereni[k].popis, vychozi: drive.indexOf(k) >= 0 };
+    }), "checkbox", "zamereni", zmena);
+  }
   function zaskrtnute(jmeno) {
     return Array.prototype.map.call(
       document.querySelectorAll('input[name="' + jmeno + '"]:checked'),
@@ -848,6 +927,8 @@
 
   function zmena() {
     stav.oblasti = zaskrtnute("oblasti");
+    vykresliZamereni();
+    stav.zamereni = zaskrtnute("zamereni");
     ["po_skole", "rozhodnuto", "praxe"].forEach(function (k) {
       stav.osobnostni[k] = zaskrtnute(k)[0] || null;
     });
