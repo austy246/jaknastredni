@@ -6,11 +6,24 @@ kvalita, maturitní výsledky, uplatnění absolventů apod.).
 
 ## Stav
 
-Projekt teprve začíná. Tento dokument shrnuje průzkum dostupných zdrojů dat.
-Druhé kolo průzkumu (22. 9. 2026) každý zdroj **reálně ověřilo stažením dat**
-— přesné URL, formáty, struktura souborů a ukázky pro jednu referenční školu
-(Obchodní akademie Heroldovy sady, REDIZO 600006573) jsou v podrobných
-zprávách v [`docs/research/`](docs/research/). Zde je jen shrnutí a závěry.
+- Průzkum zdrojů dat je hotový a ověřený stažením (22. 9. 2026), podrobné
+  zprávy jsou v [`docs/research/`](docs/research/).
+- Datový model je navržený v [`docs/datovy-model.md`](docs/datovy-model.md),
+  schéma SQLite v [`jaknastredni/schema.sql`](jaknastredni/schema.sql).
+- První importér (rejstřík MŠMT) funguje, viz níže.
+
+## Rychlý start
+
+```bash
+pip install -e ".[dev]"
+python -m jaknastredni.msmt --db data/jaknastredni.db   # stáhne pražský snapshot a naimportuje
+python -m pytest
+```
+
+Výsledkem je `data/jaknastredni.db` s 1044 organizacemi, 2434 školami
+a zařízeními a 219 středními školami (`druh = 'C00'`); pohled
+`v_stredni_skola` je nejrychlejší cesta k přehledu. Stažený surový soubor
+zůstává v `data/raw/msmt/` s datem výstupu v názvu.
 
 ## Klíčové identifikátory
 
@@ -196,8 +209,8 @@ JPZ). Rejstřík MŠMT je referenční množina.
 
 ## Doporučený postup
 
-1. **Import rejstříku MŠMT** (pražský JSON, denně) → tabulky organizace,
-   škola, obor. Filtr `druh in (C00, E00)`, ověřit číselník.
+1. ~~**Import rejstříku MŠMT**~~ hotovo (`jaknastredni/msmt.py`), zbývá
+   ověřit číselník druhů (`C00` vs. `E00`).
 2. **Import CERMAT XLSX**: maturita 2015–2026 (jeden parser), JPZ 2024–2026
    (nový formát, 3 soubory × 2 kola × rok), JPZ 2017–2023 (starý formát,
    jen pro trendy na úrovni skupiny oborů). Klíč REDIZO (+ KKOV od 2024).
