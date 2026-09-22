@@ -17,6 +17,8 @@ kvalita, maturitní výsledky, uplatnění absolventů apod.).
   viz níže.
 - Importér JPZ starého formátu CERMAT (`jaknastredni/cermat_jpz_old.py`)
   funguje pro roky 2017–2023, viz níže.
+- Scraper infoabsolvent.cz (`jaknastredni/infoabsolvent.py`) funguje a byl
+  spuštěn na všech 211 pražských SŠ, viz níže.
 
 ## Rychlý start
 
@@ -26,6 +28,7 @@ python -m jaknastredni.msmt --db data/jaknastredni.db                        # s
 python -m jaknastredni.cermat_mz --db data/jaknastredni.db --roky 2015-2026 --obdobi jap  # maturitní výsledky
 python -m jaknastredni.csi --db data/jaknastredni.db                        # seznam inspekcí ČŠI
 python -m jaknastredni.cermat_jpz_old --db data/jaknastredni.db --roky 2017-2023          # JPZ starý formát
+python -m jaknastredni.infoabsolvent --db data/jaknastredni.db              # scraper infoabsolvent.cz (1 req/s, pár minut)
 python -m pytest
 ```
 
@@ -37,8 +40,13 @@ obsahuje maturitní výsledky po školách za roky 2015–2026, tabulka
 2017–2023 (21 569 řádků). Tabulka `inspekce` obsahuje 14 912 záznamů o
 inspekcích ČŠI za roky 2003–2026 (350 z nich se týká pražských středních
 škol, 217 různých REDIZO — souhlasí s kontrolním součtem portálu ČŠI, viz
-níže). Stažené surové soubory zůstávají v `data/raw/msmt/`,
-`data/raw/cermat/` a `data/raw/csi/` s rokem/datem výstupu v názvu.
+níže). Tabulka `web_profil` obsahuje scrapovaný profil ze zdroje
+`infoabsolvent` pro všech 211 pražských SŠ (naposledy staženo 22. 9. 2026)
+— 743 řádků oborů napříč 208 školami (3 školy nemají na infoabsolventu
+žádnou vzdělávací nabídku uvedenou). Stažené surové soubory zůstávají v
+`data/raw/msmt/`, `data/raw/cermat/` a `data/raw/csi/` s rokem/datem
+výstupu v názvu; `web_profil` je čistě odvozená data přímo v databázi,
+žádné syrové HTML se needukládá (viz níže u infoabsolventu).
 
 ## Rozhodnutí o vývoji a ukládání dat
 
@@ -196,6 +204,20 @@ Podrobně: [`docs/research/atlas-infoabsolvent.md`](docs/research/atlas-infoabso
   školy, odkaz na ČŠI zprávy. Karty oborů (`/Obory/KartaOboru/{kód}`) mají
   uplatnění absolventů a navazující povolání (obecně za obor, ne za školu).
 - Žádná stránka s podmínkami užití nenalezena; kontakt `infoabsolvent@npi.cz`.
+- **Scraper implementován a spuštěn** (`jaknastredni/infoabsolvent.py` →
+  tabulka `web_profil`, zdroj `infoabsolvent`, JSON blob v poli `data`).
+  Robots.txt znovu ověřen před spuštěním (22. 9. 2026) — beze změny oproti
+  průzkumu výše. Všech **211/211** pražských SŠ staženo a naparsováno bez
+  chyby, celkem 743 řádků oborů (208/211 škol má na infoabsolventu
+  vyplněnou vzdělávací nabídku, 3 nemají žádnou — ověřeno, není to chyba
+  parseru). Sloupec „LONI: přihlášení/plán přijmout" na stránce je
+  **loňský počet přihlášených a loňský PLÁN přijmout, ne skutečný počet
+  přijatých** — infoabsolvent.cz skutečný počet přijatých neuvádí (na
+  rozdíl od Atlasu, viz bod 4); ukládá se tedy jako `loni_prihlaseni` a
+  `loni_plan_prijmout`. Parser používá `BeautifulSoup` s vestavěným
+  `html.parser` (`beautifulsoup4` přidáno jako hlavní závislost, lxml
+  nepotřeba). Žádné syrové HTML se neukládá do `data/raw/` — výstupem je
+  přímo řádek v `web_profil`.
 
 ### 6. prijimacky-onlinekurzy.cz (agregátor, jen inspirace) ✅
 Podrobně: [`docs/research/prijimacky-onlinekurzy.md`](docs/research/prijimacky-onlinekurzy.md)
@@ -276,9 +298,12 @@ JPZ). Rejstřík MŠMT je referenční množina.
    14 912 řádků, 2003–2026) → seznam inspekcí per REDIZO; PDF stahovat jen
    pro školy na užším seznamu a extrahovat sekci „Závěry" zůstává budoucí
    krok (mimo rozsah tohoto importéru).
-4. **Scraper infoabsolvent.cz** (211 detailů, 1 req/s) pro přijímací
-   kritéria, školné, jazyky, vybavení; volitelně Atlas pro dny otevřených
-   dveří a doporučený prospěch. Vždy REDIZO z detailu, ne z URL Atlasu.
+4. ~~**Scraper infoabsolvent.cz** (211 detailů, 1 req/s) pro přijímací
+   kritéria, školné, jazyky, vybavení~~ hotovo (`jaknastredni/infoabsolvent.py`,
+   tabulka `web_profil`, zdroj `infoabsolvent`) — volitelně ještě Atlas
+   školství pro doporučený prospěch a jako druhý zdroj pro křížovou kontrolu
+   (zůstává neudělané, viz "Otevřené otázky" níže). Vždy REDIZO z
+   detailu/URL infoabsolventu, ne z interního ID Atlasu.
 5. Prezentace: inspirovat se agregátorem (bod 6), ale metriky počítat
    z oficiálních dat s uvedeným vzorcem.
 

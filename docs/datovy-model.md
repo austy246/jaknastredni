@@ -35,13 +35,13 @@ organizace (REDIZO) ──< zrizovatel
 organizace ────┼──< jpz_skupina        (CERMAT JPZ 2017–2023, rok × skupina oborů)       [hotovo]
                ├──< maturita           (CERMAT MZ 2015+, rok × období × SMO16 × předmět) [hotovo]
                ├──< inspekce           (ČŠI, datum × PDF)                                [hotovo]
-               └──< web_profil         (infoabsolvent / Atlas, datum scrapování)         [plán]
+               └──< web_profil         (infoabsolvent [hotovo] / Atlas [plán], datum scrapování)
 ```
 
 Plné čáry jsou implementované (importéry MŠMT, CERMAT maturita, CERMAT JPZ
-2017–2023 a ČŠI), hranaté závorky označují tabulky navržené pro další
-importéry. CERMAT do roku 2023, maturita a ČŠI inspekce nemají IZO, proto se
-váží na organizaci (REDIZO), ne na školu.
+2017–2023, ČŠI a infoabsolvent.cz), hranaté závorky označují tabulky
+navržené pro další importéry. CERMAT do roku 2023, maturita a ČŠI inspekce
+nemají IZO, proto se váží na organizaci (REDIZO), ne na školu.
 
 ## Implementované tabulky (MŠMT)
 
@@ -68,7 +68,7 @@ Stav po importu pražského snapshotu z 22. 9. 2026:
 | střední školy (`C00`) | 219 |
 | aktivní obory na SŠ | 779 (190 různých KKOV) |
 
-## Implementované tabulky (CERMAT maturita, JPZ 2017–2023, ČŠI)
+## Implementované tabulky (CERMAT maturita, JPZ 2017–2023, ČŠI, infoabsolvent.cz)
 
 ### `maturita` — CERMAT MZ 2015+
 Klíč `(redizo, rok, obdobi, smo16, predmet)`; `obdobi` je `j` (jarní) nebo
@@ -108,6 +108,29 @@ importu). PDF zprávy se v tomto importéru nestahují (jen seznam/metadata),
 extrakce textu (sekce „Závěry", „Silné stránky" apod.) zůstává budoucí krok
 pro užší seznam škol. Zdroj: [`research/csi.md`](research/csi.md).
 
+### `web_profil` — scrapovaný doplňkový profil školy
+Klíč `(redizo, zdroj, stazeno)`; `zdroj = 'infoabsolvent'` (Atlas školství
+zůstává neimplementovaný, viz README bod 4/Otevřené otázky — do stejné
+tabulky by šel doplnit se `zdroj = 'atlas'`). Sloupec `data` je JSON objekt
+s poli, která rejstřík MŠMT nemá: vybavení a nabídka školy, velikost školy,
+ubytování/stravování, přístup k PC/internetu mimo výuku, den otevřených
+dveří, cizí jazyky (za celou školu), poznámka SŠ, kontakt (www/e-mail/
+telefon), odkaz na ČŠI zprávy, a pole `obory[]` — pro každou kombinaci
+KKOV × zaměření/ŠVP: délka a forma studia, počet povinných jazyků a jejich
+seznam, `loni_prihlaseni`/`loni_plan_prijmout` (pozor: infoabsolvent
+zveřejňuje jen loňský PLÁN přijmout, ne skutečný počet přijatých — na
+rozdíl od Atlasu), `letos_plan_prijmout`, zda se koná přijímací zkouška,
+roční školné, možnost studia pro ZP, podrobnosti přijímacího řízení
+(`prijimaci_rizeni`: jednotná/ústní/písemná/talentová/praktická zkouška,
+jiná kritéria, termíny) a poznámky k oboru. Bez cizího klíče na
+`organizace` (stejný důvod jako `maturita`). Adresa, okres, typ školy a
+jméno zřizovatele se z infoabsolventu záměrně nevytahují — jsou
+redundantní vůči `organizace`/`misto_vyuky`/`zrizovatel`; žádné osobní
+údaje nad rámec toho, co už ukládá MŠMT (`organizace.reditel_jmeno`), se
+neukládají. Zdroj:
+[`research/atlas-infoabsolvent.md`](research/atlas-infoabsolvent.md),
+oddíl 2. Stav po běhu 22. 9. 2026: 211/211 pražských SŠ, 743 řádků oborů.
+
 ## Plánované tabulky (návrh)
 
 ### `prijimaci_rizeni` — CERMAT JPZ, nový formát 2024+
@@ -117,10 +140,9 @@ přihlášky celkem a podle priority 1–5, přijatí, konali ČJ/MA, % skór a
 percentil (průměr/min/max) zvlášť za všechny a za přijaté, důvody nepřijetí.
 Zdroj: [`research/cermat.md`](research/cermat.md), oddíl 6.
 
-### `web_profil` — scrapované doplňky
-Klíč `(redizo, zdroj, stazeno)`. JSON s poli, která rejstřík nemá: přijímací
-kritéria, školné, dny otevřených dveří, jazyky, vybavení, loňský poměr
-přihlášení/přijatí. Zdroj infoabsolvent.cz, případně Atlas školství.
+`jpz_skupina`, `inspekce` a `web_profil` jsou od teď implementované, viz
+sekci výše; u `web_profil` zůstává plánované jen případné doplnění Atlasu
+školství jako druhého zdroje (`zdroj = 'atlas'`) do stejné tabulky.
 
 ## Spojování zdrojů
 

@@ -10,6 +10,12 @@ requires-python = ">=3.11"
 dependencies = [
     "requests>=2.31",
     "openpyxl>=3.1",
+    # HTML parsing pro scraper infoabsolvent.cz — na rozdíl od XLSX/JSON zdrojů
+    # je tohle skutečné parsování stránek, ne jednorázová záležitost jednoho
+    # importéru, proto je to hlavní závislost jako requests/openpyxl, ne
+    # volitelná skupina. Parser "html.parser" je vestavěný v stdlibu, lxml
+    # tedy není potřeba.
+    "beautifulsoup4>=4.12",
 ]
 
 [project.optional-dependencies]
@@ -22,6 +28,7 @@ jns-msmt = "jaknastredni.msmt:main"
 jns-cermat-mz = "jaknastredni.cermat_mz:main"
 jns-csi = "jaknastredni.csi:main"
 jns-cermat-jpz-old = "jaknastredni.cermat_jpz_old:main"
+jns-infoabsolvent = "jaknastredni.infoabsolvent:main"
 
 [tool.setuptools.packages.find]
 include = ["jaknastredni*"]
