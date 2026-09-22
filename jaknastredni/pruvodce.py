@@ -175,6 +175,7 @@ class Nabidka:
     loni_prihlaseni: int | None = None
     loni_prijati: int | None = None       # jen Atlas; infoabsolvent má plán, ne přijaté
     doporuceny_prospech: float | None = None   # jen Atlas
+    lekarska_prohlidka: bool | None = None     # jen Atlas: PLP u oboru
     zdroje_profilu: tuple[str, ...] = ()
     jazyky: str | None = None
     pocet_jazyku: int | None = None
@@ -415,10 +416,14 @@ def _doplnit_web_profil(conn: sqlite3.Connection, nabidky: dict[tuple[str, str],
                 nab.zdroje_profilu = (*nab.zdroje_profilu, r["zdroj"])
             nab.velikost_skoly = nab.velikost_skoly or _velikost_skoly(data.get("velikost_skoly"))
             nab.vybaveni = nab.vybaveni or data.get("vybaveni_a_nabidka")
-            nab.dod = nab.dod or data.get("den_otevrenych_dveri")
+            nab.dod = nab.dod or _prvni(data, "den_otevrenych_dveri", "dny_otevrenych_dveri")
             nab.www = nab.www or data.get("www")
             nab.jazyky = nab.jazyky or data.get("cizi_jazyky")
         for o in data.get("obory", []):
+            # Atlas u oboru formu studia neuvádí vůbec (nemá pro ni sloupec),
+            # infoabsolvent ano — chybějící hodnota proto projde. Spojovacím
+            # klíčem je KKOV; u Atlasu může být None (obor bez uvedeného kódu),
+            # pak se prostě nespáruje.
             if (o.get("forma_studia") or "").lower() not in ("denní", "denni", ""):
                 continue
             for nab in cilove:
@@ -427,23 +432,42 @@ def _doplnit_web_profil(conn: sqlite3.Connection, nabidky: dict[tuple[str, str],
                 _doplnit_obor(nab, o)
 
 
+def _prvni(data: dict[str, Any], *klice: str) -> Any:
+    """První neprázdná hodnota z uvedených klíčů.
+
+    Každý scraper pojmenovává svoje pole podle toho, jak se jmenují na jeho
+    webu — infoabsolvent má `den_otevrenych_dveri` a `letos_plan_prijmout`,
+    Atlas `dny_otevrenych_dveri` a `planovany_pocet_prijmout`. Přejmenovávat
+    je ve scraperech by rozbilo vazbu na zdroj, takže se aliasy řeší až tady.
+    """
+    for k in klice:
+        hodnota = data.get(k)
+        if hodnota not in (None, ""):
+            return hodnota
+    return None
+
+
 def _doplnit_obor(nab: Nabidka, o: dict[str, Any]) -> None:
     """Přenese oborová pole z JSON blobu `web_profil` do nabídky.
 
-    Názvy klíčů jsou ty, které ukládá `jaknastredni.infoabsolvent`; klíče
-    `loni_prijati` a `doporuceny_prospech` má jen Atlas školství (u
-    infoabsolventu prostě chybí a zůstanou None). Nic se nepřepisuje —
-    vyhrává první zdroj, který hodnotu měl.
+    Pole `loni_prijati` (skutečný počet přijatých) a `doporuceny_prospech` má
+    jen Atlas školství, `pocet_povinnych_jazyku` a rozepsané složky přijímacího
+    řízení (`prijimaci_rizeni`) jen infoabsolvent — chybějící klíč zůstane
+    None. Nic se nepřepisuje: vyhrává první zdroj, který hodnotu měl.
     """
     if nab.skolne is None:
         nab.skolne = o.get("skolne_rocne")
-    nab.plan_prijmout = nab.plan_prijmout or o.get("letos_plan_prijmout")
+    nab.plan_prijmout = nab.plan_prijmout or _prvni(
+        o, "letos_plan_prijmout", "planovany_pocet_prijmout"
+    )
     nab.loni_prihlaseni = nab.loni_prihlaseni or o.get("loni_prihlaseni")
     nab.loni_prijati = nab.loni_prijati or o.get("loni_prijati")
     nab.pocet_jazyku = nab.pocet_jazyku or o.get("pocet_povinnych_jazyku")
     nab.jazyky = o.get("vyucovane_jazyky") or nab.jazyky
     if nab.doporuceny_prospech is None:
         nab.doporuceny_prospech = _prospech(o.get("doporuceny_prospech"))
+    if nab.lekarska_prohlidka is None:
+        nab.lekarska_prohlidka = o.get("plp")
     pr = o.get("prijimaci_rizeni") or {}
     nab.prihlasky_do = nab.prihlasky_do or pr.get("prihlasky_podejte_do")
     nab.dalsi_kriteria = nab.dalsi_kriteria or pr.get("jina_kriteria_prijimani")
@@ -887,6 +911,8 @@ def _varovani(nab: Nabidka, profil: Profil, p: float | None) -> list[str]:
         out.append(f"Škola přidává vlastní kritéria: {nab.dalsi_kriteria}")
     if nab.talentova_zkouska:
         out.append("Obor má talentovou zkoušku — přihláška se podává dřív (do 30. 11.).")
+    if nab.lekarska_prohlidka:
+        out.append("Obor vyžaduje potvrzení od lékaře (PLP) — objednat se včas.")
     if nab.maturita_uspesnost is None and oblasti.s_maturitou(nab.typ):
         out.append("Škola nemá v datech CERMAT maturitní výsledky (malá škola nebo nový obor).")
     if nab.inspekce_datum and nab.inspekce_datum < "2019-01-01":

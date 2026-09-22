@@ -434,6 +434,13 @@ Soubor `web/data.js` se neverzuje (odvozený artefakt, stejně jako databáze).
 Zdrojem pravdy o hodnocení zůstává `pruvodce.py` — export do dat přibaluje
 i jeho konstanty, takže je web čte a nemá je opsané u sebe.
 
+Průvodce čte **všechny** zdroje v tabulce `web_profil` (infoabsolvent, pak
+Atlas školství); pozdější zdroj jen doplňuje, co chybí. Z Atlasu přibyl
+doporučený prospěch (72 nabídek), skutečný počet loni přijatých (552) a
+povinná lékařská prohlídka (570). Názvy klíčů se mezi scrapery liší
+záměrně — aliasy řeší `_prvni()` v `pruvodce.py`, ne přejmenování ve
+scraperech.
+
 **Šance na přijetí** se počítá ze zveřejněného minimálního % skóru přijatých
 (`prijimaci_rizeni.skor_prijati_min_cjma`, 2024+) jako normální rozdělení
 kolem očekávané hranice. Nejistota není odhad od stolu: směrodatná odchylka

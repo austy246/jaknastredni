@@ -360,3 +360,89 @@ def test_export_web_nese_nabidky_i_konstanty(conn):
     ucnak = next(n for n in data["nabidky"] if n["redizo"] == "600000004")
     assert "hranice" not in ucnak and "skolne" not in ucnak
     assert ucnak["kod_kkov"] == "23-51-H/01"
+
+
+# --------------------------------------------------------------------------
+# Napojení druhého zdroje (Atlas školství)
+# --------------------------------------------------------------------------
+
+ATLAS_PROFIL = {
+    # Atlas pojmenovává pole podle svého webu: "dny_" místo "den_",
+    # "planovany_pocet_prijmout" místo "letos_plan_prijmout".
+    "dny_otevrenych_dveri": "5. 11. 2025, 4. 2. 2026",
+    "cizi_jazyky": "anglický, německý",
+    "obory": [{
+        "nazev_oboru": "Strojní mechanik",
+        "kod_kkov": "23-51-H/01",
+        "typ_ukonceni": "Výuční list",
+        "delka_studia": "3 roky",
+        # Atlas u oboru NEMÁ forma_studia — nesmí ho to vyřadit.
+        "planovany_pocet_prijmout": 24,
+        "loni_prihlaseni": 40,
+        "loni_prijati": 20,          # skutečně přijatí, ne plán
+        "doporuceny_prospech": 2.5,
+        "plp": True,
+        "ozp": False,
+        "skolne_rocne": 0,
+    }],
+}
+
+
+def _atlas(conn, redizo, profil=None):
+    conn.execute(
+        "INSERT INTO web_profil (redizo, zdroj, stazeno, data) VALUES (?,'atlas','2026-09-22',?)",
+        (redizo, json.dumps(profil or ATLAS_PROFIL, ensure_ascii=False)),
+    )
+    conn.commit()
+
+
+def test_atlas_doplni_pole_ktera_infoabsolvent_nema(conn):
+    _atlas(conn, "600000004")
+    ucnak = next(n for n in pruvodce.nacti_nabidky(conn) if n.redizo == "600000004")
+    assert ucnak.zdroje_profilu == ("atlas",)
+    assert ucnak.doporuceny_prospech == 2.5
+    assert ucnak.loni_prijati == 20 and ucnak.loni_prihlaseni == 40
+    assert ucnak.lekarska_prohlidka is True
+    # Aliasy názvů klíčů mezi zdroji.
+    assert ucnak.plan_prijmout == 24
+    assert ucnak.dod == "5. 11. 2025, 4. 2. 2026"
+
+
+def test_atlas_neprepise_hodnoty_z_infoabsolventu(conn):
+    """Vyhrává první zdroj v PORADI_ZDROJU, ať SQL vrátí řádky v jakémkoli pořadí."""
+    _atlas(conn, "600000003", {
+        "dny_otevrenych_dveri": "atlasový termín",
+        "obory": [{"kod_kkov": "79-41-K/41", "skolne_rocne": 11111,
+                   "planovany_pocet_prijmout": 99, "doporuceny_prospech": 1.5}],
+    })
+    soukrome = next(n for n in pruvodce.nacti_nabidky(conn) if n.redizo == "600000003")
+    assert soukrome.skolne == 90000          # z infoabsolventu, ne 11111
+    assert soukrome.plan_prijmout == 30      # z infoabsolventu, ne 99
+    assert soukrome.doporuceny_prospech == 1.5   # tohle má jen Atlas
+    assert set(soukrome.zdroje_profilu) == {"infoabsolvent", "atlas"}
+
+
+def test_prospech_horsi_nez_doporuceny_srazi_skore_a_varuje(conn):
+    _atlas(conn, "600000004")
+    nabidky = pruvodce.nacti_nabidky(conn)
+    dobry = pruvodce.ohodnot(pruvodce.Profil(trida=9, prospech=2.0), nabidky)
+    spatny = pruvodce.ohodnot(pruvodce.Profil(trida=9, prospech=4.0), nabidky)
+
+    def najdi(vysledky):
+        return next(v for v in vysledky if v.nabidka.redizo == "600000004")
+
+    assert najdi(spatny).slozky["dosazitelnost"] < najdi(dobry).slozky["dosazitelnost"]
+    assert any("doporučuje průměr" in w for w in najdi(spatny).varovani)
+    assert any("vyhovuje doporučenému prospěchu" in d for d in najdi(dobry).duvody)
+    assert any("potvrzení od lékaře" in w for w in najdi(dobry).varovani)
+
+
+def test_sance_z_atlasu_kdyz_obor_nema_jpz(conn):
+    """Obor bez CERMAT dat dostane šanci z loňského poměru přihlášek ku PŘIJATÝM."""
+    _atlas(conn, "600000004")
+    ucnak = next(n for n in pruvodce.nacti_nabidky(conn) if n.redizo == "600000004")
+    assert not ucnak.hranice and not ucnak.poptavka
+    p, zdroj = pruvodce.sance_prijeti(ucnak, 120.0)
+    assert p is not None and "loni přijatých" in zdroj
+    # 40/20 = 2.0x -> pásmo 60 %, ne 92 % jako kdyby se počítalo z plánu 24.
+    assert p == pytest.approx(0.6, abs=0.01)

@@ -254,7 +254,8 @@
 
     <div class="q">
       <header><span class="cislo">6</span><h3>Jaký máš průměr na vysvědčení?</h3></header>
-      <p class="hint" id="prospech-hint">Porovná se s doporučeným prospěchem školy.</p>
+        <p class="hint" id="prospech-hint">Porovná se s doporučeným prospěchem školy (Atlas
+        školství). Není to podmínka — školy ho promítají do vlastních bodů.</p>
       <div class="radky">
         <div class="pole"><label for="prospech">Průměr (1,0–5,0)</label><input type="number" id="prospech" min="1" max="5" step="0.1" placeholder="—"></div>
       </div>
@@ -302,7 +303,9 @@
   <footer class="paticka">
     <p><b>Data:</b> rejstřík škol MŠMT (stav 22. 9. 2026) · CERMAT — výsledky
       jednotné přijímací zkoušky 2024–2026 a maturity 2015–2026 · Česká školní
-      inspekce · infoabsolvent.cz (NPI ČR).</p>
+      inspekce · infoabsolvent.cz (NPI ČR) · Atlas školství (Scio) — z něj
+      doporučený prospěch, skutečný počet loni přijatých a povinná lékařská
+      prohlídka.</p>
     <p><b>Hranice přijetí</b> je minimální % skór posledního přijatého uchazeče,
       který zveřejňuje CERMAT. Šance je normální rozdělení kolem očekávané
       hranice; nejistota (σ = 18 až 32 bodů) vychází z naměřeného meziročního
@@ -385,7 +388,9 @@
     }
     if (n.loni_prihlaseni && (n.loni_prijati || n.plan_prijmout)) {
       var pomer = n.loni_prihlaseni / (n.loni_prijati || n.plan_prijmout);
-      return { p: omez(sanceZPoptavky(pomer)), zdroj: "z loňského poměru přihlášek (" + pomer.toFixed(1) + "×)" };
+      var zdrojPomeru = n.loni_prijati ? "loni přijatých" : "loňského plánu přijmout";
+      return { p: omez(sanceZPoptavky(pomer)),
+               zdroj: "z loňského poměru přihlášek (" + pomer.toFixed(1) + "×, " + zdrojPomeru + ")" };
     }
     return { p: null, zdroj: n.plan_prijmout ? "obor bez jednotné zkoušky — šanci z dat neodhadneme"
                                              : "chybí data o přijímacím řízení" };
@@ -562,6 +567,7 @@
                + stav.prospech.toFixed(1) + " — není to podmínka, ale body za prospěch ztratíš.");
     if (n.dalsi_kriteria) out.push("Škola přidává vlastní kritéria: " + n.dalsi_kriteria);
     if (n.talentova_zkouska) out.push("Obor má talentovou zkoušku — přihláška se podává dřív (do 30. 11.).");
+    if (n.lekarska_prohlidka) out.push("Obor vyžaduje potvrzení od lékaře (PLP) — objednat se včas.");
     if (n.skolni_zkousky && n.skolni_zkousky.length) out.push("Škola má navíc: " + n.skolni_zkousky.join(", "));
     if (n.maturita_uspesnost == null && C.typy[n.typ] && C.typy[n.typ].maturita)
       out.push("Škola nemá v datech CERMAT maturitní výsledky (malá škola nebo nový obor).");
@@ -816,7 +822,7 @@
   if (!NAB.some(function (n) { return n.doporuceny_prospech != null; })) {
     document.getElementById("prospech-hint").textContent =
       "Porovná se s doporučeným prospěchem školy — ten zná jen Atlas školství, "
-      + "jehož scraper se právě dodělává. Do té doby otázka výsledek neovlivní.";
+      + "jehož scraper zatím není v databázi. Do té doby otázka výsledek neovlivní.";
   }
 
   postavTypy();

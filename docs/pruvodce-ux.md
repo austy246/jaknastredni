@@ -261,25 +261,45 @@ se záměrně opakují ve víc oblastech:
 - **Změny pro příští ročník.** Škola může obor zrušit, otevřít nový nebo
   změnit kritéria; průvodce pracuje s loňskými čísly a říká to.
 
-## Návaznost na scraper Atlas školství
-
-Atlas přidá do `web_profil` (se `zdroj = 'atlas'`) dvě pole, která
-infoabsolvent nemá vůbec a průvodce je umí využít hned:
-
-- **`doporuceny_prospech`** — pohání otázku 6. Bere se jako doporučení, ne
-  podmínka: horší průměr sníží složku `dosazitelnost` (nejvýš o 60 %) a
-  přidá varování, ale nabídku nevyhodí.
-- **`loni_prijati`** (skutečně přijatí, ne plán) — dává šanci na přijetí
-  i učňovským oborům bez JPZ, kde je dnes `None`. Atlas je u učňovských
-  oborů zveřejňuje bez kreditů (viz `research/atlas-infoabsolvent.md`).
+## Druhý zdroj: Atlas školství
 
 `_doplnit_web_profil()` čte **všechny** zdroje v tabulce `web_profil`
-v pořadí `PORADI_ZDROJU` (`infoabsolvent`, pak `atlas`) a pozdější zdroj jen
-doplňuje, co chybí. Dokud Atlas v databázi není, je to no-op. Klíče v JSON
-blobu se předpokládají ve stejné konvenci jako u infoabsolventu (snake_case,
-oborová pole v poli `obory`) — **až scraper přistane, ověřit, že názvy
-`loni_prijati` a `doporuceny_prospech` sedí**, jinak stačí upravit
-`_doplnit_obor()`.
+v pořadí `PORADI_ZDROJU` (`infoabsolvent`, pak `atlas`); pozdější zdroj jen
+doplňuje, co chybí, nikdy nepřepisuje. Pořadí určuje `ORDER BY` v SQL, ne
+náhodné pořadí řádků.
+
+Atlas (`jaknastredni/atlas.py`, 215 pražských škol, 738 oborů) přináší tři
+pole, která infoabsolvent nemá vůbec:
+
+| Pole | Pokrytí | K čemu je v průvodci |
+|---|---|---|
+| `doporuceny_prospech` | 72 z 623 nabídek | otázka 6 — složka `dosazitelnost` a text na kartě |
+| `loni_prijati` | 552 z 623 | **skutečně** přijatí, ne plán (3. úroveň odhadu šance) |
+| `plp` | 570 z 623 (333× ano) | povinná lékařská prohlídka — konkrétní úkol pro rodiče |
+
+**Názvy klíčů se mezi scrapery liší** a záměrně se nesjednocují: každý
+scraper pojmenovává pole podle svého webu, aby šla dohledat ke zdroji.
+Aliasy řeší až `_prvni()` v průvodci — `den_otevrenych_dveri` vs.
+`dny_otevrenych_dveri`, `letos_plan_prijmout` vs. `planovany_pocet_prijmout`.
+Atlas navíc u oboru **neuvádí formu studia** (nemá pro ni sloupec), takže
+filtr na denní formu jeho řádky propouští; spojovacím klíčem je KKOV.
+
+### Co Atlas na odhadu šance nezměnil
+
+`loni_prijati` mělo podle původního návrhu pokrýt učňovské obory bez JPZ,
+kde odhad šance chyběl. V praxi se to neprojeví: **44 nabídek nemá data
+o přijímacím řízení** a ani jedna z nich nemá oborový řádek v Atlasu ani
+v infoabsolventu (škola se páruje přes REDIZO, ale ten konkrétní obor
+v jejich tabulce oborů není). Zbylé obory bez jednotné zkoušky mají v CERMAT
+řádek s kapacitou a přihláškami, takže na ně sahá už 2. úroveň odhadu
+(`index_poptavky`). `loni_prijati` tedy dnes slouží hlavně jako druhý zdroj
+čísel na kartě a jako pojistka, kdyby CERMAT řádek chyběl.
+
+Otevřená možnost do budoucna: u nabídek **bez zveřejněné hranice** (46 %)
+je přihlášky/**přijatí** přesnější signál poptávky než dnešní
+přihlášky/**kapacita** — kapacita nemusí být naplněná. Obě čísla má přitom
+CERMAT sám, takže na to Atlas není potřeba; je to změna modelu, ne
+propojení zdroje, proto zůstává jako návrh.
 
 ## Webový prototyp
 
