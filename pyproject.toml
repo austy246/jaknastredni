@@ -30,6 +30,8 @@ jns-csi = "jaknastredni.csi:main"
 jns-cermat-jpz-old = "jaknastredni.cermat_jpz_old:main"
 jns-infoabsolvent = "jaknastredni.infoabsolvent:main"
 jns-cermat-jpz = "jaknastredni.cermat_jpz:main"
+jns-fetch = "jaknastredni.fetch_all:main"
+jns-build = "jaknastredni.build_db:main"
 
 [tool.setuptools.packages.find]
 include = ["jaknastredni*"]

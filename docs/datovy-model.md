@@ -21,6 +21,10 @@ Schéma je v [`jaknastredni/schema.sql`](../jaknastredni/schema.sql).
   adresa.
 - **Každý import má záznam** v `import_run` (zdroj, URL, hash souboru, datum
   dat), takže jde dohledat, odkud které řádky pocházejí.
+- **Databáze je odvozený artefakt, ne zdroj pravdy.** Sestavuje se vždy znovu
+  z `data/raw/` (`jaknastredni.build_db`, čistě offline) — proto se soubor
+  `data/jaknastredni.db` neverzuje v gitu, jen syrová data v `data/raw/`.
+  Viz README, sekce "Rychlý start" a "Rozhodnutí o vývoji a ukládání dat".
 
 ## Přehled entit
 

@@ -11,9 +11,14 @@ robots.txt (ověřeno 2026-09-22, viz stejný dokument) zakazuje jen
 Seznam (`/Skoly/Seznam/...`) a detail (`/Skoly/Skola/...`) škol nejsou
 zakázané pro obecného robota (`User-agent: *`).
 
-Použití:
+Použití (jeden krok, stáhne i naimportuje):
     python -m jaknastredni.infoabsolvent --db data/jaknastredni.db
     python -m jaknastredni.infoabsolvent --db data/jaknastredni.db --limit 5 -v
+
+Modul odděluje síťovou část (`fetch_raw`, ukládá HTML + `_manifest.json` do
+`data/raw/infoabsolvent/`) od importu (`import_from_local`, čistě offline) —
+viz `jaknastredni/fetch_all.py` a `jaknastredni/build_db.py`, které tyhle dvě
+funkce volají samostatně napříč všemi zdroji.
 
 Rate limit: 1 požadavek/s (doporučení průzkumu), viz `RATE_LIMIT_SECONDS`.
 """
@@ -27,6 +32,7 @@ import sqlite3
 import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Iterable
 
 from bs4 import BeautifulSoup, Tag
@@ -324,8 +330,15 @@ def _log_import_run(conn: sqlite3.Connection, *, url: str, pocet: int, poznamka:
         )
 
 
-def scrape(conn: sqlite3.Connection, session: RateLimitedSession, *,
-           kraj: str = KRAJ_PRAHA, limit: int | None = None) -> dict[str, int]:
+def fetch_raw(session: RateLimitedSession, raw_dir: Path, *,
+              kraj: str = KRAJ_PRAHA, limit: int | None = None) -> dict[str, int]:
+    """Stáhne seznam škol a HTML detailu každé z nich do `raw_dir`, bez zápisu do
+    databáze — odděluje pomalou/rate-limitovanou síťovou část od importu (viz
+    `jaknastredni/fetch_all.py`). Ukládá `{redizo}.html` na školu a `_manifest.json`
+    (seznam škol + datum stažení + URL seznamu), který `import_from_local()`
+    potřebuje k offline importu.
+    """
+    raw_dir.mkdir(parents=True, exist_ok=True)
     list_url = f"{LIST_URL}?Kraj={kraj}"
     log.info("Stahuji seznam škol: %s", list_url)
     schools = parse_list(session.get(list_url))
@@ -341,18 +354,48 @@ def scrape(conn: sqlite3.Connection, session: RateLimitedSession, *,
         log.debug("(%d/%d) %s %s", i, len(schools), redizo, url)
         try:
             html = session.get(url)
-            data = parse_detail(html, redizo)
-            import_profil(conn, redizo, data, stazeno=stazeno, url=url)
+            (raw_dir / f"{redizo}.html").write_text(html, encoding="utf-8")
             ok += 1
         except Exception as exc:  # noqa: BLE001 - chceme pokračovat i po chybě jedné školy
             log.warning("Škola %s (%s) selhala: %s", redizo, url, exc)
             failed.append((redizo, str(exc)))
 
-    _log_import_run(conn, url=list_url, pocet=ok,
-                     poznamka=json.dumps({"celkem": len(schools), "ok": ok, "selhalo": failed},
-                                          ensure_ascii=False) if failed else None)
-    log.info("Hotovo: %d/%d škol úspěšně naimportováno (%d selhalo)", ok, len(schools), len(failed))
+    manifest = {"stazeno": stazeno, "kraj": kraj, "list_url": list_url, "schools": schools}
+    (raw_dir / "_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    log.info("Staženo %d/%d škol (%d selhalo)", ok, len(schools), len(failed))
     return {"celkem": len(schools), "ok": ok, "selhalo": len(failed)}
+
+
+def import_from_local(conn: sqlite3.Connection, raw_dir: Path) -> dict[str, int]:
+    """Naimportuje profily z lokálně stažených HTML (viz `fetch_raw`) do `web_profil`,
+    zcela bez síťových požadavků. Vyžaduje `_manifest.json` v `raw_dir` — pokud
+    chybí, nic se neimportuje (nejdřív je nutné spustit fetch).
+    """
+    manifest_path = raw_dir / "_manifest.json"
+    if not manifest_path.exists():
+        log.warning("%s neexistuje, infoabsolvent přeskočen (nejdřív spusť fetch)", manifest_path)
+        return {"celkem": 0, "ok": 0, "chybi_html": 0}
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    stazeno = manifest["stazeno"]
+    schools = manifest["schools"]
+
+    ok = 0
+    missing: list[str] = []
+    for school in schools:
+        redizo, url = school["redizo"], school["url"]
+        html_path = raw_dir / f"{redizo}.html"
+        if not html_path.exists():
+            missing.append(redizo)
+            continue
+        data = parse_detail(html_path.read_text(encoding="utf-8"), redizo)
+        import_profil(conn, redizo, data, stazeno=stazeno, url=url)
+        ok += 1
+
+    _log_import_run(conn, url=manifest.get("list_url"), pocet=ok,
+                     poznamka=json.dumps({"celkem": len(schools), "ok": ok, "chybi_html": missing},
+                                          ensure_ascii=False) if missing else None)
+    log.info("infoabsolvent (lokálně): %d/%d škol naimportováno (%d chybí HTML)", ok, len(schools), len(missing))
+    return {"celkem": len(schools), "ok": ok, "chybi_html": len(missing)}
 
 
 # --------------------------------------------------------------------------- robots.txt
@@ -383,8 +426,12 @@ def check_robots_allows(session: RateLimitedSession, paths: Iterable[str]) -> No
 # --------------------------------------------------------------------------- CLI
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="Scraper infoabsolvent.cz do tabulky web_profil.")
+    p = argparse.ArgumentParser(
+        description="Scraper infoabsolvent.cz do tabulky web_profil (stáhne a rovnou naimportuje)."
+    )
     p.add_argument("--db", default="data/jaknastredni.db", help="cesta k SQLite databázi")
+    p.add_argument("--raw-dir", type=Path, default=Path("data/raw/infoabsolvent"),
+                    help="kam ukládat stažené HTML (a odkud se čte manifest)")
     p.add_argument("--kraj", default=KRAJ_PRAHA, help="kód kraje (CZ-NUTS), výchozí Praha")
     p.add_argument("--limit", type=int, default=None, help="omezit na prvních N škol (test/rychlý běh)")
     p.add_argument("--skip-robots-check", action="store_true", help="přeskočit ověření robots.txt (needoporučeno)")
@@ -396,8 +443,9 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_robots_check:
         check_robots_allows(session, ["/Skoly/Seznam/SOS", "/Skoly/Skola/"])
 
+    fetch_raw(session, args.raw_dir, kraj=args.kraj, limit=args.limit)
     conn = db.connect(args.db)
-    stats = scrape(conn, session, kraj=args.kraj, limit=args.limit)
+    stats = import_from_local(conn, args.raw_dir)
     log.info("Import hotov: %s", stats)
     return 0
 

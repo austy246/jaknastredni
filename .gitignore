@@ -1,6 +1,8 @@
-# data: data/jaknastredni.db a stažené soubory v data/raw/ se verzují v repu
-# (rozhodnutí viz README.md, sekce Rozhodnutí o ukládání dat); ignorujeme jen
-# přechodné soubory SQLite.
+# data: syrová stažená data v data/raw/ se verzují v repu (rozhodnutí viz
+# README.md, sekce Rozhodnutí o vývoji a ukládání dat), ale výsledná databáze
+# ne — je 100% reprodukovatelná z data/raw/ skriptem jaknastredni.build_db,
+# takže nemá smysl ji držet v gitu (binární soubor, roste s každou změnou).
+*.db
 *.db-journal
 *.db-wal
 *.db-shm

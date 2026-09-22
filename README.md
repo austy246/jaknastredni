@@ -21,18 +21,36 @@ kvalita, maturitní výsledky, uplatnění absolventů apod.).
   spuštěn na všech 211 pražských SŠ, viz níže.
 - Importér výsledků JPZ CERMAT, nový formát (`jaknastredni/cermat_jpz.py`)
   funguje pro roky 2024–2026 (obě kola), viz níže.
+- Proces stažení dat a sestavení databáze je rozdělený na dva kroky
+  (`jaknastredni.fetch_all` a `jaknastredni.build_db`), viz "Rychlý start".
 
 ## Rychlý start
 
+Proces je rozdělený na dva kroky: **fetch** (stáhne syrová data ze všech
+zdrojů do `data/raw/`, síťově náročné a pomalé kvůli rate limitu
+infoabsolventu) a **build** (sestaví/aktualizuje databázi čistě z toho, co
+už je v `data/raw/`, žádná síť, cca 1 minuta). Syrová data se commitují do
+repa, výsledná databáze ne (viz "Rozhodnutí" níže) — proto build stačí
+spustit po každém `git clone`/deploy, fetch jen když je potřeba zdrojová
+data obnovit/rozšířit o nový ročník.
+
 ```bash
 pip install -e ".[dev]"
+python -m jaknastredni.fetch_all -v        # stáhne vše ze všech zdrojů do data/raw/ (~7–8 minut)
+python -m jaknastredni.build_db  -v        # sestaví data/jaknastredni.db jen z data/raw/ (~1 minuta, offline)
+python -m pytest
+```
+
+Jednotlivé importéry jdou pořád spustit i samostatně (stáhnou i naimportují
+najednou, přes síť) — užitečné pro doplnění jen jednoho zdroje/ročníku:
+
+```bash
 python -m jaknastredni.msmt --db data/jaknastredni.db                        # stáhne pražský snapshot a naimportuje
 python -m jaknastredni.cermat_mz --db data/jaknastredni.db --roky 2015-2026 --obdobi jap  # maturitní výsledky
 python -m jaknastredni.csi --db data/jaknastredni.db                        # seznam inspekcí ČŠI
 python -m jaknastredni.cermat_jpz_old --db data/jaknastredni.db --roky 2017-2023          # JPZ starý formát
 python -m jaknastredni.infoabsolvent --db data/jaknastredni.db              # scraper infoabsolvent.cz (1 req/s, pár minut)
 python -m jaknastredni.cermat_jpz --db data/jaknastredni.db --roky 2024-2026            # výsledky přijímaček (JPZ)
-python -m pytest
 ```
 
 Výsledkem je `data/jaknastredni.db` s 1044 organizacemi, 2434 školami
@@ -58,14 +76,36 @@ u infoabsolventu).
 - **Vývoj přímo v `main`.** Import CERMAT maturity (viz níže) byl na
   explicitní žádost vlastníka repa vyvíjen a commitnut přímo do větve
   `main`, ne přes samostatnou feature větev a pull request.
-- **Stažené soubory i výsledná databáze se verzují v repu.** Na rozdíl od
-  původního záměru (`data/` jen lokálně, `.gitignore`d) bylo na explicitní
-  žádost rozhodnuto ukládat do gitu i `data/jaknastredni.db` a syrové
-  soubory `data/raw/**`. `.gitignore` teď vynechává jen přechodné soubory
-  SQLite (`*.db-journal`, `*.db-wal`, `*.db-shm`). Důsledek: repo poroste s
-  každým dalším importérem/ročníkem (jen maturitní XLSX 2015–2026 mají
-  dohromady cca 50 MB) — pokud to začne vadit, řešením je Git LFS nebo návrat
-  k `.gitignore`, ne mazání historie.
+- **Syrová stažená data se verzují v repu, výsledná databáze ne.** Zpočátku
+  se do gitu ukládalo obojí (`data/jaknastredni.db` i `data/raw/**`), ale
+  databáze je čistě odvozená (100% reprodukovatelná z `data/raw/` skriptem
+  `jaknastredni.build_db`, viz "Rychlý start") a jako binární SQLite soubor
+  se v gitu nedá rozumně diffovat — každá i jednořádková změna znovu
+  commitne celý soubor (desítky MB) a repo neúměrně roste. `data/raw/**`
+  naopak diffovat nepotřebujeme (nemění se, jen přibývá) a chceme ho mít
+  verzované pro reprodukovatelnost/audit. `.gitignore` proto ignoruje
+  `*.db` (a přechodné soubory SQLite `*.db-journal`/`*.db-wal`/`*.db-shm`),
+  ale ne `data/raw/`. Historie z doby, kdy se databáze do repa ukládala,
+  zatím zůstává beze změny (nebyla přepsána) — pokud by časem vadila
+  velikost `.git`, řešením je `git filter-repo`, ne postupné mazání.
+- **Proces je rozdělený na fetch (`jaknastredni/fetch_all.py`) a build
+  (`jaknastredni/build_db.py`).** Cílem je, aby build šel spouštět v CI/CD
+  při nasazení čistě offline (`git clone` + `build_db` => hotová databáze),
+  bez závislosti na dostupnosti/rychlosti/rate limitům zdrojových webů.
+  Podmínkou bylo, aby úplně každý zdroj uměl uložit syrová data lokálně a
+  naimportovat je později bez sítě — to platilo už pro CERMAT/MŠMT/ČŠI
+  (mají vlastní `download()`/`parse()`), ale ne pro scraper
+  infoabsolvent.cz, který dřív stahoval a rovnou parsoval HTML v jednom
+  kroku. Doplněno:
+  `infoabsolvent.fetch_raw()` teď ukládá HTML každé školy do
+  `data/raw/infoabsolvent/{redizo}.html` a `_manifest.json` (seznam škol +
+  datum stažení + URL), `infoabsolvent.import_from_local()` z nich importuje
+  offline. `build_db.py` najde nejnovější soubor podle jména (MŠMT
+  snapshot, ČŠI CSV) nebo podle vzoru názvu (CERMAT XLSX podle roku/období/
+  kola) a použije jeho `parse()`/`import_rows()` — nikdy nestahuje nic
+  sám. `fetch_all.py` má pevné roky pro JPZ starý formát (2017–2023, formát
+  zmrzlý) a plovoucí horní hranici (aktuální rok) pro maturitu a JPZ nový
+  formát; chybějící/ještě nepublikovaný soubor jen zaloguje a pokračuje dál.
 - **Tabulka `maturita` nemá cizí klíč na `organizace(redizo)`.** CERMAT
   zahrnuje i školy mimo Prahu a mezitím zaniklé školy, které v rejstříku
   MŠMT nejsou. Filtrování na Prahu se dělá JOINem v dotazech, případně
