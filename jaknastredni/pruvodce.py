@@ -206,6 +206,12 @@ class Profil:
     praxe: str | None = None             # 'hodne' / 'stredne' / 'teorie'
     typy_vyloucene: list[str] = field(default_factory=list)  # co uchazeč nechce
     priority: list[str] = field(default_factory=list)  # klíče PRIORITY, max 3
+    # Odpověď na doplňující otázku, která se ptá jen při širokém výběru
+    # (viz `siroky_vyber`): pustit do výběru i gymnázia a lycea, i když si
+    # uchazeč oblast „Všeobecné vzdělání" sám nezaškrtl. Bez ní by je tvrdý
+    # filtr oblastí vyhodil a žádné řazení by je nevrátilo — kdo zaškrtne
+    # jen „IT", nedostane ani jedno ze 148 pražských gymnázií.
+    vseobecne_taky: bool = False
 
     @property
     def hledana_zamereni(self) -> set[str]:
@@ -218,7 +224,7 @@ class Profil:
         """
         if not self.oblasti_zajmu:
             return set()
-        zvolene = set(self.oblasti_zajmu)
+        zvolene = set(self.ucinne_oblasti)
         return {k for k in self.zamereni
                 if k in oblasti.ZAMERENI and zvolene & set(oblasti.ZAMERENI[k][1])}
 
@@ -226,6 +232,38 @@ class Profil:
     def osobnostni(self) -> dict[str, str | None]:
         """Odpovědi na osobnostní otázky ve tvaru, který čeká `oblasti`."""
         return {"po_skole": self.po_skole, "rozhodnuto": self.rozhodnuto, "praxe": self.praxe}
+
+    @property
+    def sirka(self) -> float | None:
+        """Jak široce má uchazeč zaškrtnuto (0–1), nebo None = nezměřitelné."""
+        return oblasti.sirka_vyberu(self.oblasti_zajmu, self.zamereni)
+
+    @property
+    def siroky_vyber(self) -> bool:
+        """Zaškrtl tak široce, že mu má smysl nabídnout i všeobecné vzdělání?
+
+        Ptáme se jen tehdy, když si oblast `vseobecne` sám nezaškrtl — jinak
+        gymnázia ve výběru dávno jsou a není na co se ptát.
+        """
+        if "vseobecne" in self.oblasti_zajmu:
+            return False
+        s = self.sirka
+        return s is not None and s >= oblasti.PRAH_SIROKY_VYBER
+
+    @property
+    def ucinne_oblasti(self) -> list[str]:
+        """Oblasti, podle kterých se doopravdy filtruje a boduje zájem.
+
+        Musí to být **jeden** seznam pro filtr i pro `_skore_zajem`: kdyby
+        `vseobecne` prošlo jen filtrem, gymnázium by dostalo zájem 0,0 a
+        skončilo na chvostu — tedy stejně neviditelné, jako když se
+        vyfiltruje, jen s větší prací.
+        """
+        if not self.oblasti_zajmu:
+            return []
+        if self.vseobecne_taky and "vseobecne" not in self.oblasti_zajmu:
+            return [*self.oblasti_zajmu, "vseobecne"]
+        return list(self.oblasti_zajmu)
 
     @property
     def priprava(self) -> dict[str, str | None]:
@@ -1200,7 +1238,7 @@ def projde_filtrem(nab: Nabidka, profil: Profil) -> bool:
         # gymnázia). Přihláška se navíc podává dřív, do 30. 11.
         return False
     if profil.oblasti_zajmu:
-        if not set(oblasti.oblasti_oboru(nab.kod_kkov)) & set(profil.oblasti_zajmu):
+        if not set(oblasti.oblasti_oboru(nab.kod_kkov)) & set(profil.ucinne_oblasti):
             return False
     if profil.skolne_max is not None and not _vejde_se_do_skolneho(nab, profil.skolne_max):
         return False
@@ -1238,7 +1276,7 @@ def ohodnot(profil: Profil, nabidky: Iterable[Nabidka]) -> list[Vysledek]:
         return []
 
     vahy = _vahy_profilu(profil)
-    preference = oblasti.preference_typu(profil.osobnostni)
+    preference = oblasti.preference_typu(profil.osobnostni, profil.sirka)
     # Preference typu se normalizuje proti tomu, co prošlo filtrem — stejně
     # jako `kvalita`. Surové hodnoty se u jedné nabídky mačkají do pásma
     # kolem 0,75 (průměr ze tří tabulek táhne ke středu) a složka pak
@@ -1294,12 +1332,14 @@ def _skore_zajem(nab: Nabidka, profil: Profil) -> float:
     """Jak dobře obor sedí na zájem — hrubě oblastí, jemně zaměřením."""
     if not profil.oblasti_zajmu:
         return 0.5
-    shoda = set(oblasti.oblasti_oboru(nab.kod_kkov)) & set(profil.oblasti_zajmu)
+    shoda = set(oblasti.oblasti_oboru(nab.kod_kkov)) & set(profil.ucinne_oblasti)
     if not shoda:
         return 0.0
     # Obor, který patří do jedné oblasti a ta je zvolená, sedí přesněji než
     # obor rozkročený mezi pět oblastí, z nichž jednu uchazeč zaškrtl.
     zaklad = min(1.0, 0.6 + 0.4 * len(shoda) / max(len(oblasti.oblasti_oboru(nab.kod_kkov)), 1))
+    if not shoda & set(profil.oblasti_zajmu):
+        zaklad *= ZAJEM_PRIDANA_OBLAST
     return zaklad * _shoda_zamereni(nab, profil)
 
 
@@ -1308,6 +1348,18 @@ def _skore_zajem(nab: Nabidka, profil: Profil) -> float:
 # (škola to učí, ale u tohohle oboru to doložené nemáme) a doložené **jiné**
 # zaměření hodně — takový obor se jmenuje stejně, ale učí něco jiného.
 SHODA_ZAMERENI = {"obor": 1.0, "skola": 0.9, "nevime": 0.8, "jine": 0.6}
+
+# Násobek skóre zájmu pro nabídku, která se trefila **jen** do oblasti, co si
+# průvodce přidal sám (`Profil.vseobecne_taky`). Uchazeč ji nezaškrtl — je to
+# odvozené zjištění ze šířky výběru, a odvozené má vážit míň než zaškrtnuté,
+# stejně jako zaměření z popisu školy váží míň než doložené u oboru.
+# Bez toho gymnázia celou pětici vymetla a uchazeč, který napsal „baví mě IT",
+# nedostal ani jednu průmyslovku — to je druhý extrém, ne oprava.
+ZAJEM_PRIDANA_OBLAST = 0.75
+
+# Kolik z pětice se drží pro oblasti, které uchazeč sám zaškrtl, když si
+# průvodce přidal všeobecné vzdělání. Viz `vyber_top`.
+REZERVA_ZVOLENYCH = 2
 
 
 def _shoda_zamereni(nab: Nabidka, profil: Profil) -> float:
@@ -1407,11 +1459,38 @@ def _skore_jazyk(nab: Nabidka, profil: Profil) -> float:
     return 1.0 if _uci_jazyk(nab, profil.jazyk) else 0.15
 
 
+def _poznamka_sirky(profil: Profil) -> list[str]:
+    """Věta o tom, co průvodce vyčetl z šířky výběru (a co s tím udělal)."""
+    sirka = profil.sirka
+    if sirka is None:
+        return []
+    # Počítá se z toho, co uchazeč **zaškrtl** — ne z `ucinne_oblasti`, kam
+    # si průvodce sám přidal `vseobecne`. Jinak by mu věta tvrdila „7 z 11",
+    # kde on viděl a zaškrtával sedm ze sedmi.
+    nabizena = oblasti.zamereni_oblasti(profil.oblasti_zajmu)
+    kolik = len([k for k in profil.zamereni if k in nabizena])
+    z_kolika = len(nabizena)
+    if sirka < oblasti.SIRKA_ROZHODNUTO:
+        return []
+    kde = (f"Zaškrtl sis {kolik} z {z_kolika} zaměření"
+           if z_kolika else "Zaškrtl sis hodně oblastí")
+    if len(profil.oblasti_zajmu) > 1:
+        kde += f" napříč {len(profil.oblasti_zajmu)} oblastmi"
+    hlavni = (f"{kde} — beru to tak, že se ještě rozhoduješ, a řadím výš obory, "
+              f"které ti nechají otevřené dveře.")
+    if profil.rozhodnuto == "obor":
+        hlavni += (" U otázky, jestli to víš přesně, jsi sice odpověděl že ano, "
+                   "ale zaškrtnutá políčka beru jako lepší důkaz.")
+    if profil.vseobecne_taky:
+        hlavni += " Proto jsem do výběru přidal i gymnázia a lycea."
+    return [hlavni]
+
+
 def _duvody(nab: Nabidka, profil: Profil, slozky: dict[str, float], p: float | None) -> list[str]:
     """Proč se nabídka objevila — čte se pod kartou jako odrážky."""
     out: list[str] = []
     if profil.oblasti_zajmu and slozky["zajem"] > 0:
-        shoda = set(oblasti.oblasti_oboru(nab.kod_kkov)) & set(profil.oblasti_zajmu)
+        shoda = set(oblasti.oblasti_oboru(nab.kod_kkov)) & set(profil.ucinne_oblasti)
         popisky = ", ".join(oblasti.OBLASTI[k][0] for k in sorted(shoda))
         out.append(f"Obor patří do: {popisky}")
     out.extend(_duvody_zamereni(nab, profil))
@@ -1530,7 +1609,8 @@ def _varovani(nab: Nabidka, profil: Profil, p: float | None) -> list[str]:
     return out
 
 
-def vyber_top(vysledky: list[Vysledek], pocet: int = 5, max_na_skolu: int = 1) -> list[Vysledek]:
+def vyber_top(vysledky: list[Vysledek], pocet: int = 5, max_na_skolu: int = 1,
+              profil: Profil | None = None) -> list[Vysledek]:
     """Prvních `pocet` nabídek, ale nejvýš `max_na_skolu` od jedné školy.
 
     Bez tohohle omezení se do pětice dostane dvakrát táž průmyslovka se
@@ -1548,9 +1628,26 @@ def vyber_top(vysledky: list[Vysledek], pocet: int = 5, max_na_skolu: int = 1) -
     téhož oboru (Gymnázium Na Pražačce: Všeobecné / Němčina / Výtvarka),
     proto se vypisuje `obor_plny`, ne `obor` — jinak by se v seznamu
     objevilo třikrát „Gymnázium".
+
+    Když si průvodce sám přidal všeobecné vzdělání (`Profil.vseobecne_taky`),
+    drží se navíc `REZERVA_ZVOLENYCH` míst pro obory z oblastí, které
+    uchazeč **doopravdy zaškrtl**. Složka typu se totiž normalizuje přes
+    kandidáty, takže jakmile gymnázium porazí průmyslovku, porazí ji
+    *každé* gymnázium — a kdo napsal „baví mě IT", dostal pětici gymnázií a
+    ani jednu průmyslovku. Smysl přidání je dát obojí vedle sebe na
+    porovnání, ne jedno nahradit druhým.
     """
+    rezervovat = 0
+    if profil is not None and profil.vseobecne_taky:
+        rezervovat = min(REZERVA_ZVOLENYCH, pocet)
+    zvolene = set(profil.oblasti_zajmu) if profil is not None else set()
+
+    def je_zvolena(v: Vysledek) -> bool:
+        return bool(set(oblasti.oblasti_oboru(v.nabidka.kod_kkov)) & zvolene)
+
     out: list[Vysledek] = []
     zobrazene: dict[str, list[Vysledek]] = {}
+    odlozene: list[Vysledek] = []       # vytlačené rezervou, kdyby nedošlo naplnění
     for v in vysledky:
         redizo = v.nabidka.redizo
         uz_zobrazene = zobrazene.setdefault(redizo, [])
@@ -1561,10 +1658,23 @@ def vyber_top(vysledky: list[Vysledek], pocet: int = 5, max_na_skolu: int = 1) -
                 posledni.dalsi_obory.append(
                     f"{v.nabidka.obor_plny} ({v.nabidka.kod_kkov}, {sance})")
             continue
-        if len(out) < pocet:
-            uz_zobrazene.append(v)
-            out.append(v)
-    return out
+        if len(out) >= pocet:
+            continue
+        # Poslední `rezervovat` míst patří zvoleným oblastem. Nabídka mimo ně
+        # se odloží — a vrátí se na konci, pokud se rezerva nenaplnila (v
+        # zvolených oblastech prostě nemusí být dost škol).
+        if not je_zvolena(v) and rezervovat and len(out) >= pocet - rezervovat:
+            odlozene.append(v)
+            continue
+        uz_zobrazene.append(v)
+        out.append(v)
+        if je_zvolena(v) and rezervovat:
+            rezervovat -= 1
+    for v in odlozene:
+        if len(out) >= pocet:
+            break
+        out.append(v)
+    return sorted(out, key=lambda v: -v.skore)
 
 
 def poznamky(profil: Profil, vysledky: list[Vysledek],
@@ -1589,11 +1699,15 @@ def poznamky(profil: Profil, vysledky: list[Vysledek],
             "Bez očekávaného skóru z přijímaček je šance jen hrubý odhad z poměru "
             "přihlášek — zkus průvodce znovu po přijímačkách nanečisto."
         )
-    doporucene = oblasti.doporucene_typy(profil.osobnostni, profil.trida)
-    if doporucene and any(profil.osobnostni.values()):
+    sirka = profil.sirka
+    doporucene = oblasti.doporucene_typy(profil.osobnostni, profil.trida, sirka=sirka)
+    if doporucene and (any(profil.osobnostni.values()) or sirka is not None):
         out.append("Podle odpovědí ti sedí: "
                    + ", ".join(oblasti.popis_typu(t) for t in doporucene)
                    + ". Ostatní typy se nevyřadily, jen jsou níž.")
+    # Odvozené zjištění se ukazuje, ne schovává: uchazeč má vědět, že mu
+    # pořadí posunula **jeho vlastní** zaškrtnutá políčka, ne náhoda.
+    out.extend(_poznamka_sirky(profil))
     if not profil.talentove:
         out.append("Obory s talentovou zkouškou (umělecké, sportovní gymnázia) jsem vynechal "
                    "— mají jinou vstupní zkoušku a dřívější přihlášku. Zapni je, pokud "
@@ -1731,6 +1845,23 @@ def prubeh_pruvodce() -> Profil:
         vic=True,
     ) if nabizena else []
 
+    # 5c) Doplňující otázka, která se objeví jen při širokém výběru. Kdo
+    # zaškrtne skoro všechno, tím říká „ještě nevím" — jenže gymnázia mu
+    # vyhodí tvrdý filtr oblastí (kdo zvolí jen „IT", nedostane ani jedno
+    # ze 148 pražských gymnázií) a žádné řazení je nevrátí. Ptát se radši
+    # než potichu přidat: je to nabídka toho, co uchazeč **nezaškrtl**.
+    vseobecne_taky = False
+    _zatim = Profil(trida=trida, oblasti_zajmu=oblasti_zajmu, zamereni=zamereni)
+    if _zatim.siroky_vyber:
+        kolik = len(_zatim.hledana_zamereni)
+        print(f"\n   Zaškrtl sis {kolik} z {len(nabizena)} zaměření — vypadá to, že se "
+              f"ještě rozhoduješ.")
+        vseobecne_taky = bool(_zeptej_se_vyber(
+            "5c) Chceš vidět i gymnázia a lycea, která ti nechají dveře otevřené?",
+            [("ano", "Ano, ukaž mi i je"),
+             ("ne", "Ne, drž se oborů, co jsem zaškrtl")],
+        ) == ["ano"])
+
     mestske_casti = _zeptej_se_vyber(
         "6) Kde bydlíte? (městská část, klidně víc)",
         [(f"Praha {i}", f"Praha {i}") for i in range(1, 23)],
@@ -1801,6 +1932,7 @@ def prubeh_pruvodce() -> Profil:
         priprava_ted=priprava.get("priprava_ted"),
         hodin_tydne=priprava.get("hodin_tydne"),
         kurz=priprava.get("kurz"),
+        vseobecne_taky=vseobecne_taky,
         po_skole=osobnostni.get("po_skole"),
         rozhodnuto=osobnostni.get("rozhodnuto"),
         praxe=osobnostni.get("praxe"),
@@ -1977,7 +2109,7 @@ def main(argv: list[str] | None = None) -> int:
               "(víc městských částí, vyšší školné, víc oblastí).", file=sys.stderr)
         return 1
 
-    nejlepsi = vyber_top(vysledky, args.pocet)
+    nejlepsi = vyber_top(vysledky, args.pocet, profil=profil)
     trojice = portfolio(vysledky)
     hlasky = poznamky(profil, vysledky, nabidky)
 

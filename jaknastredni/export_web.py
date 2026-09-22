@@ -62,7 +62,11 @@ def nabidka_do_dictu(nab: pruvodce.Nabidka) -> dict[str, Any]:
         # „kolik uchazečů s podobným skórem" (okolí ±OKNO_PASMA) a musel by
         # místo toho hlásit celkový vzorek nabídky — tedy jiné číslo, než
         # ukáže `pruvodce.py` na tomtéž profilu.
-        d["fit"] = {str(pasmo): [round(podil, 4), n] for pasmo, (podil, n) in sorted(vyhlazena.items())}
+        # Šest desetinných míst, ne čtyři: při čtyřech se podíl lišil od
+        # Pythonu až o 5e-5, což se přes smrštění a `min(1, p/0,4)` roztáhlo
+        # na 2e-3 bodu skóre — dost na to, aby si web se dvěma skoro
+        # vyrovnanými nabídkami prohodil pořadí. Stojí to ~30 kB.
+        d["fit"] = {str(pasmo): [round(podil, 6), n] for pasmo, (podil, n) in sorted(vyhlazena.items())}
         d["fit_n"] = celkem
     # Obory bez jednotné zkoušky. Podíl se **váží roky** (`ROKY_JPZ`), takže
     # ho nejde poskládat z holých součtů — musí ven spočítaný. Bere se
@@ -108,6 +112,12 @@ def export(conn) -> dict[str, Any]:
             "okno_pasma": pruvodce.OKNO_PASMA,
             "max_navrh_bodu": pruvodce.MAX_NAVRH_BODU,
             "slozky_skore": pruvodce.SLOZKY_SKORE,
+            "zajem_pridana_oblast": pruvodce.ZAJEM_PRIDANA_OBLAST,
+            "rezerva_zvolenych": pruvodce.REZERVA_ZVOLENYCH,
+            "vaha_podilu_zamereni": oblasti.VAHA_PODILU_ZAMERENI,
+            "sirka_rozhodnuto": oblasti.SIRKA_ROZHODNUTO,
+            "sirka_otevreno": oblasti.SIRKA_OTEVRENO,
+            "prah_siroky_vyber": oblasti.PRAH_SIROKY_VYBER,
             "priority": {k: {"popis": p, "slozka": s} for k, (p, s) in pruvodce.PRIORITY.items()},
             "pasma_portfolia": pruvodce.PASMA_PORTFOLIA,
         },

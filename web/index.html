@@ -301,6 +301,12 @@
       <div class="chips" id="q-zamereni"></div>
     </div>
 
+    <div class="q" id="q-vseobecne-box" hidden>
+      <header><span class="cislo">3c</span><h3>Vypadá to, že se ještě rozhoduješ.</h3></header>
+      <p class="hint" id="q-vseobecne-hint"></p>
+      <div class="chips" id="q-vseobecne"></div>
+    </div>
+
     <div class="q">
       <header><span class="cislo">4</span><h3>Kde by to mělo být?</h3></header>
       <p class="hint">Vyber svoji městskou část (Praha 1–22). Nefiltruje, jen zvýhodní; dojezd MHD zatím v datech nemáme.</p>
@@ -415,6 +421,7 @@
           <code>profil.json</code> a spusť
           <code>python -m jaknastredni.pruvodce --db data/jaknastredni.db --profil profil.json</code>
           — musí vyjít totéž pořadí jako tady.</p>
+        <p class="hint" id="ladeni-sirka"></p>
         <div class="ladeni-lista">
           <button type="button" id="ladeni-kopiruj-profil">Zkopírovat profil</button>
           <span class="hint" id="ladeni-kopie-stav"></span>
@@ -490,7 +497,7 @@
   var stav = { trida: 9, oblasti: [], zamereni: [], obvody: [], skorCj: null, skorMa: null,
                bodyCj: null, bodyMa: null,
                prospech: null, skolneMax: null, jazyk: null, jazykPovinny: false, priority: [],
-               talentove: false, zlepseni: 0,
+               talentove: false, zlepseni: 0, vseobecneTaky: false,
                osobnostni: { po_skole: null, rozhodnuto: null, praxe: null },
                priprava: { priprava_ted: null, hodin_tydne: null, kurz: null } };
 
@@ -614,10 +621,60 @@
   // `zamereni_kody` u oboru, `zamereni_skoly` z popisu celé školy) — tady
   // se jen porovnávají, aby stránka nemusela mít slovník vzorů u sebe.
   function hledanaZamereni() {
+    var ucinne = ucinneOblasti();
     return stav.zamereni.filter(function (k) {
       var z = C.zamereni[k];
-      return z && z.oblasti.some(function (o) { return stav.oblasti.indexOf(o) >= 0; });
+      return z && z.oblasti.some(function (o) { return ucinne.indexOf(o) >= 0; });
     });
+  }
+  // Zaměření nabízená ke zvoleným oblastem (Python: oblasti.zamereni_oblasti).
+  function nabizenaZamereni(obl) {
+    return Object.keys(C.zamereni).filter(function (k) {
+      return C.zamereni[k].oblasti.some(function (o) { return obl.indexOf(o) >= 0; });
+    });
+  }
+  // Šířka výběru 0–1, nebo null = nezměřitelné (Python: oblasti.sirka_vyberu).
+  // Měří se z toho, co uchazeč **zaškrtl**, ne z `ucinneOblasti()` — jinak by
+  // si přidaná oblast sama zvyšovala šířku, kterou byla vyvolaná.
+  function sirkaVyberu() {
+    if (!stav.oblasti.length) return null;
+    var nabizena = nabizenaZamereni(stav.oblasti);
+    if (!nabizena.length) return null;
+    var zvolena = stav.zamereni.filter(function (k) { return nabizena.indexOf(k) >= 0; });
+    var podilZamereni = zvolena.length / nabizena.length;
+    var podilOblasti = Math.min(1, (stav.oblasti.length - 1) / 2);
+    return K.vaha_podilu_zamereni * podilZamereni
+         + (1 - K.vaha_podilu_zamereni) * podilOblasti;
+  }
+  // Zaškrtl tak široce, že mu má smysl nabídnout i všeobecné vzdělání?
+  function sirokyVyber() {
+    if (stav.oblasti.indexOf("vseobecne") >= 0) return false;
+    var s = sirkaVyberu();
+    return s != null && s >= K.prah_siroky_vyber;
+  }
+  // Oblasti, podle kterých se doopravdy filtruje i boduje zájem. Musí to být
+  // jeden seznam pro obojí: kdyby `vseobecne` prošlo jen filtrem, gymnázium
+  // by dostalo zájem 0 a bylo stejně neviditelné (Python: Profil.ucinne_oblasti).
+  function ucinneOblasti() {
+    if (!stav.oblasti.length) return [];
+    if (stav.vseobecneTaky && stav.oblasti.indexOf("vseobecne") < 0)
+      return stav.oblasti.concat(["vseobecne"]);
+    return stav.oblasti;
+  }
+  // Tabulka typů ze šířky výběru — interpoluje mezi variantami `obor`
+  // a `otevreno` otázky `rozhodnuto` (Python: oblasti.tabulka_sirky).
+  function tabulkaSirky(sirka) {
+    var v = C.osobnostni.rozhodnuto.varianty;
+    var presne = v.obor.typy, otevreno = v.otevreno.typy, out = {};
+    var t = (sirka - K.sirka_rozhodnuto) / (K.sirka_otevreno - K.sirka_rozhodnuto);
+    t = Math.min(1, Math.max(0, t));
+    Object.keys(presne).forEach(function (typ) {
+      out[typ] = presne[typ] * (1 - t) + (otevreno[typ] !== undefined ? otevreno[typ] : 0.3) * t;
+    });
+    Object.keys(otevreno).forEach(function (typ) {
+      if (out[typ] === undefined) out[typ] = 0.3 * (1 - t) + otevreno[typ] * t;
+    });
+    return out;
   }
   function protina(seznam, hledane) {
     return (seznam || []).filter(function (x) { return hledane.indexOf(x) >= 0; });
@@ -657,8 +714,8 @@
     if (n.talentova_zkouska && !stav.talentove)
       return "obor s talentovou zkouškou (zapni je v otázce 12)";
     if (stav.oblasti.length) {
-      var o = oblastiOboru(n.kod_kkov);
-      if (!stav.oblasti.some(function (x) { return o.indexOf(x) >= 0; }))
+      var o = oblastiOboru(n.kod_kkov), ucinne = ucinneOblasti();
+      if (!ucinne.some(function (x) { return o.indexOf(x) >= 0; }))
         return "obor patří do oblastí " + (o.length ? o.map(function (k) {
           return C.oblasti[k].popis; }).join(", ") : "(do žádné)") + ", ty jsi zaškrtl jiné (otázka 3)";
     }
@@ -751,9 +808,13 @@
 
       if (!stav.oblasti.length) slozky.zajem = 0.5;
       else {
-        var vse = oblastiOboru(n.kod_kkov);
-        var shoda = vse.filter(function (x) { return stav.oblasti.indexOf(x) >= 0; });
+        var vse = oblastiOboru(n.kod_kkov), ucinne2 = ucinneOblasti();
+        var shoda = vse.filter(function (x) { return ucinne2.indexOf(x) >= 0; });
         slozky.zajem = shoda.length ? Math.min(1, 0.6 + 0.4 * shoda.length / Math.max(vse.length, 1)) : 0;
+        // Nabídka, která se trefila jen do oblasti přidané průvodcem, váží
+        // míň — uchazeč ji nezaškrtl (Python: ZAJEM_PRIDANA_OBLAST).
+        if (shoda.length && !shoda.some(function (x) { return stav.oblasti.indexOf(x) >= 0; }))
+          slozky.zajem *= K.zajem_pridana_oblast;
         slozky.zajem *= K.shoda_zamereni[urovenZamereni(n)];
       }
 
@@ -798,7 +859,11 @@
     // Vynechaný obor téže školy nesmí zmizet beze stopy — přidá se jako
     // poznámka k té zobrazené, jinak se uchazeč nedozví, že škola nabízí
     // i obor, který chce víc (nebo na který má vyšší šanci).
-    var out = [], zobrazena = {};
+    var out = [], zobrazena = {}, odlozene = [];
+    var rezervovat = stav.vseobecneTaky ? Math.min(K.rezerva_zvolenych, pocet) : 0;
+    function jeZvolena(v) {
+      return oblastiOboru(v.n.kod_kkov).some(function (o) { return stav.oblasti.indexOf(o) >= 0; });
+    }
     for (var i = 0; i < vysledky.length; i++) {
       var v = vysledky[i], r = v.n.redizo;
       if (zobrazena[r]) {
@@ -810,9 +875,24 @@
         }
         continue;
       }
-      if (out.length < pocet) { zobrazena[r] = v; out.push(v); }
+      if (out.length >= pocet) continue;
+      // Když si průvodce přidal všeobecné vzdělání sám, drží se poslední
+      // `rezerva_zvolenych` míst pro oblasti, které uchazeč doopravdy
+      // zaškrtl. Složka typu se normalizuje přes kandidáty, takže jakmile
+      // gymnázium porazí průmyslovku, porazí ji *každé* — a kdo napsal
+      // „baví mě IT", dostal pětici gymnázií a ani jednu průmyslovku.
+      if (!jeZvolena(v) && rezervovat && out.length >= pocet - rezervovat) {
+        odlozene.push(v);
+        continue;
+      }
+      zobrazena[r] = v;
+      out.push(v);
+      if (jeZvolena(v) && rezervovat) rezervovat--;
     }
-    return out;
+    // Rezerva se nemusí naplnit (ve zvolených oblastech nemusí být dost
+    // škol) — odložené se pak vrátí, ať pětice není kratší.
+    for (var j = 0; j < odlozene.length && out.length < pocet; j++) out.push(odlozene[j]);
+    return out.sort(function (a, b) { return b.skore - a.skore; });
   }
   function portfolio(vysledky) {
     var out = {}, pouzite = {};
@@ -1053,12 +1133,17 @@
   // Typ vzdělání se neodvozuje z otázky na typ, ale z osobnostních odpovědí
   // — tabulky posílá Python v C.osobnostni, aby měl pravidlo jedno místo.
   function preferenceTypu() {
-    var tabulky = [];
+    var tabulky = [], sirka = sirkaVyberu();
     for (var klic in C.osobnostni) {
+      // Šířka výběru **nahrazuje** odpověď na `rozhodnuto`, i když ji
+      // uchazeč vyplnil: zaškrtaná políčka jsou lepší důkaz než to, co o
+      // sobě u té otázky tvrdí. Je to táž otázka, jen líp změřená.
+      if (klic === "rozhodnuto" && sirka != null) continue;
       var odpoved = stav.osobnostni[klic];
       var varianty = C.osobnostni[klic].varianty;
       if (odpoved && varianty[odpoved]) tabulky.push(varianty[odpoved].typy);
     }
+    if (sirka != null) tabulky.push(tabulkaSirky(sirka));
     var out = {};
     for (var typ in C.typy) {
       if (typ === "L5" || typ === "N") continue;
@@ -1081,10 +1166,28 @@
                    .map(function (x) { return x[0]; });
   }
 
+  // Otázka 3c se ukáže jen při širokém výběru a jen když si uchazeč oblast
+  // „Všeobecné vzdělání" sám nezaškrtl — jinak gymnázia ve výběru dávno jsou.
+  function vykresliVseobecne() {
+    var box = document.getElementById("q-vseobecne-box");
+    var ukazat = sirokyVyber();
+    box.hidden = !ukazat;
+    if (!ukazat) { stav.vseobecneTaky = false; return; }
+    var nabizena = nabizenaZamereni(stav.oblasti);
+    var zvolena = stav.zamereni.filter(function (k) { return nabizena.indexOf(k) >= 0; });
+    document.getElementById("q-vseobecne-hint").textContent =
+      "Zaškrtl sis " + zvolena.length + " z " + nabizena.length + " zaměření"
+      + (stav.oblasti.length > 1 ? " napříč " + stav.oblasti.length + " oblastmi" : "")
+      + ". Gymnázia a lycea ti tvůj výběr oblastí vyřadil — přitom právě ony "
+      + "nechávají rozhodnutí o oboru na později. Chceš je vidět taky?";
+  }
+
   function zmena() {
     stav.oblasti = zaskrtnute("oblasti");
     vykresliZamereni();
     stav.zamereni = zaskrtnute("zamereni");
+    vykresliVseobecne();
+    stav.vseobecneTaky = !!zaskrtnute("vseobecne_taky")[0] && sirokyVyber();
     ["po_skole", "rozhodnuto", "praxe"].forEach(function (k) {
       stav.osobnostni[k] = zaskrtnute(k)[0] || null;
     });
@@ -1222,6 +1325,7 @@
       obvody: stav.obvody.slice(),
       priority: stav.priority.slice(0, 3),
       talentove: stav.talentove,
+      vseobecne_taky: stav.vseobecneTaky,
       // Body z 50 -> % skór 0–100 na předmět, jak je počítá CERMAT.
       // Bez zlepšení: to jde vedle jako `zlepseni_bodu`.
       skor_cj: stav.bodyCj == null ? null : stav.bodyCj / 50 * 100,
@@ -1248,6 +1352,23 @@
     if (!box) return;
     document.getElementById("ladeni-profil").textContent =
       JSON.stringify(profilProPython(), null, 2);
+
+    // Šířka výběru se v profilu neobjeví — je to odvozená hodnota, ne
+    // odpověď. Bez ní ale není poznat, proč složka `typ` řadí, jak řadí.
+    var sirka = sirkaVyberu(), radek = document.getElementById("ladeni-sirka");
+    if (sirka == null) {
+      radek.textContent = "Šířka výběru: nezměřitelná (žádná oblast, nebo k ní žádná zaměření).";
+    } else {
+      var tab = tabulkaSirky(sirka);
+      var klicove = ["G4", "LYC", "M", "H"].filter(function (x) { return tab[x] !== undefined; });
+      radek.textContent =
+        "Šířka výběru: " + sirka.toFixed(3)
+        + " (práh pro otázku 3c: " + K.prah_siroky_vyber
+        + "; plný posun od " + K.sirka_otevreno + "). "
+        + "Nahrazuje odpověď na „rozhodnuto“ tabulkou "
+        + klicove.map(function (x) { return x + " " + tab[x].toFixed(2); }).join(", ")
+        + (stav.vseobecneTaky ? ". Gymnázia a lycea jsou ve výběru navíc (otázka 3c)." : ".");
+    }
     vykresliLadeniTabulku(vysledky);
     vykresliLadeniSkoly();
   }
@@ -1431,6 +1552,10 @@
                         { hodnota: "ano", popis: "Ano, ukaž i obory s talentovkou" }],
         "radio", "talentove", zmena);
 
+  chips("q-vseobecne", [{ hodnota: "", popis: "Ne, drž se toho, co jsem zaškrtl", vychozi: true },
+                        { hodnota: "ano", popis: "Ano, ukaž mi i gymnázia a lycea" }],
+        "radio", "vseobecne_taky", zmena);
+
   chips("q-oblasti", Object.keys(C.oblasti).map(function (k) {
     return { hodnota: k, popis: C.oblasti[k].popis };
   }), "checkbox", "oblasti", zmena);
@@ -1485,7 +1610,8 @@
   // než klikat, a hlavně se tím dá stránka ověřit skriptem proti Pythonu.
   window.JNS = { stav: stav, nabidky: NAB, konstanty: K, ciselniky: C,
                  ohodnot: ohodnot, duvodFiltru: duvodFiltru, profil: profilProPython,
-                 urovenZamereni: urovenZamereni, vahy: vahy, prekresli: zmena };
+                 urovenZamereni: urovenZamereni, vahy: vahy, prekresli: zmena,
+                 sirka: sirkaVyberu, sirokyVyber: sirokyVyber, vyberTop: vyberTop };
 
   vykresliTerminy();
   vykresliStavDat();

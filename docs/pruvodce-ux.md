@@ -565,6 +565,75 @@ Dvě věci, které prototyp ukazuje a CLI ne:
 - **Pás šance** s rozmytým koncem — vizuální připomínka, že je to odhad
   s nejistotou, ne naměřená hodnota.
 
+### Šířka výběru jako měření nerozhodnosti
+
+Otázka 3b („A co konkrétně z toho?") nese víc informace, než kolik z ní
+průvodce původně četl. **Kolik** políček uchazeč zaškrtl je samo o sobě
+odpověď — a to na otázku, na kterou se průvodce už ptá jinde:
+`rozhodnuto` („Víš už, čemu se chceš věnovat?"). Kdo zaškrtne osm zaměření
+z osmi, tím řekl „ještě nevím" spolehlivěji, než jak na to umí odpovědět
+přímo. Je to chování, ne sebehodnocení, a u čtrnáctiletého je chování lepší
+důkaz — proto šířka výběru odpověď na `rozhodnuto` **nahrazuje**, i když ji
+uchazeč vyplnil. S ostatními dvěma osobnostními otázkami (`po_skole`,
+`praxe`) se dál průměruje, takže vyhrává otázku, kterou měří, ne celé skóre.
+
+Než tohle přibylo, chovalo se to **obráceně**. `_uroven_zamereni` bere
+maximum přes zaškrtnutá zaměření: stačí jedna trefa z jedenácti a odborná
+škola má násobek 1,0, kdežto gymnázium má `zamereni_kody` skoro vždycky
+prázdné a zůstane trčet na 0,8 („nevíme") ať uchazeč zaškrtne cokoli.
+Naměřeno na oblastech IT + všeobecné (200 nabídek): při žádném zaškrtnutém
+zaměření měla gymnázia průměrnou shodu 0,743 proti 0,681 u odborných škol,
+při sedmi už 0,839 proti 0,931 — a v pětici nezbylo ani jedno gymnázium.
+Čím širší výběr, tím víc to tlačilo *od* všeobecného vzdělání.
+
+Měří se dvě věci, vážené 3:1 (`VAHA_PODILU_ZAMERENI`):
+
+- **Podíl zaměření** (`zvolená / nabízená`), ne jejich počet. Čtyři ze čtyř
+  nabízených je něco jiného než čtyři z osmadvaceti; absolutní počet by
+  trestal uchazeče, kterým formulář nabídl užší výběr.
+- **Počet oblastí**, protože šířka *uvnitř* jedné oblasti není nerozhodnost.
+  Kdo zaškrtne všech osm IT zaměření, neříká „nevím, co chci" — říká „chci
+  IT, je mi jedno jaké", a tomu sedí široká průmyslovka, ne gymnázium.
+
+Výsledná šířka 0–1 interpoluje mezi tabulkami variant `obor` a `otevreno`
+otázky `rozhodnuto` (`SIRKA_ROZHODNUTO` = 0,25, `SIRKA_OTEVRENO` = 0,75),
+takže nepřináší žádná nová čísla — jen jiný způsob, jak se na tutéž otázku
+dostat odpověď.
+
+#### Otázka 3c: gymnázia, která filtr vyhodil
+
+Samotné řazení by ale nestačilo. Kdo zaškrtne jen oblast „IT", tomu tvrdý
+filtr oblastí vyhodí **všech 148 pražských gymnázií** a žádná změna skóre
+je nevrátí. Při šířce nad `PRAH_SIROKY_VYBER` (0,5) se proto objeví
+doplňující otázka 3c: *„Zaškrtl sis 8 z 8 zaměření. Gymnázia a lycea ti
+tvůj výběr oblastí vyřadil — přitom právě ony nechávají rozhodnutí o oboru
+na později. Chceš je vidět taky?"* Ptá se, místo aby je potichu přidal —
+je to nabídka toho, co uchazeč **nezaškrtl**. Neptá se, když si oblast
+`vseobecne` zaškrtl sám; tam gymnázia ve výběru dávno jsou.
+
+Po „ano" platí přidaná oblast pro filtr **i pro skóre zájmu**
+(`Profil.ucinne_oblasti`). Musí to být jeden seznam pro obojí: kdyby
+`vseobecne` prošlo jen filtrem, gymnázium by dostalo zájem 0,0 a skončilo
+na chvostu — stejně neviditelné, jen s větší prací. Zároveň se zájem srazí
+na `ZAJEM_PRIDANA_OBLAST` (0,75), protože přidaná oblast je odvozené
+zjištění, ne zaškrtnutá volba — stejná logika, podle které zaměření
+z popisu školy váží míň než doložené u oboru.
+
+A ještě jedna past: složka typu se normalizuje přes kandidáty, takže jakmile
+gymnázium porazí průmyslovku, porazí ji **každé** gymnázium. Uchazeč, který
+napsal „baví mě IT", pak dostal pětici gymnázií a ani jednu průmyslovku —
+druhý extrém, ne oprava. `vyber_top` proto drží `REZERVA_ZVOLENYCH` (2) míst
+z pěti pro oblasti, které uchazeč doopravdy zaškrtl. Smysl přidání je dát
+obojí vedle sebe na porovnání, ne jedno nahradit druhým. Na profilu „jen
+IT, 8 z 8 zaměření, skór 80/76" vypadá výsledek takhle:
+
+| zaškrtnuto | pětice |
+| --- | --- |
+| 2 z 8 | 5× průmyslovka (typ M) |
+| 5 z 8 | 5× průmyslovka |
+| 8 z 8, bez otázky 3c | 5× průmyslovka |
+| 8 z 8, po „ano" ve 3c | 3× gymnázium + 2× průmyslovka |
+
 ### Ladicí výpis
 
 Karta ukazuje závěr, ne vstup. Když pořadí nesedí očekávání („proč je ta
@@ -605,6 +674,7 @@ vlastně počítá. Nalezeno a opraveno najednou:
 | jazyk ve filtru | tvrdý filtr vždy | tvrdý jen na `jazyk_povinny` |
 | obory bez JPZ | podíl jako přijato/posouzeno | podíl **vážený roky** (`ROKY_JPZ`) |
 | vzorek na kartě | celkový vzorek nabídky | vzorek v okolí ±`OKNO_PASMA` |
+| `fit` v exportu | zaokrouhlený na 4 des. místa | plná přesnost (rozdíl až 2e-3 bodu skóre) |
 
 Dvě poslední se daly opravit jen v exportu — `bez_jpz` proto nese i hotový
 vážený podíl a `fit` ke každému pásmu i jeho počet.

@@ -1015,3 +1015,185 @@ def test_export_nese_ke_kazdemu_pasmu_i_vzorek(conn):
     for pasmo, hodnota in fit.items():
         podil, vzorek = hodnota
         assert 0.0 <= podil <= 1.0 and vzorek == 10, (pasmo, hodnota)
+
+
+# --------------------------------------------------------------------------
+# Šířka výběru — kolik toho uchazeč zaškrtl jako měření nerozhodnosti
+# --------------------------------------------------------------------------
+
+def test_sirka_pocita_podil_ne_pocet():
+    """Čtyři ze čtyř nabízených je něco jiného než čtyři z osmadvaceti."""
+    uzka = oblasti.zamereni_oblasti(["vseobecne"])       # 4 zaměření
+    siroka = oblasti.zamereni_oblasti(["it", "umeni", "technika"])
+    assert len(siroka) > len(uzka)
+    # Stejný absolutní počet, úplně jiná šířka.
+    ctyri_z_mala = oblasti.sirka_vyberu(["vseobecne"], uzka)
+    ctyri_z_mnoha = oblasti.sirka_vyberu(["it", "umeni", "technika"], list(siroka)[:4])
+    assert ctyri_z_mala > ctyri_z_mnoha
+
+
+def test_sirka_uvnitr_jedne_oblasti_neni_plna_nerozhodnost():
+    """„Chci IT, je mi jedno jaké" není totéž co „nevím, co chci".
+
+    Kdo zaškrtne všech osm IT zaměření, vybírá si uvnitř jednoho směru.
+    Nerozhodnost je teprve šířka napříč oblastmi, takže sama o sobě nesmí
+    dojet na maximum stupnice.
+    """
+    vsechno_it = oblasti.sirka_vyberu(["it"], oblasti.zamereni_oblasti(["it"]))
+    napric = oblasti.sirka_vyberu(["it", "umeni", "gastro"],
+                                  oblasti.zamereni_oblasti(["it", "umeni", "gastro"]))
+    assert vsechno_it < napric == 1.0
+
+
+def test_sirka_je_none_kdyz_neni_co_merit():
+    assert oblasti.sirka_vyberu([], ["programovani"]) is None
+    assert oblasti.sirka_vyberu(["it"], []) == 0.0     # zaškrtnuto nic z nabízených
+
+
+def test_sirka_nahrazuje_odpoved_na_rozhodnuto():
+    """Zaškrtaná políčka jsou lepší důkaz než to, co o sobě uchazeč tvrdí."""
+    rekl_ze_vi = {"po_skole": None, "rozhodnuto": "obor", "praxe": None}
+    uzky = oblasti.preference_typu(rekl_ze_vi, sirka=0.0)
+    siroky = oblasti.preference_typu(rekl_ze_vi, sirka=1.0)
+    # Stejná odpověď „vím to přesně", jen jinak zaškrtnuto — a typy se otočí.
+    assert siroky["G4"] > uzky["G4"]
+    assert siroky["H"] < uzky["H"]
+    # Bez změřené šířky se odpověď použije tak, jak ji uchazeč dal.
+    assert oblasti.preference_typu(rekl_ze_vi) == uzky
+
+
+def test_siroky_vyber_otoci_poradi_typu_na_vseobecne():
+    """Vlastní pointa celé věci: široký výběr má typy skutečně přehodit.
+
+    Nestačí, že se gymnázium posune „o kousek nahoru" — musí odborný obor
+    předběhnout, jinak se na pořadí škol nic nepozná. Test na směr
+    (`siroky["G4"] > uzky["G4"]`) tohle nechytí: projde i tehdy, když je
+    posun tisícina. (Ověřeno mutací prahu `SIRKA_OTEVRENO`.)
+    """
+    uzky = oblasti.preference_typu({}, sirka=0.0)
+    siroky = oblasti.preference_typu({}, sirka=1.0)
+    assert uzky["M"] > uzky["G4"], "úzký výběr = rozhodnuto = odborný obor"
+    assert siroky["G4"] > siroky["M"], "široký výběr = nerozhodnuto = gymnázium"
+
+
+def test_bezny_uzky_vyber_gymnazium_netlaci():
+    """Druhá půlka kontraktu: dvě zaměření z osmi nesmí hnout ničím.
+
+    Bez tohohle projdou i prahy nastavené tak, že se šířka uplatní vždycky
+    naplno — a uchazeč, který ví, že chce programovat, dostane gymnázium.
+    """
+    dve_z_osmi = list(oblasti.zamereni_oblasti(["it"]))[:2]
+    sirka = oblasti.sirka_vyberu(["it"], dve_z_osmi)
+    assert sirka < oblasti.PRAH_SIROKY_VYBER
+    preference = oblasti.preference_typu({}, sirka=sirka)
+    assert preference["M"] > preference["G4"]
+    # A je to totéž, jako kdyby odpověděl „vím to docela přesně" — šířka pod
+    # dolní mezí tu odpověď nepřekrucuje, jen ji potvrdí.
+    assert preference == oblasti.preference_typu({"rozhodnuto": "obor"})
+
+
+def test_sirka_neprebiji_ostatni_osobnostni_otazky():
+    """Šířka vyhrává otázku, kterou měří — ne celé skóre.
+
+    Průměruje se s `po_skole` a `praxe`, takže kdo chce rukama pracovat,
+    nedostane gymnázium jen proto, že zaškrtl hodně zaměření.
+    """
+    jen_sirka = oblasti.preference_typu({}, sirka=1.0)
+    s_praxi = oblasti.preference_typu(
+        {"po_skole": "prace", "praxe": "hodne"}, sirka=1.0)
+    assert s_praxi["G4"] < jen_sirka["G4"]
+    assert s_praxi["H"] > jen_sirka["H"]
+
+
+def test_siroky_vyber_se_neptá_kdyz_vseobecne_uz_je_zvolene():
+    siroka_zam = list(oblasti.zamereni_oblasti(["it"]))
+    assert pruvodce.Profil(oblasti_zajmu=["it"], zamereni=siroka_zam).siroky_vyber
+    # S „vseobecne" gymnázia ve výběru dávno jsou, není se na co ptát.
+    p = pruvodce.Profil(oblasti_zajmu=["it", "vseobecne"],
+                        zamereni=list(oblasti.zamereni_oblasti(["it", "vseobecne"])))
+    assert not p.siroky_vyber
+
+
+def test_pridana_oblast_plati_pro_filtr_i_pro_zajem(conn):
+    """Kdyby `vseobecne` prošlo jen filtrem, gymnázium má zájem 0 a je stejně pryč."""
+    _skola(conn, "600000011", "100000011", "Gymnázium U Šířky", "Praha 9")
+    _obor(conn, "100000011", "79-41-K/41", "Gymnázium")
+    nabidky = pruvodce.nacti_nabidky(conn)
+    gym = next(n for n in nabidky if n.izo == "100000011")
+
+    bez = pruvodce.Profil(trida=9, oblasti_zajmu=["it"])
+    assert not pruvodce.projde_filtrem(gym, bez)
+
+    s_pridanim = pruvodce.Profil(trida=9, oblasti_zajmu=["it"], vseobecne_taky=True)
+    assert pruvodce.projde_filtrem(gym, s_pridanim)
+    # …a zároveň dostane nenulový zájem, jen sražený, protože ho uchazeč
+    # nezaškrtl — jinak by skončil na chvostu, tedy stejně neviditelný.
+    zajem = pruvodce._skore_zajem(gym, s_pridanim)
+    jako_zaskrtnute = pruvodce._skore_zajem(
+        gym, pruvodce.Profil(trida=9, oblasti_zajmu=["it", "vseobecne"]))
+    # Ostrá nerovnost, ne rovnost s konstantou: test psaný jako
+    # `zajem == jako_zaskrtnute * ZAJEM_PRIDANA_OBLAST` projde i s tou
+    # konstantou nastavenou na 1,0, tedy se srážkou úplně vypnutou.
+    assert 0 < zajem < jako_zaskrtnute
+    assert zajem == pytest.approx(jako_zaskrtnute * pruvodce.ZAJEM_PRIDANA_OBLAST)
+
+
+def test_rezerva_drzi_v_petici_misto_pro_zvolene_oblasti():
+    """Přidaná gymnázia nesmí pětici vymést — má jít o porovnání, ne výměnu."""
+    def vysledek(kkov, skore):
+        nab = pruvodce.Nabidka(
+            izo=f"i{skore}", redizo=f"r{skore}", skola="S", organizace=f"Š {skore}",
+            kod_kkov=kkov, obor="O", typ=oblasti.typ_oboru(kkov), trida_prihlasky=9,
+            obvody=(), adresa="", zrizovatel_verejny=True)
+        return pruvodce.Vysledek(nabidka=nab, skore=skore, slozky={}, sance=0.5,
+                                 sance_zdroj="", duvody=[], varovani=[])
+    # Osm gymnázií nad každou průmyslovkou — přesně to, co dělá normalizace
+    # složky typu, jakmile gymnázium jednou vyhraje.
+    vysledky = [vysledek("79-41-K/41", 90 - i) for i in range(8)]
+    vysledky += [vysledek("18-20-M/01", 70 - i) for i in range(5)]
+
+    p = pruvodce.Profil(trida=9, oblasti_zajmu=["it"], vseobecne_taky=True)
+    top = pruvodce.vyber_top(vysledky, 5, profil=p)
+    typy = [v.nabidka.typ for v in top]
+    # Natvrdo 2 a 3, ne `REZERVA_ZVOLENYCH` a `5 - REZERVA_ZVOLENYCH`: test
+    # psaný proti té samé konstantě, kterou má hlídat, projde i s rezervou
+    # vypnutou na nulu. (Ověřeno mutací — přesně tohle se stalo.)
+    assert pruvodce.REZERVA_ZVOLENYCH == 2, "změna konstanty -> přepiš i čísla níž"
+    assert typy.count("M") == 2
+    assert typy.count("G4") == 3
+    # Pořadí zůstává podle skóre, rezerva jen rozhoduje, kdo se vejde.
+    assert [v.skore for v in top] == sorted((v.skore for v in top), reverse=True)
+
+    # Bez přidání se nerezervuje nic.
+    bez = pruvodce.Profil(trida=9, oblasti_zajmu=["it", "vseobecne"])
+    assert all(v.nabidka.typ == "G4" for v in pruvodce.vyber_top(vysledky, 5, profil=bez))
+
+
+def test_rezerva_nezkrati_petici_kdyz_neni_cim_naplnit():
+    """Ve zvolených oblastech nemusí být dost škol — pětice zůstane pětice."""
+    def vysledek(i):
+        nab = pruvodce.Nabidka(
+            izo=f"i{i}", redizo=f"r{i}", skola="S", organizace=f"Š {i}",
+            kod_kkov="79-41-K/41", obor="O", typ="G4", trida_prihlasky=9,
+            obvody=(), adresa="", zrizovatel_verejny=True)
+        return pruvodce.Vysledek(nabidka=nab, skore=90 - i, slozky={}, sance=0.5,
+                                 sance_zdroj="", duvody=[], varovani=[])
+    vysledky = [vysledek(i) for i in range(8)]
+    p = pruvodce.Profil(trida=9, oblasti_zajmu=["it"], vseobecne_taky=True)
+    assert len(pruvodce.vyber_top(vysledky, 5, profil=p)) == 5
+
+
+def test_web_zrcadli_konstanty_sirky(web_js):
+    """Web nesmí mít prahy šířky opsané u sebe — čte je z dat."""
+    for konstanta in ["vaha_podilu_zamereni", "sirka_rozhodnuto", "sirka_otevreno",
+                      "prah_siroky_vyber", "zajem_pridana_oblast", "rezerva_zvolenych"]:
+        assert f"K.{konstanta}" in web_js, f"web nečte konstantu {konstanta} z dat"
+
+
+def test_export_nese_konstanty_sirky(conn):
+    k = export_web.export(conn)["konstanty"]
+    assert k["vaha_podilu_zamereni"] == oblasti.VAHA_PODILU_ZAMERENI
+    assert k["sirka_otevreno"] == oblasti.SIRKA_OTEVRENO
+    assert k["prah_siroky_vyber"] == oblasti.PRAH_SIROKY_VYBER
+    assert k["zajem_pridana_oblast"] == pruvodce.ZAJEM_PRIDANA_OBLAST
+    assert k["rezerva_zvolenych"] == pruvodce.REZERVA_ZVOLENYCH

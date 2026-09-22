@@ -276,19 +276,98 @@ def popis_zamereni(kod: str) -> str:
     return ZAMERENI[kod][0] if kod in ZAMERENI else kod
 
 
-def preference_typu(odpovedi: dict[str, str | None]) -> dict[str, float]:
+# Šířka výběru — kolik toho uchazeč zaškrtl, jako **měření** odpovědi na
+# otázku `rozhodnuto`.
+#
+# Kdo zaškrtne osm zaměření z jedenácti, tím řekl „ještě nevím" spolehlivěji,
+# než jak na to umí odpovědět u otázky, která se ho na to ptá přímo. Je to
+# chování, ne sebehodnocení, a u čtrnáctiletého je chování lepší důkaz.
+# Proto šířka výběru u `preference_typu` **nahrazuje** odpověď na
+# `rozhodnuto`: je to táž otázka, jen líp změřená. S ostatními dvěma
+# otázkami (`po_skole`, `praxe`) se dál průměruje, takže nepřebíjí všechno.
+#
+# Měří se dvě věci a váží se v poměru 3:1:
+#
+# - **Podíl zaměření** (`zvolená / nabízená`), ne jejich počet. Čtyři ze
+#   čtyř nabízených je něco úplně jiného než čtyři z osmadvaceti — absolutní
+#   počet by trestal uchazeče, kterým formulář nabídl užší výběr.
+# - **Počet oblastí**, protože šířka *uvnitř* jedné oblasti není nerozhodnost.
+#   Kdo zaškrtne všech sedm IT zaměření, neříká „nevím, co chci" — říká
+#   „chci IT, je mi jedno jaké", a tomu sedí široká průmyslovka, ne
+#   gymnázium. Nerozhodnost je teprve šířka napříč oblastmi.
+VAHA_PODILU_ZAMERENI = 0.75
+# Od jaké šířky se pořadí začne posouvat a kde je posun naplno. Pod dolní
+# mezí se chová jako „vím to docela přesně", nad horní jako „chci si nechat
+# otevřené dveře" — tedy přesně varianty otázky `rozhodnuto`, jejichž
+# tabulky se mezi těmi mezemi interpolují.
+SIRKA_ROZHODNUTO, SIRKA_OTEVRENO = 0.25, 0.75
+# Od jaké šířky se uchazeče ptáme, jestli chce vidět i gymnázia a lycea,
+# když si oblast „Všeobecné vzdělání" sám nezaškrtl.
+PRAH_SIROKY_VYBER = 0.5
+
+
+def sirka_vyberu(oblasti_zajmu: "Iterable[str]", zamereni: "Iterable[str]") -> float | None:
+    """Jak široce má uchazeč zaškrtnuto (0 = úzce, 1 = skoro všechno).
+
+    Vrací None, když se nedá nic změřit — uchazeč nezaškrtl žádnou oblast,
+    nebo k jeho oblastem formulář žádná zaměření nenabízí. None znamená
+    „neřaď podle toho", ne „zaškrtl úzce".
+    """
+    zvolene_oblasti = list(dict.fromkeys(oblasti_zajmu))
+    if not zvolene_oblasti:
+        return None
+    nabizena = zamereni_oblasti(zvolene_oblasti)
+    if not nabizena:
+        return None
+    # Jen zaměření, na která se u zvolených oblastí vůbec ptáme (stejné
+    # pravidlo jako `Profil.hledana_zamereni`) — jinak by ručně poskládaný
+    # profil mohl podílem přelézt jedničku.
+    zvolena = {k for k in zamereni if k in nabizena}
+    podil_zamereni = len(zvolena) / len(nabizena)
+    # Jedna oblast = 0, dvě = 0,5, tři a víc = 1. Kdo si vybral tři oblasti
+    # z dvanácti, už nevybírá směr, jen vylučuje.
+    podil_oblasti = min(1.0, (len(zvolene_oblasti) - 1) / 2)
+    return (VAHA_PODILU_ZAMERENI * podil_zamereni
+            + (1 - VAHA_PODILU_ZAMERENI) * podil_oblasti)
+
+
+def tabulka_sirky(sirka: float) -> dict[str, float]:
+    """Tabulka typů odvozená ze šířky výběru.
+
+    Interpoluje mezi tabulkami variant `obor` („vím to docela přesně") a
+    `otevreno` („chci si nechat otevřené dveře") otázky `rozhodnuto` — ta
+    je na tohle už nakalibrovaná, takže šířka nepřináší žádná nová čísla,
+    jen jiný způsob, jak se na tutéž otázku dostat odpověď.
+    """
+    varianty = OSOBNOSTNI_OTAZKY["rozhodnuto"][1]
+    presne, otevreno = varianty["obor"][1], varianty["otevreno"][1]
+    t = (sirka - SIRKA_ROZHODNUTO) / (SIRKA_OTEVRENO - SIRKA_ROZHODNUTO)
+    t = min(1.0, max(0.0, t))
+    return {typ: presne.get(typ, 0.3) * (1 - t) + otevreno.get(typ, 0.3) * t
+            for typ in set(presne) | set(otevreno)}
+
+
+def preference_typu(odpovedi: dict[str, str | None],
+                    sirka: float | None = None) -> dict[str, float]:
     """Z osobnostních odpovědí udělá skóre 0–1 pro každý typ vzdělání.
 
     `odpovedi` mapuje klíč otázky (`po_skole`, `rozhodnuto`, `praxe`) na
     zvolenou variantu; None nebo chybějící klíč se přeskočí. Když uchazeč
     neodpoví nic, vrátí pro všechny typy 0,5 — tedy „nevím, neřaď podle
     toho", ne „nic ti nesedí".
+
+    `sirka` (0–1 z `sirka_vyberu`) **nahradí odpověď na `rozhodnuto`**, i
+    když ji uchazeč vyplnil: zaškrtaná políčka jsou lepší důkaz než to, co
+    o sobě u té otázky tvrdí. Viz komentář u `sirka_vyberu`.
     """
     tabulky = [
         varianty[odpoved][1]
         for klic, (_popis, varianty) in OSOBNOSTNI_OTAZKY.items()
         if (odpoved := odpovedi.get(klic)) in varianty
+        and not (klic == "rozhodnuto" and sirka is not None)
     ]
+    if sirka is not None:
+        tabulky.append(tabulka_sirky(sirka))
     typy = [t for t in TYPY if t not in TYPY_MIMO_ZS]
     if not tabulky:
         return {t: 0.5 for t in typy}
@@ -296,13 +375,13 @@ def preference_typu(odpovedi: dict[str, str | None]) -> dict[str, float]:
 
 
 def doporucene_typy(odpovedi: dict[str, str | None], trida: int = 9,
-                    prah: float = 0.75) -> list[str]:
+                    prah: float = 0.75, sirka: float | None = None) -> list[str]:
     """Typy, které podle odpovědí sedí nejlíp — pro větu „vyšlo ti…".
 
     Filtruje na typy dostupné z dané třídy a vrací je seřazené od nejlepší
     shody; `prah` je podíl nejvyššího skóre, pod který se už typ neuvádí.
     """
-    skore = {t: s for t, s in preference_typu(odpovedi).items()
+    skore = {t: s for t, s in preference_typu(odpovedi, sirka).items()
              if trida_prihlasky(t) == trida}
     if not skore:
         return []
