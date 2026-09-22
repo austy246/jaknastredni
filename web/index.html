@@ -527,6 +527,15 @@
     if (protina(n.zamereni_skoly, hledane).length) return "skola";
     return (n.zamereni_kody && n.zamereni_kody.length) ? "jine" : "nevime";
   }
+  // Název oboru i se zaměřením — dvě nabídky téže školy pod jedním kódem
+  // KKOV se jinak jmenují stejně (Python: Nabidka.obor_plny).
+  function oborPlny(n) {
+    // Pět zaměření začíná kódem oboru — jinak by na kartě stálo
+    // „Dvojjazyčné gymnázium — 79-43-K/61 Dvojjazyčné gymnázium".
+    var z = (n.zamereni_nazev || "").replace(/^\s*\d{2}-\d{2}-[A-Z]\/\d{2}\s*/, "").trim();
+    if (z && z.toLowerCase() !== (n.obor || "").toLowerCase()) return n.obor + " — " + z;
+    return n.obor;
+  }
   function popisZamereni(kody) {
     return kody.map(function (k) { return C.zamereni[k] ? C.zamereni[k].popis : k; }).join(", ");
   }
@@ -654,7 +663,7 @@
         if (!cil.dalsiObory) cil.dalsiObory = [];
         if (cil.dalsiObory.length < 3) {
           var sance = v.sance == null ? "šance neznámá" : "šance " + Math.round(v.sance * 100) + " %";
-          cil.dalsiObory.push(v.n.obor + " (" + v.n.kod_kkov + ", " + sance + ")");
+          cil.dalsiObory.push(oborPlny(v.n) + " (" + v.n.kod_kkov + ", " + sance + ")");
         }
         continue;
       }
@@ -730,6 +739,10 @@
     if (v.sance == null) out.push("Šanci na přijetí nejde z dat odhadnout — u oboru chybí výsledky JPZ.");
     else if (!roky.length) out.push("Škola nevykázala hranici přijetí, šance je jen odhad z poměru přihlášek ku kapacitě.");
     else if (roky.length === 1) out.push("Hranice přijetí je známá jen za jeden rok — odhad je nejistý.");
+    if (n.pasma_sdileno && v.sance != null)
+      out.push("Naměřená šance je za celý obor " + n.kod_kkov + " dohromady (" +
+               n.pasma_sdileno + " zaměření) — data o uchazečích zaměření neuvádějí. " +
+               "U zaměření s vyšší hranicí je ve skutečnosti nižší, u snazšího vyšší.");
     if (roky.length >= 2) {
       var hodnoty = roky.map(function (r) { return h[r]; });
       var rozpeti = Math.max.apply(null, hodnoty) - Math.min.apply(null, hodnoty);
@@ -756,7 +769,7 @@
     var hlava = el("div", "karta-hlava");
     if (role) hlava.appendChild(el("span", "role", { sen: "Sen", realisticka: "Realistická volba", jistota: "Jistota" }[role]));
     hlava.appendChild(el("h3", null, n.organizace));
-    hlava.appendChild(el("p", "obor", n.obor + " · " + n.kod_kkov + " · " + (C.typy[n.typ] ? C.typy[n.typ].popis : "")));
+    hlava.appendChild(el("p", "obor", oborPlny(n) + " · " + n.kod_kkov + " · " + (C.typy[n.typ] ? C.typy[n.typ].popis : "")));
     var misto = el("p", "misto");
     misto.appendChild(document.createTextNode(n.adresa + ", " + (n.obvody || []).join(", ")));
     if (n.www) {

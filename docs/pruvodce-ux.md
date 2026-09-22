@@ -1,7 +1,7 @@
 # Průvodce výběrem školy — návrh UX
 
 Návrh interakce, kterou uchazeč (respektive jeho rodič) projde, aby se ze
-**623 denních nabídek pražských středních škol** dostal na pět, které mu
+**702 denních nabídek pražských středních škol** dostal na pět, které mu
 dávají smysl. Implementace návrhu: [`jaknastredni/pruvodce.py`](../jaknastredni/pruvodce.py)
 (výpočetní jádro + interaktivní CLI) a [`jaknastredni/oblasti.py`](../jaknastredni/oblasti.py)
 (překlad kódů KKOV do lidské řeči).
@@ -18,7 +18,7 @@ obtížnosti" bez vzorce. Průvodce má být tím třetím: **řadí, a u každ�
 
 ## Tři principy, ze kterých návrh vychází
 
-**1. Jednotka není škola, ale nabídka (škola × obor).** Přihláška se podává
+**1. Jednotka není škola, ale nabídka (škola × obor × zaměření).** Přihláška se podává
 na obor, kapacita i hranice přijetí jsou oborové. Kdybychom řadili školy,
 průměrovali bychom gymnázium s učňovským oborem na téže adrese. Pětice na
 konci je tedy pět nabídek — a nejvýš jedna od každé školy (viz `vyber_top`),
@@ -221,7 +221,7 @@ to, že ji CERMAT nevykázal. Místo toho se to napíše do `varovani`.
 Nejdůležitější a nejnebezpečnější číslo v celém průvodci. Počítá se ve
 čtyřech úrovních podle toho, co o nabídce víme (`sance_prijeti`):
 
-**1. Naměřený podíl přijatých** (550 z 623 nabídek). CERMAT zveřejňuje
+**1. Naměřený podíl přijatých** (629 ze 702 nabídek). CERMAT zveřejňuje
 soubory uchazečů — jeden řádek = jeden anonymizovaný uchazeč, jeho % skór
 a až pět přihlášek s výsledkem. Importér `jaknastredni.cermat_uchazeci` z nich
 spočítá tabulku `prijimacky_pasmo`: kolik lidí se v jakém bodovém pásmu na
@@ -277,7 +277,7 @@ rozsahu přepnul na jinou metodu a na tom přepnutí vznikl útes („se 170 bod
 95 %, se 180 body 52 %"). Teď platí: buď o nabídce data máme (aspoň
 `MIN_VZOREK` posouzených přihlášek celkem), nebo ne. Nad i pod rozsahem
 naměřených pásem se drží krajní hodnota křivky. **Výsledek je ověřený
-testem: napříč všemi 623 nabídkami a celým rozsahem skóre šance ani jednou
+testem: napříč všemi 702 nabídkami a celým rozsahem skóre šance ani jednou
 neklesne s rostoucími body** (`test_sance_nikdy_neklesa_se_skorem`).
 
 **Obory, kde nerozhoduje jednotná zkouška.** U oborů s výučním listem se JPZ
@@ -348,7 +348,7 @@ s hranicí 160 bodů bude mít lepší maturity než učňovský obor bez ohledu
 to, jak učí. Proto se počítá i **posun**: průměrný percentil školy u
 maturity v roce Y minus průměrný percentil téže školy u přijímaček v roce
 Y−4, tedy zhruba tentýž ročník na vstupu a na výstupu (`jpz_skupina`
-2017–2023 × `maturita` 2015+, 514 z 623 nabídek má výsledek).
+2017–2023 × `maturita` 2015+, 611 ze 702 nabídek má výsledek).
 
 Je to **hrubý ukazatel**, ne oficiální „přidaná hodnota":
 
@@ -411,7 +411,7 @@ z Úžlabiny vyjde dvanáct zaměření včetně sportu (z „sportovní kurzy")
 společenských věd (z popisu gymnázia). Jako důkaz o konkrétním oboru je to
 slabé — ale pořád je to jediné místo, kde se ta síťařina dá vyčíst.
 
-V pražské nabídce (623 nabídek) má **346 rozpoznané zaměření u oboru**, 252
+V pražské nabídce (702 nabídek) má **420 rozpoznané zaměření u oboru**, 257
 jen z popisu školy a 25 ani to. Otázka není mrtvá: ze 46 kombinací
 oblast × zaměření jich **36 (78 %) změní aspoň jednu školu v pětici**.
 
@@ -422,15 +422,58 @@ patří k některé ze zvolených oblastí (`Profil.hledana_zamereni`).
 
 - **Naměřenou šanci rozlišit po zaměření.** Soubory uchazečů CERMATu nesou
   jen REDIZO + KKOV, zaměření v nich není — `prijimacky_pasmo` je proto
-  sdílené a Ječná „programování" i Ječná „automatizace" dostanou v rámci
-  jednoho KKOV tutéž křivku.
-- **Hranici přijetí rozlišit po zaměření.** To už data unesou
-  (`prijimaci_rizeni.zamereni_oboru`), ale `_doplnit_prijimacky()` je
-  slévá váženým průměrem do jedné nabídky. U 73 pražských nabídek je pod
-  jedním KKOV víc zaměření a **u 26 z nich se hranice liší o 15 bodů a víc**
-  — Gymnázium Na Pražačce má „Všeobecné" 146, „Německý jazyk" 130 a
-  „Výtvarná výchova" 62, průměr 113 nesedí ani na jedno. Viz „Další kroky".
+  sdílené. Hranice, kapacita a poptávka už po zaměření rozlišené jsou (viz
+  „Nabídka = škola × obor × zaměření"), takže Gymnázium Na Pražačce ukazuje
+  hranice 146 / 130 / 62, ale u všech tří stejnou naměřenou šanci 32 %.
+  **Karta to musí přiznat**, jinak se to čte jako fakt o tom konkrétním
+  zaměření: `Nabidka.pasma_sdileno` řekne, kolik nabídek se o křivku dělí,
+  a mezi varování (`!`) přibude „Naměřená šance je za celý obor 79-41-K/61
+  dohromady (3 zaměření) — u zaměření s vyšší hranicí je ve skutečnosti
+  nižší, u snazšího vyšší.".
 - **Co škola nenapsala.** Slovník vzorů pozná jen to, co je v textu.
+
+## Nabídka = škola × obor × zaměření
+
+Jednotkou není (IZO × KKOV), ale **(IZO × KKOV × zaměření)** — 702 pražských
+nabídek místo 623. Dokud se zaměření slévala váženým průměrem, platilo pro
+Gymnázium Na Pražačce jedno číslo 113, i když se uchazeč rozhoduje mezi:
+
+| Zaměření (79-41-K/61) | Hranice 2026 | Přijato |
+|---|---|---|
+| Všeobecné | 146 | 30 |
+| Německý jazyk | 130 | 30 |
+| Výtvarná výchova | 62 | 30 |
+
+Rozdělených nabídek s víc než jednou hranicí je **38**; u **13** se aspoň
+jedno zaměření liší od starého průměru o 10 bodů a víc, u **8** o 15 a víc,
+u **3** o 30 a víc. Největší je Na Pražačce (62 vs. 146) a Gymnázium
+Přípotoční, kde se sportovní příprava dělí na volejbal (156) až atletiku (90).
+
+Dvě věci, které se u toho ukázaly a které s zaměřeními vůbec nesouvisely:
+
+- **Nedenní formy se počítaly do hranic denního studia.** `prijimaci_rizeni`
+  vede pod týmž IZO a KKOV i dálkové, kombinované a distanční kohorty —
+  79 řádků u 28 pražských nabídek. Karlínské gymnázium tak mělo hranici 121
+  z pražské denní třídy (142) a dálkového programu „Druhá šance" (22);
+  Českoslovanská akademie 4letou denní 108 smíchanou s 5letou dálkovou 40.
+  Soubory uchazečů (`cermat_uchazeci`) filtrují na `forma == 'den'` odjakživa,
+  tahle strana to jen doháněla (`pruvodce.FORMA_DENNI`).
+- **Mimopražské pobočky pod pražským IZO.** PORG vede pod `79-41-K/81`
+  vedle pražských tříd (146 a 144) i „8leté PORG Brno" (114) a „8leté PORG
+  Ostrava" (80), policejní škola vedle Prahy i „Bezpečnostní pracovník,
+  Sokolov". Do pražského průvodce nepatří a vyřazují se: pozná se to tak,
+  že název zaměření pojmenovává obec, kde má škola podle rejstříku
+  (`misto_vyuky`) místo výuky mimo Prahu — netýká se to seznamu měst
+  v kódu, ale pěti konkrétních škol, které mimopražskou výuku doložené mají.
+
+Po obojím rozliší zaměření pražskou denní nabídku **beze zbytku** — nezůstala
+ani jedna dvojice řádků, kterou by klíč nerozdělil. Délka ani jazyk studia
+proto v klíči nejsou; co by se pod jedním klíčem přesto sešlo, slije se
+váženým průměrem podle počtu přijatých jako dřív.
+
+Sesterská zaměření téže školy se do pětice nedostanou dvakrát (`vyber_top`
+pouští nejvýš jednu nabídku na REDIZO) — zbylá se vypíšou pod kartou jako
+„Táž škola nabízí i: Gymnázium — Německý jazyk (79-41-K/61, šance 32 %)".
 
 ## Co návrh zatím neumí
 
@@ -461,9 +504,9 @@ pole, která infoabsolvent nemá vůbec:
 
 | Pole | Pokrytí | K čemu je v průvodci |
 |---|---|---|
-| `doporuceny_prospech` | 72 z 623 nabídek | otázka 6 — složka `dosazitelnost` a text na kartě |
-| `loni_prijati` | 552 z 623 | **skutečně** přijatí, ne plán (3. úroveň odhadu šance) |
-| `plp` | 570 z 623 (333× ano) | povinná lékařská prohlídka — konkrétní úkol pro rodiče |
+| `doporuceny_prospech` | 89 ze 702 nabídek | otázka 6 — složka `dosazitelnost` a text na kartě |
+| `loni_prijati` | 626 ze 702 | **skutečně** přijatí, ne plán (3. úroveň odhadu šance) |
+| `plp` | 650 ze 702 (375× ano) | povinná lékařská prohlídka — konkrétní úkol pro rodiče |
 
 **Názvy klíčů se mezi scrapery liší** a záměrně se nesjednocují: každý
 scraper pojmenovává pole podle svého webu, aby šla dohledat ke zdroji.
@@ -475,15 +518,15 @@ filtr na denní formu jeho řádky propouští; spojovacím klíčem je KKOV.
 ### Co Atlas na odhadu šance nezměnil
 
 `loni_prijati` mělo podle původního návrhu pokrýt učňovské obory bez JPZ,
-kde odhad šance chyběl. V praxi se to neprojeví: **44 nabídek nemá data
-o přijímacím řízení** a ani jedna z nich nemá oborový řádek v Atlasu ani
+kde odhad šance chyběl. Pokrývá jich málo: **49 nabídek nemá data
+o přijímacím řízení** a jen 9 z nich má oborový řádek v Atlasu nebo
 v infoabsolventu (škola se páruje přes REDIZO, ale ten konkrétní obor
-v jejich tabulce oborů není). Zbylé obory bez jednotné zkoušky mají v CERMAT
-řádek s kapacitou a přihláškami, takže na ně sahá už 2. úroveň odhadu
-(`index_poptavky`). `loni_prijati` tedy dnes slouží hlavně jako druhý zdroj
-čísel na kartě a jako pojistka, kdyby CERMAT řádek chyběl.
+v jejich tabulce oborů často není). Zbylé obory bez jednotné zkoušky mají
+v CERMAT řádek s kapacitou a přihláškami, takže na ně sahá už 2. úroveň
+odhadu (`index_poptavky`). `loni_prijati` tedy dnes slouží hlavně jako
+druhý zdroj čísel na kartě a jako pojistka, kdyby CERMAT řádek chyběl.
 
-Otevřená možnost do budoucna: u nabídek **bez zveřejněné hranice** (46 %)
+Otevřená možnost do budoucna: u nabídek **bez zveřejněné hranice** (42 %)
 je přihlášky/**přijatí** přesnější signál poptávky než dnešní
 přihlášky/**kapacita** — kapacita nemusí být naplněná. Obě čísla má přitom
 CERMAT sám, takže na to Atlas není potřeba; je to změna modelu, ne
@@ -532,18 +575,11 @@ Dvě věci, které prototyp ukazuje a CLI ne:
    hranice, maturity) — to, co si uživatel stejně dělá ručně v Excelu.
 3. **Dojezd MHD** (GTFS) — největší jednotlivé zlepšení kvality výsledku.
 4. **Závěry inspekčních zpráv** — extrakce sekcí ze ČŠI PDF pro školy
-   v užším výběru, ne pro všech 219.
+   v užším výběru, ne pro všech 214 organizací.
 5. **Kalibrace na skutečnosti.** Až budou známé výsledky 2027, porovnat
    odhad šance s tím, jak to dopadlo, a případně upravit `σ`.
-6. **Nabídka po zaměřeních, ne po KKOV.** Dnešní jednotkou je
-   (IZO × KKOV) a `_doplnit_prijimacky()` přes zaměření slévá hranici
-   váženým průměrem. U 73 pražských nabídek je pod jedním KKOV víc
-   zaměření, u 26 z nich se hranice liší o ≥15 bodů, u 16 o ≥30. Část
-   těch rozdílů přitom **nejsou obsahová zaměření, ale mimopražské
-   pobočky nebo jiný program**: PORG má pod `79-41-K/81` pražské třídy
-   na 146 a 144 bodech, ale Brno 114 a Ostrava 80 → průměr 129
-   podhodnocuje pražskou nabídku; Karlínské gymnázium slévá „Naše škola"
-   (142) s programem „Druhá šance" (22) na 121. Rozdělením nabídky na
-   (IZO × KKOV × zaměření) by to zmizelo — jen naměřená šance
-   (`prijimacky_pasmo`) by zůstala sdílená, protože zaměření v souborech
-   uchazečů není.
+6. **Naměřená šance po zaměřeních.** Rozdělení nabídky je hotové (viz
+   „Nabídka = škola × obor × zaměření"), ale `prijimacky_pasmo` zůstává
+   sdílené přes celý KKOV — soubory uchazečů zaměření neuvádějí. Kdyby je
+   CERMAT začal zveřejňovat, byla by to poslední složka, která zaměření
+   nerozlišuje.

@@ -254,7 +254,13 @@ def parse(paths: dict[str, Path]) -> Iterator[Row]:
                 entry["rocnik"] = int(row[idx["ROČNÍK"]])
                 entry["rok"] = int(row[idx["ROK"]])
                 entry["kolo"] = int(row[idx["KOLO"]])
-                entry["zamereni_oboru"] = row[idx["ZAMĚŘENÍ OBORU"]] or ""
+                # Mezery na kraji ořezat: 337 z 3860 zaměření je má a bez
+                # toho je „Cukrář " jiná nabídka než „Cukrář". Od chvíle,
+                # kdy je zaměření součástí identity nabídky v průvodci
+                # (`pruvodce.Klic`), by to byly dvě karty téhož oboru.
+                # Ověřeno, že se tím žádné dva řádky nesloučí do jednoho
+                # primárního klíče.
+                entry["zamereni_oboru"] = (row[idx["ZAMĚŘENÍ OBORU"]] or "").strip()
                 entry["forma_vzdelavani"] = row[idx["FORMA VZDĚLÁVÁNÍ"]]
                 entry["delka_studia"] = _delka(row[idx["DÉLKA STUDIA"]])
                 entry["jazyk_studia"] = row[idx["JAZYK STUDIA"]]

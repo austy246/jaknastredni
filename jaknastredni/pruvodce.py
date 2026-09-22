@@ -66,6 +66,15 @@ ROKY_JPZ: dict[int, float] = {2026: 3.0, 2025: 2.0, 2024: 1.0}
 # ±10 bodů kolem uchazečova skóru; když v něm není dost věcně posouzených
 # přihlášek, rozšíří se na ±20 a teprve pak se sáhne po odhadu z hranice.
 # MIN_VZOREK drží odhad mimo pásma, kde by o něm rozhodovali tři lidé.
+# Průvodce je pro žáky ZŠ, tedy o denním studiu (`obor.forma = '10'`).
+# `prijimaci_rizeni` ale vede i dálkové, kombinované a distanční kohorty
+# pod týmž IZO a KKOV a jejich hranice jsou jinde: SŠ gastronomická má
+# u `65-42-M/01` denní hranici 108 a kombinovanou 14. Dokud se řádky
+# nefiltrovaly, mísily se do jednoho čísla — 79 řádků u 28 pražských
+# nabídek. Soubory uchazečů (`cermat_uchazeci`) filtrují na 'den' už dávno,
+# tahle strana to jen doháněla.
+FORMA_DENNI = "den"
+
 OKNO_PASMA = 10
 OKNO_PASMA_SIROKE = 20
 MIN_VZOREK = 10
@@ -244,6 +253,16 @@ class Profil:
         return cls(**data)
 
 
+# Pět pražských zaměření začíná kódem oboru („79-43-K/61 Dvojjazyčné
+# gymnázium"). V klíči nabídky zůstávají, jak jsou — jen na kartě by pak
+# stálo „Dvojjazyčné gymnázium — 79-43-K/61 Dvojjazyčné gymnázium".
+_KOD_KKOV_NA_ZACATKU = re.compile(r"^\s*\d{2}-\d{2}-[A-Z]/\d{2}\s*")
+
+
+def _bez_kodu_kkov(zamereni: str) -> str:
+    return _KOD_KKOV_NA_ZACATKU.sub("", zamereni or "").strip()
+
+
 @dataclass
 class Nabidka:
     """Jedna nabídka = škola (IZO) × obor (KKOV), se vším, co o ní víme."""
@@ -270,7 +289,13 @@ class Nabidka:
     # Pozn.: `obor.kapacita` z rejstříku MŠMT se tu záměrně nepoužívá — je to
     # nejvyšší povolený počet žáků oboru přes všechny ročníky (u čtyřletého
     # oboru zhruba 4× roční nábor), ne počet míst pro letošní přijímačky.
-    zamereni: tuple[str, ...] = ()       # texty zaměření z CERMATu
+    # Zaměření, pod kterým škola obor otevírá (`prijimaci_rizeni.zamereni_oboru`)
+    # — součást identity nabídky, ne jen popisek. Prázdné = škola obor
+    # otevírá jen v jedné variantě. Viz `_rozdel_na_zamereni`.
+    zamereni_nazev: str = ""
+    rok_prijimacek: int | None = None    # poslední rok, za který má nabídka čísla
+    # Kolik nabídek se dělí o tutéž naměřenou křivku (`pasma`); 0 = jen tahle.
+    pasma_sdileno: int = 0
     svp: str | None = None               # název ŠVP (infoabsolvent) — co škola
                                          # pod obecným kódem KKOV doopravdy učí
     # Rozpoznaná zaměření (klíče oblasti.ZAMERENI). `zamereni_kody` jsou
@@ -320,6 +345,20 @@ class Nabidka:
     def typ_popis(self) -> str:
         return oblasti.popis_typu(self.typ)
 
+    @property
+    def obor_plny(self) -> str:
+        """Název oboru i se zaměřením — to, čím se nabídka liší od sesterské.
+
+        Název z rejstříku je u obou variant stejný (`Elektrotechnika`),
+        rozhoduje se podle zaměření (`Automatizace a robotika`).
+        """
+        zamereni = _bez_kodu_kkov(self.zamereni_nazev)
+        # Spousta škol dá do zaměření prostě název oboru („Informační
+        # technologie — Informační technologie"); opakovat ho nemá smysl.
+        if zamereni and zamereni.casefold() != self.obor.casefold():
+            return f"{self.obor} — {zamereni}"
+        return self.obor
+
 
 @dataclass
 class Vysledek:
@@ -349,6 +388,18 @@ class Vysledek:
 # --------------------------------------------------------------------------
 # Načtení nabídek z databáze
 # --------------------------------------------------------------------------
+
+# Klíč nabídky: škola × obor × zaměření. Zaměření je v klíči proto, že se
+# pod jedním kódem KKOV skrývají nabídky, mezi kterými se uchazeč rozhoduje
+# a které se liší i o 84 bodů hranice přijetí (Gymnázium Na Pražačce:
+# Všeobecné 146, Němčina 130, Výtvarka 62).
+#
+# Délka a jazyk studia v klíči **nejsou**: po filtru na denní formu
+# (`FORMA_DENNI`) se jimi v pražské nabídce neliší ani jedna dvojice řádků.
+# Co se pod jedním klíčem přesto sejde, se slije váženým průměrem
+# (`_doplnit_prijimacky`) — tichému zmizení řádku se tak předejde i bez nich.
+Klic = tuple[str, str, str]
+
 
 def nacti_nabidky(conn: sqlite3.Connection) -> list[Nabidka]:
     """Poskládá z databáze všechny denní nabídky pražských SŠ s metrikami."""
@@ -391,20 +442,106 @@ def nacti_nabidky(conn: sqlite3.Connection) -> list[Nabidka]:
             jen_pro_zp=bool(VZOR_SKOLY_PRO_ZP.search(r["organizace"] or "")),
         )
 
-    _doplnit_prijimacky(conn, nabidky)
-    _doplnit_pasma(conn, nabidky)
-    _doplnit_web_profil(conn, nabidky)
-    _doplnit_kvalitu(conn, nabidky)
-    _doplnit_zamereni(nabidky)
-    return list(nabidky.values())
+    rozdelene = _rozdel_na_zamereni(conn, nabidky)
+    _doplnit_prijimacky(conn, rozdelene)
+    _doplnit_pasma(conn, rozdelene)
+    _doplnit_web_profil(conn, rozdelene)
+    _doplnit_kvalitu(conn, rozdelene)
+    _doplnit_zamereni(rozdelene)
+    return list(rozdelene.values())
 
 
-def _doplnit_zamereni(nabidky: dict[tuple[str, str], Nabidka]) -> None:
+def _rozdel_na_zamereni(
+    conn: sqlite3.Connection, nabidky: dict[tuple[str, str], Nabidka],
+) -> dict[Klic, Nabidka]:
+    """Z jedné nabídky na obor udělá tolik nabídek, kolik má obor zaměření.
+
+    Rejstřík MŠMT zná jen obor (`18-20-M/01`), CERMAT k němu přidává
+    zaměření, pod kterým ho škola doopravdy otevírá. Dokud se přes ně
+    počítal vážený průměr, mísila se dohromady čísla nabídek, mezi kterými
+    se uchazeč rozhoduje — a u 26 pražských nabídek se hranice přijetí
+    lišila o 15 bodů a víc.
+
+    Rozděluje se podle **posledního roku, za který škola u oboru čísla má**:
+    co se loni otevíralo, je dnešní nabídka; zaměření, které v něm už není,
+    škola zrušila a nabídka za něj nevzniká (starší řádky za ně pak nemají
+    kam patřit a ignorují se). Obor bez jediného řádku v CERMATu zůstává
+    jednou nabídkou s prázdným zaměřením.
+
+    Spolu s filtrem na denní formu (`FORMA_DENNI`) rozliší zaměření
+    pražskou nabídku beze zbytku — nezůstala ani jedna dvojice řádků, kterou
+    by klíč nerozdělil. Kód na ni přesto připravený je (řádky na tomtéž
+    klíči se slijí, viz `_doplnit_prijimacky`): jinde než v Praze nebo
+    napřesrok se lišit můžou třeba jazykem studia.
+    """
+    posledni: dict[tuple[str, str], int] = {}
+    varianty: dict[tuple[str, str], dict[int, set[tuple[str, str]]]] = {}
+    for r in conn.execute(
+        "SELECT izo, kod_kkov, rok, zamereni_oboru"
+        "  FROM prijimaci_rizeni WHERE kolo = 1 AND forma_vzdelavani = ?",
+        (FORMA_DENNI,),
+    ):
+        zaklad = (r["izo"], r["kod_kkov"])
+        if zaklad not in nabidky:
+            continue
+        posledni[zaklad] = max(posledni.get(zaklad, 0), r["rok"])
+        varianty.setdefault(zaklad, {}).setdefault(r["rok"], set()).add(
+            r["zamereni_oboru"] or ""
+        )
+
+    mimo_prahu = _zamereni_mimo_prahu(conn)
+    out: dict[Klic, Nabidka] = {}
+    for zaklad, nab in nabidky.items():
+        letos = varianty.get(zaklad, {}).get(posledni.get(zaklad, 0)) or {""}
+        for zamereni in sorted(letos):
+            if zamereni and zamereni in mimo_prahu.get(nab.izo, set()):
+                continue        # pobočka mimo Prahu, do pražského průvodce nepatří
+            out[(nab.izo, nab.kod_kkov, zamereni)] = dataclasses.replace(
+                nab, zamereni_nazev=zamereni)
+    return out
+
+
+def _zamereni_mimo_prahu(conn: sqlite3.Connection) -> dict[str, set[str]]:
+    """Zaměření, jejichž název pojmenovává mimopražské místo výuky školy.
+
+    Pět pražských škol učí i mimo Prahu a CERMAT jejich mimopražské třídy
+    vede pod týmž pražským IZO — PORG má pod `79-41-K/81` vedle pražských
+    tříd (hranice 146 a 144) i „8leté PORG Brno" (114) a „8leté PORG
+    Ostrava" (80), policejní škola vedle Prahy i „Bezpečnostní pracovník,
+    Sokolov". V pražském průvodci nemají co dělat.
+
+    Obce se berou z rejstříku (`misto_vyuky.obec`), ne ze seznamu měst
+    v kódu: poznají se tak jen školy, u kterých je mimopražská výuka
+    doložená, a přibude-li další, pozná se sama.
+    """
+    obce: dict[str, set[str]] = {}
+    for r in conn.execute(
+        "SELECT izo, obec FROM misto_vyuky WHERE obvod_prahy IS NULL AND obec IS NOT NULL"
+    ):
+        obce.setdefault(r["izo"], set()).add(r["obec"])
+    if not obce:
+        return {}
+
+    out: dict[str, set[str]] = {}
+    for r in conn.execute(
+        "SELECT DISTINCT izo, zamereni_oboru FROM prijimaci_rizeni WHERE zamereni_oboru <> ''"
+    ):
+        mimo = obce.get(r["izo"])
+        if not mimo:
+            continue
+        text = r["zamereni_oboru"].lower()
+        if any(re.search(rf"\b{re.escape(o.lower())}\b", text) for o in mimo):
+            out.setdefault(r["izo"], set()).add(r["zamereni_oboru"])
+    return out
+
+
+def _doplnit_zamereni(nabidky: dict[Klic, Nabidka]) -> None:
     """Dopočítá rozpoznaná zaměření ze všech textů, které o nabídce máme.
 
     Běží až nakonec, protože skládá dohromady tři zdroje: název oboru
     z rejstříku, název ŠVP a název oboru z webových profilů (ty doplnil
-    `_doplnit_obor`) a texty zaměření z CERMATu (`_doplnit_prijimacky`).
+    `_doplnit_obor`) a zaměření z CERMATu (to je od rozdělení nabídek
+    součást identity, `Nabidka.zamereni_nazev`).
 
     Zaměření, které je doložené u oboru, se zároveň škrtne ze slabšího
     školního seznamu — aby se tentýž signál nezapočítal dvakrát a aby
@@ -413,7 +550,7 @@ def _doplnit_zamereni(nabidky: dict[tuple[str, str], Nabidka]) -> None:
     """
     for nab in nabidky.values():
         nab.zamereni_kody = tuple(sorted(set(nab.zamereni_kody) | set(
-            oblasti.zamereni_textu(nab.obor, nab.svp, *nab.zamereni))))
+            oblasti.zamereni_textu(nab.obor, nab.svp, nab.zamereni_nazev))))
         nab.zamereni_skoly = tuple(sorted(set(nab.zamereni_skoly) - set(nab.zamereni_kody)))
 
 
@@ -443,19 +580,24 @@ def _obvody_podle_izo(conn: sqlite3.Connection) -> dict[str, tuple[str, ...]]:
     return {k: tuple(sorted(v)) for k, v in out.items()}
 
 
-def _doplnit_prijimacky(conn: sqlite3.Connection, nabidky: dict[tuple[str, str], Nabidka]) -> None:
-    """Metriky z CERMAT JPZ 2024+ (1. kolo), agregované přes zaměření oboru.
+def _doplnit_prijimacky(conn: sqlite3.Connection, nabidky: dict[Klic, Nabidka]) -> None:
+    """Metriky z CERMAT JPZ 2024+ (1. kolo) pro konkrétní zaměření oboru.
 
-    Jedna nabídka (IZO × KKOV) může mít v datech víc řádků (zaměření, délky,
-    jazyky studia — viz `docs/datovy-model.md`, tabulka `prijimaci_rizeni`).
-    Hranice přijetí se přes ně počítá **váženým průměrem podle počtu
-    přijatých**, ne minimem: minimum by bralo nejsnáze dostupné zaměření a
-    šanci systematicky nadhodnocovalo. Jednotlivá zaměření se přitom pamatují
-    v `Nabidka.zamereni`, aby šla zobrazit na kartě.
+    Řádek se páruje na nabídku přes celý klíč (IZO × KKOV × zaměření),
+    takže se čísla dvou zaměření téhož oboru nemíchají. Řádky ze
+    starších let, jejichž zaměření už letos v nabídce není, nemají kam
+    patřit a ignorují se — jsou to zrušené nabídky, ne historie té dnešní
+    (viz `_rozdel_na_zamereni`).
+
+    Co klíč nerozliší (dva řádky téhož zaměření, lišící se třeba délkou
+    nebo jazykem studia), se pořád slévá: hranice se přes ně počítá **váženým
+    průměrem podle počtu přijatých**, ne minimem — minimum by bralo tu
+    nejsnáze dostupnou a šanci nadhodnocovalo. V pražské denní nabídce
+    dnes taková dvojice není.
     """
     # (rok -> [součet hodnot × váha, součet vah]) pro každou agregovanou metriku
-    agregace: dict[tuple[str, str], dict[str, dict[int, list[float]]]] = {}
-    posledni_rok = max(ROKY_JPZ)
+    agregace: dict[Klic, dict[str, dict[int, list[float]]]] = {}
+    radky: dict[Klic, list[sqlite3.Row]] = {}
 
     for r in conn.execute(
         """
@@ -463,42 +605,48 @@ def _doplnit_prijimacky(conn: sqlite3.Connection, nabidky: dict[tuple[str, str],
                p.kapacita, p.prihlasky_celkem, p.prijati, p.index_poptavky,
                p.skor_prijati_min_cjma, p.skor_prijati_prumer_cjma
           FROM prijimaci_rizeni p
-         WHERE p.kolo = 1
-        """
+         WHERE p.kolo = 1 AND p.forma_vzdelavani = ?
+        """,
+        (FORMA_DENNI,),
     ):
-        klic = (r["izo"], r["kod_kkov"])
-        nab = nabidky.get(klic)
-        if nab is None:
-            continue
-        rok = r["rok"]
-        a = agregace.setdefault(klic, {"hranice": {}, "prumer": {}, "poptavka": {}})
-        # Váhou je počet přijatých (u poptávky kapacita) — zaměření, kam se
-        # dostalo 90 lidí, má na hranici školy větší vliv než to s 8 přijatými.
-        vaha_prijati = float(max(r["prijati"] or 0, 1))
-        vaha_kapacita = float(max(r["kapacita"] or 0, 1))
-        _pricti_vazene(a["hranice"], rok, r["skor_prijati_min_cjma"], vaha_prijati)
-        _pricti_vazene(a["prumer"], rok, r["skor_prijati_prumer_cjma"], vaha_prijati)
-        _pricti_vazene(a["poptavka"], rok, r["index_poptavky"], vaha_kapacita)
-        if rok == posledni_rok:
-            if r["zamereni_oboru"]:
-                nab.zamereni = tuple(sorted(set(nab.zamereni) | {r["zamereni_oboru"]}))
-            nab.kapacita = _secti(nab.kapacita, r["kapacita"])
-            nab.prihlasky = _secti(nab.prihlasky, r["prihlasky_celkem"])
-            nab.prijati = _secti(nab.prijati, r["prijati"])
+        klic = (r["izo"], r["kod_kkov"], r["zamereni_oboru"] or "")
+        if klic in nabidky:
+            radky.setdefault(klic, []).append(r)
 
-    for klic, a in agregace.items():
+    for klic, skupina in radky.items():
         nab = nabidky[klic]
+        a = agregace.setdefault(klic, {"hranice": {}, "prumer": {}, "poptavka": {}})
+        # Poslední rok se bere za nabídku, ne globálně: škola mohla obor
+        # letos neotevřít a čísla za něj má jen starší.
+        posledni_rok = max(r["rok"] for r in skupina)
+        for r in skupina:
+            rok = r["rok"]
+            vaha_prijati = float(max(r["prijati"] or 0, 1))
+            vaha_kapacita = float(max(r["kapacita"] or 0, 1))
+            _pricti_vazene(a["hranice"], rok, r["skor_prijati_min_cjma"], vaha_prijati)
+            _pricti_vazene(a["prumer"], rok, r["skor_prijati_prumer_cjma"], vaha_prijati)
+            _pricti_vazene(a["poptavka"], rok, r["index_poptavky"], vaha_kapacita)
+            if rok == posledni_rok:
+                nab.kapacita = _secti(nab.kapacita, r["kapacita"])
+                nab.prihlasky = _secti(nab.prihlasky, r["prihlasky_celkem"])
+                nab.prijati = _secti(nab.prijati, r["prijati"])
+        nab.rok_prijimacek = posledni_rok
         nab.hranice = _dokonci_vazene(a["hranice"])
         nab.prumer_prijatych = _dokonci_vazene(a["prumer"])
         nab.poptavka = _dokonci_vazene(a["poptavka"])
 
 
-def _doplnit_pasma(conn: sqlite3.Connection, nabidky: dict[tuple[str, str], Nabidka]) -> None:
+def _doplnit_pasma(conn: sqlite3.Connection, nabidky: dict[Klic, Nabidka]) -> None:
     """Naměřená míra přijetí po bodových pásmech (CERMAT soubory uchazečů).
 
-    Klíčem je REDIZO + KKOV (soubory uchazečů IZO neuvádějí), takže víc škol
-    jedné organizace se stejným oborem sdílí jedna čísla — v pražských datech
-    vzácné, viz komentář u tabulky v schema.sql.
+    Klíčem je REDIZO + KKOV (soubory uchazečů IZO **ani zaměření**
+    neuvádějí), takže jedna čísla sdílí jak víc škol téže organizace se
+    stejným oborem (v pražských datech vzácné, viz schema.sql), tak
+    **všechna zaměření jednoho oboru**. Gymnázium Na Pražačce má pod
+    `79-41-K/61` hranice 146, 130 a 62, ale naměřenou šanci pro všechna tři
+    stejnou. Kolik nabídek si křivku dělí, se zapíše do `pasma_sdileno`,
+    aby to šlo říct na kartě — jinak by uchazeč četl jedno číslo u tří
+    výrazně různě náročných zaměření jako fakt o tom svém.
 
     Bere jen **1. kolo**: druhé kolo je jiná hra (zbylá místa, jiná skladba
     uchazečů) a míchat je dohromady by zkreslilo. Roky 2024–2026 se sčítají,
@@ -521,6 +669,12 @@ def _doplnit_pasma(conn: sqlite3.Connection, nabidky: dict[tuple[str, str], Nabi
         for nab in podle_redizo_kkov.get((r["redizo"], r["kod_kkov"]), ()):
             if r["posouzeno"]:
                 nab.pasma.setdefault(r["pasmo_od"], {})[r["rok"]] = (r["prijato"] or 0, r["posouzeno"])
+
+    for sourozenci in podle_redizo_kkov.values():
+        if len(sourozenci) > 1:
+            for nab in sourozenci:
+                if nab.pasma:
+                    nab.pasma_sdileno = len(sourozenci)
 
 
 def _secti(soucasne: int | None, pridat: int | None) -> int | None:
@@ -549,7 +703,7 @@ def _dokonci_vazene(kam: dict[int, list[float]]) -> dict[int, float]:
 PORADI_ZDROJU: tuple[str, ...] = ("infoabsolvent", "atlas")
 
 
-def _doplnit_web_profil(conn: sqlite3.Connection, nabidky: dict[tuple[str, str], Nabidka]) -> None:
+def _doplnit_web_profil(conn: sqlite3.Connection, nabidky: dict[Klic, Nabidka]) -> None:
     """Školné, plán/skutečnost přijetí, jazyky, DOD a kritéria z `web_profil`.
 
     Bere **všechny** zdroje v tabulce, ne jen infoabsolvent: každý zdroj se
@@ -700,7 +854,7 @@ def _velikost_skoly(text: str | None) -> int | None:
     return (od + do) // 2
 
 
-def _doplnit_kvalitu(conn: sqlite3.Connection, nabidky: dict[tuple[str, str], Nabidka]) -> None:
+def _doplnit_kvalitu(conn: sqlite3.Connection, nabidky: dict[Klic, Nabidka]) -> None:
     """Maturitní výsledky (CERMAT MZ), posun žáků a poslední inspekce ČŠI.
 
     Maturita i inspekce jsou v datech na úrovni **organizace (REDIZO)**, ne
@@ -1339,6 +1493,12 @@ def _varovani(nab: Nabidka, profil: Profil, p: float | None) -> list[str]:
         )
     elif len(nab.hranice) == 1:
         out.append("Hranice přijetí je známá jen za jeden rok — odhad je nejistý.")
+    if nab.pasma_sdileno and p is not None:
+        out.append(
+            f"Naměřená šance je za celý obor {nab.kod_kkov} dohromady "
+            f"({nab.pasma_sdileno} zaměření) — data o uchazečích zaměření neuvádějí. "
+            f"U zaměření s vyšší hranicí je ve skutečnosti nižší, u snazšího vyšší."
+        )
     if nab.hranice and len(nab.hranice) >= 2:
         rozpeti = max(nab.hranice.values()) - min(nab.hranice.values())
         if rozpeti >= 25:
@@ -1383,6 +1543,11 @@ def vyber_top(vysledky: list[Vysledek], pocet: int = 5, max_na_skolu: int = 1) -
     nedozví, že táž škola nabízí i obor, který by chtěl víc (nebo na který
     má výrazně vyšší šanci). Zapíše se proto do `dalsi_obory` té nabídky,
     která se zobrazila. Proto se prochází celý seznam, ne jen prvních pět.
+
+    Od rozdělení nabídek podle zaměření sem padají i sesterská zaměření
+    téhož oboru (Gymnázium Na Pražačce: Všeobecné / Němčina / Výtvarka),
+    proto se vypisuje `obor_plny`, ne `obor` — jinak by se v seznamu
+    objevilo třikrát „Gymnázium".
     """
     out: list[Vysledek] = []
     zobrazene: dict[str, list[Vysledek]] = {}
@@ -1393,7 +1558,8 @@ def vyber_top(vysledky: list[Vysledek], pocet: int = 5, max_na_skolu: int = 1) -
             posledni = uz_zobrazene[-1]
             if len(posledni.dalsi_obory) < 3:
                 sance = "šance neznámá" if v.sance is None else f"šance {v.sance * 100:.0f} %"
-                posledni.dalsi_obory.append(f"{v.nabidka.obor} ({v.nabidka.kod_kkov}, {sance})")
+                posledni.dalsi_obory.append(
+                    f"{v.nabidka.obor_plny} ({v.nabidka.kod_kkov}, {sance})")
             continue
         if len(out) < pocet:
             uz_zobrazene.append(v)
@@ -1750,7 +1916,7 @@ def vypis_kartu(poradi: int, v: Vysledek, role: str | None = None) -> None:
     if role:
         hlavicka += f"   [{role}]"
     print("\n" + hlavicka)
-    print(f"   {nab.obor} ({nab.kod_kkov}, {nab.typ_popis})")
+    print(f"   {nab.obor_plny} ({nab.kod_kkov}, {nab.typ_popis})")
     print(f"   {nab.adresa}, {', '.join(nab.obvody) or 'Praha'}"
           + (f" · {nab.www}" if nab.www else ""))
     sance = "neznámá" if v.sance is None else f"{v.sance * 100:.0f} %"

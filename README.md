@@ -408,7 +408,8 @@ Implementace: [`jaknastredni/pruvodce.py`](jaknastredni/pruvodce.py) +
 [`jaknastredni/oblasti.py`](jaknastredni/oblasti.py).
 
 Průvodce nic nestahuje a do databáze nezapisuje — jen ji čte. Základní
-jednotkou je **nabídka = škola × obor** (623 denních nabídek pražských SŠ),
+jednotkou je **nabídka = škola × obor × zaměření** (702 denních nabídek
+pražských SŠ),
 protože přihláška se podává na obor a všechna čísla (kapacita, poměr
 přihlášek, hranice přijetí) jsou oborová.
 
@@ -457,7 +458,7 @@ povinná lékařská prohlídka (570). Názvy klíčů se mezi scrapery liší
 záměrně — aliasy řeší `_prvni()` v `pruvodce.py`, ne přejmenování ve
 scraperech.
 
-**Šance na přijetí** se u 550 z 623 nabídek **neodhaduje, ale měří**: ze
+**Šance na přijetí** se u 629 ze 702 nabídek **neodhaduje, ale měří**: ze
 souborů uchazečů CERMAT (tabulka `prijimacky_pasmo`, importér
 `jaknastredni.cermat_uchazeci`) se spočítá skutečný podíl přijatých v okolí
 uchazečova bodového pásma — „ze 115 lidí s podobným skórem se jich dostalo

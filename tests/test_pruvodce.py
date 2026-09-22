@@ -1,6 +1,7 @@
 """Testy průvodce výběrem školy.
 
-Fixtura je malá umělá databáze (4 školy, 5 nabídek) poskládaná ze stejných
+Fixtura je malá umělá databáze (4 školy, 5 nabídek — IT obor se dělí na dvě
+zaměření, takže průvodce jich vidí 5) poskládaná ze stejných
 tabulek jako ostrá databáze — testy tedy nepotřebují `data/jaknastredni.db`
 ani syrová data. Čísla jsou vymyšlená, ale ve tvaru, v jakém je ukládají
 importéry (% skór 0–200, REDIZO jako text s vedoucí nulou, školné v Kč).
@@ -72,14 +73,14 @@ def _obor(conn, izo, kod, nazev):
 
 
 def _pz(conn, izo, redizo, kod, rok, *, kapacita, prihlasky, prijati, hranice=None,
-        zamereni="", poptavka=None):
+        zamereni="", poptavka=None, forma="den", delka="4", jazyk="CJ"):
     conn.execute(
         """INSERT INTO prijimaci_rizeni
            (izo, kod_kkov, rocnik, rok, kolo, zamereni_oboru, forma_vzdelavani,
             delka_studia, jazyk_studia, redizo, kapacita, index_poptavky,
             prihlasky_celkem, prijati, skor_prijati_min_cjma)
-           VALUES (?,?,9,?,1,?,'denní','4','CJ',?,?,?,?,?,?)""",
-        (izo, kod, rok, zamereni, redizo, kapacita,
+           VALUES (?,?,9,?,1,?,?,?,?,?,?,?,?,?,?)""",
+        (izo, kod, rok, zamereni, forma, delka, jazyk, redizo, kapacita,
          poptavka if poptavka is not None else prihlasky / kapacita,
          prihlasky, prijati, hranice),
     )
@@ -94,7 +95,8 @@ def conn():
     for rok, hranice in ((2024, 150.0), (2025, 156.0), (2026, 154.0)):
         _pz(c, "100000001", "600000001", "79-41-K/41", rok,
             kapacita=30, prihlasky=400, prijati=30, hranice=hranice)
-    # 2) Průmyslovka s IT oborem, dostupná, dvě zaměření v jednom KKOV.
+    # 2) Průmyslovka s IT oborem, dostupná, dvě zaměření v jednom KKOV —
+    #    průvodce z nich udělá dvě samostatné nabídky (viz `_rozdel_na_zamereni`).
     _skola(c, "600000002", "100000002", "SPŠ Testovací", "Praha 9")
     _obor(c, "100000002", "18-20-M/01", "Informační technologie")
     _pz(c, "100000002", "600000002", "18-20-M/01", 2026, zamereni="programování",
@@ -136,22 +138,73 @@ def conn():
 # --------------------------------------------------------------------------
 
 def test_nacti_nabidky_zaklad(conn):
-    nabidky = {(n.izo, n.kod_kkov): n for n in pruvodce.nacti_nabidky(conn)}
-    assert len(nabidky) == 4
-    gympl = nabidky[("100000001", "79-41-K/41")]
+    nabidky = {(n.izo, n.kod_kkov, n.zamereni_nazev): n for n in pruvodce.nacti_nabidky(conn)}
+    assert len(nabidky) == 5      # 4 obory, z toho IT ve dvou zaměřeních
+    gympl = nabidky[("100000001", "79-41-K/41", "")]
     assert gympl.typ == "G4" and gympl.trida_prihlasky == 9
     assert gympl.hranice == {2024: 150.0, 2025: 156.0, 2026: 154.0}
     assert gympl.obvody == ("Praha 6",)
     assert gympl.zrizovatel_verejny is True
 
 
-def test_hranice_se_pres_zamereni_vazi_poctem_prijatych(conn):
-    """Zaměření s 60 přijatými má na hranici větší vliv než to s 10."""
-    it = next(n for n in pruvodce.nacti_nabidky(conn) if n.kod_kkov == "18-20-M/01")
-    # (100*60 + 60*10) / 70 = 94.3 — ne prostý průměr 80 a ne minimum 60.
-    assert it.hranice[2026] == pytest.approx((100 * 60 + 60 * 10) / 70, abs=0.1)
-    assert it.kapacita == 70 and it.prijati == 70
-    assert set(it.zamereni) == {"programování", "sítě"}
+def test_zamereni_je_samostatna_nabidka(conn):
+    """Dřív se z hranic 100 a 60 počítal vážený průměr 94 — a platil pro obojí."""
+    it = {n.zamereni_nazev: n for n in pruvodce.nacti_nabidky(conn)
+          if n.kod_kkov == "18-20-M/01"}
+    assert set(it) == {"programování", "sítě"}
+    assert it["programování"].hranice[2026] == 100.0
+    assert it["sítě"].hranice[2026] == 60.0
+    # Kapacita a přihlášky se taky nesčítají přes zaměření.
+    assert (it["programování"].kapacita, it["programování"].prijati) == (60, 60)
+    assert (it["sítě"].kapacita, it["sítě"].prijati) == (10, 10)
+    # Na kartě se obor od sesterského pozná jen podle zaměření.
+    assert it["sítě"].obor_plny == "Informační technologie — sítě"
+
+
+def test_co_rozlisit_nejde_se_porad_sleva(conn):
+    """Co klíč nerozliší (tady jazyk studia), musí se slít jako dřív.
+
+    V pražské denní nabídce už taková dvojice není, ale kód na ni pořád
+    musí být připravený — jinak by jeden z řádků tiše zmizel.
+    """
+    _pz(conn, "100000001", "600000001", "79-41-K/41", 2026, jazyk="AJ",
+        kapacita=10, prihlasky=30, prijati=10, hranice=60.0)
+    conn.commit()
+    gympl = next(n for n in pruvodce.nacti_nabidky(conn) if n.redizo == "600000001")
+    # (154*30 + 60*10) / 40 = 130.5 — vážený průměr podle přijatých, ne minimum.
+    assert gympl.hranice[2026] == pytest.approx((154 * 30 + 60 * 10) / 40, abs=0.1)
+
+
+def test_jina_nez_denni_forma_do_hranice_nepatri(conn):
+    """Regrese: dálkové studium má jinou hranici a mísilo se do denní.
+
+    Českoslovanská akademie má pod `63-41-M/02` denní hranici 108 a dálkovou
+    40; SŠ gastronomická u `65-42-M/01` denní 108 a kombinovanou 14. Průvodce
+    je pro žáky ZŠ, tedy o denním studiu — nedenní řádky do něj nepatří.
+    """
+    _pz(conn, "100000001", "600000001", "79-41-K/41", 2026, forma="dal", delka="5",
+        kapacita=30, prihlasky=30, prijati=10, hranice=40.0)
+    conn.commit()
+    gympl = next(n for n in pruvodce.nacti_nabidky(conn) if n.redizo == "600000001")
+    assert gympl.hranice[2026] == 154.0        # ne vážený průměr se 40
+    assert gympl.kapacita == 30
+
+
+def test_zamereni_pobocky_mimo_prahu_se_vyradi(conn):
+    """PORG vede třídy v Brně a Ostravě pod pražským IZO — do pětice nepatří."""
+    conn.execute(
+        "INSERT INTO misto_vyuky (izo, id_mista, obec, obvod_prahy) VALUES (?,?,?,NULL)",
+        ("100000001", "m1", "Brno"),
+    )
+    _pz(conn, "100000001", "600000001", "79-41-K/41", 2026, zamereni="8leté PORG Brno",
+        kapacita=26, prihlasky=30, prijati=26, hranice=80.0)
+    _pz(conn, "100000001", "600000001", "79-41-K/41", 2026, zamereni="Praha 4",
+        kapacita=26, prihlasky=90, prijati=26, hranice=150.0)
+    conn.commit()
+    zamereni = {n.zamereni_nazev for n in pruvodce.nacti_nabidky(conn)
+                if n.redizo == "600000001"}
+    assert "8leté PORG Brno" not in zamereni
+    assert "Praha 4" in zamereni
 
 
 def test_nekona_se_neni_talentovka(conn):
@@ -216,7 +269,7 @@ def test_filtr_tridy(conn):
     nabidky = pruvodce.nacti_nabidky(conn)
     # Z 5. třídy (osmiletá gymnázia) v téhle fixtuře není nic.
     assert pruvodce.ohodnot(pruvodce.Profil(trida=5), nabidky) == []
-    assert len(pruvodce.ohodnot(pruvodce.Profil(trida=9), nabidky)) == 4
+    assert len(pruvodce.ohodnot(pruvodce.Profil(trida=9), nabidky)) == 5
 
 
 def test_filtr_skolneho(conn):
@@ -230,7 +283,8 @@ def test_filtr_skolneho(conn):
 def test_filtr_oblasti(conn):
     nabidky = pruvodce.nacti_nabidky(conn)
     it = pruvodce.ohodnot(pruvodce.Profil(trida=9, oblasti_zajmu=["it"]), nabidky)
-    assert [v.nabidka.kod_kkov for v in it] == ["18-20-M/01"]
+    assert [v.nabidka.kod_kkov for v in it] == ["18-20-M/01", "18-20-M/01"]
+    assert {v.nabidka.zamereni_nazev for v in it} == {"programování", "sítě"}
 
 
 def test_jazyk_vazi_ale_nefiltruje(conn):
@@ -381,7 +435,7 @@ def test_export_web_nese_nabidky_i_konstanty(conn):
     from jaknastredni import export_web
 
     data = export_web.export(conn)
-    assert len(data["nabidky"]) == 4
+    assert len(data["nabidky"]) == 5
     # Web nemá mít konstanty opsané u sebe — čte je z exportu.
     assert data["konstanty"]["slozky_skore"] == pruvodce.SLOZKY_SKORE
     assert data["konstanty"]["sigma_zaklad"] == pruvodce.SIGMA_ZAKLAD
@@ -826,3 +880,36 @@ def test_export_vynecha_svp_shodne_s_nazvem_oboru(conn):
     _s_popisem(conn, "600000005", "79-41-K/41", svp="Gymnázium")
     podle_izo = {n["izo"]: n for n in export_web.export(conn)["nabidky"]}
     assert "svp" not in podle_izo["100000005"]
+
+
+def test_obor_plny_neopakuje_nazev_ani_kod(conn):
+    """Zaměření bývá jen opis názvu oboru, občas i s kódem KKOV před ním."""
+    def nab(zamereni):
+        return pruvodce.Nabidka(
+            izo="1", redizo="6", skola="S", organizace="S", kod_kkov="79-41-K/41",
+            obor="Gymnázium", typ="G4", trida_prihlasky=9, obvody=(), adresa="",
+            zrizovatel_verejny=True, zamereni_nazev=zamereni)
+    assert nab("").obor_plny == "Gymnázium"
+    assert nab("Gymnázium").obor_plny == "Gymnázium"
+    assert nab("79-41-K/81 Gymnázium").obor_plny == "Gymnázium"
+    assert nab("79-41-K/81").obor_plny == "Gymnázium"
+    assert nab("Výtvarná výchova").obor_plny == "Gymnázium — Výtvarná výchova"
+
+
+def test_sdilena_namerena_krivka_se_prizna(conn):
+    """Pásma jsou klíčovaná REDIZO+KKOV, zaměření v nich není — karta to řekne."""
+    for pasmo, prijato, celkem in ((100, 5, 20), (150, 15, 20)):
+        conn.execute(
+            "INSERT INTO prijimacky_pasmo (redizo, kod_kkov, rok, kolo, pasmo_od,"
+            " prihlasek, prijato, nedostatecna_kapacita, nesplneni_podminek,"
+            " vyssi_priorita, vzdal_se) VALUES ('600000002','18-20-M/01',2026,1,?,?,?,?,0,0,0)",
+            (pasmo, celkem, prijato, celkem - prijato),
+        )
+    conn.commit()
+    it = {n.zamereni_nazev: n for n in pruvodce.nacti_nabidky(conn)
+          if n.kod_kkov == "18-20-M/01"}
+    assert it["sítě"].pasma_sdileno == 2
+    profil = pruvodce.Profil(trida=9, skor_cj=75.0, skor_ma=75.0)
+    v = next(v for v in pruvodce.ohodnot(profil, list(it.values()))
+             if v.nabidka.zamereni_nazev == "sítě")
+    assert any("za celý obor" in x for x in v.varovani), v.varovani
