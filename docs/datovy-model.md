@@ -143,18 +143,20 @@ zkouška/výuční list), délka studia, `planovany_pocet_prijmout` (plán
 přijmout na příští rok), **`loni_prihlaseni`/`loni_prijati`** (na rozdíl od
 infoabsolventu jde o **skutečný** loňský počet přijatých, ne jen plán —
 jediné místo v projektu, kde je toto číslo k dispozici zdarma, viz README
-bod 4), přijímací zkoušky (předměty), `plp`/`ozp` (bool), a
-`doporuceny_prospech` (float) — pole, které žádný jiný ověřený zdroj v
-projektu nemá. Adresa, IČ, ředitel/ka, zřizovatel a kontakty se z Atlasu
-záměrně nevytahují ze stejného důvodu jako u infoabsolventu. Placená
-statistika JPZ/maturit u maturitních oborů (odkaz "Statistika",
+bod 4), přijímací zkoušky (předměty), `plp`/`ozp` (bool), roční školné
+(`skolne_rocne`), a `doporuceny_prospech` (float) — pole, které žádný jiný
+ověřený zdroj v projektu nemá. Adresa, IČ, ředitel/ka, zřizovatel a kontakty
+se z Atlasu záměrně nevytahují ze stejného důvodu jako u infoabsolventu.
+Placená statistika JPZ/maturit u maturitních oborů (odkaz "Statistika",
 `?obor=...`) se nikdy nestahuje ani neparsuje — viz modulový docstring
 `atlas.py` a docs/research/atlas-infoabsolvent.md, oddíl 1.4 a 3 (bod 1).
 Atlas nemá REDIZO v URL (na rozdíl od infoabsolventu) — čte se z textu
 detailu školy, interní ID Atlasu v URL seznamu (`/ss{id}-slug`) se
 nepoužívá jako klíč. Zdroj:
 [`research/atlas-infoabsolvent.md`](research/atlas-infoabsolvent.md),
-oddíl 1. **Implementováno, doposud nespuštěno na produkčních datech.**
+oddíl 1. Stav po běhu 22. 9. 2026: 215/215 pražských SŠ z Atlasova seznamu,
+738 řádků oborů (703 s loňským skutečným počtem přijatých, 86 s doporučeným
+prospěchem).
 
 Bez cizího klíče na `organizace` u obou zdrojů (stejný důvod jako
 `maturita`). Žádné osobní údaje nad rámec toho, co už ukládá MŠMT
@@ -181,9 +183,9 @@ oddíly 6, 13.
 
 Všechny tabulky navržené v tomto dokumentu jsou nyní implementované (viz
 sekci výše), včetně Atlasu školství jako druhého zdroje (`zdroj = 'atlas'`)
-do existující tabulky `web_profil` (`jaknastredni/atlas.py`) — implementován,
-doposud nespuštěn na produkčních datech (viz README bod 4). Žádné další
-plánované rozšíření datového modelu aktuálně není otevřené.
+do existující tabulky `web_profil` (`jaknastredni/atlas.py`), spuštěného na
+215/215 pražských SŠ (viz README bod 4). Žádné další plánované rozšíření
+datového modelu aktuálně není otevřené.
 
 ## Spojování zdrojů
 

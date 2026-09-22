@@ -21,9 +21,9 @@ kvalita, maturitní výsledky, uplatnění absolventů apod.).
   spuštěn na všech 211 pražských SŠ, viz níže.
 - Importér výsledků JPZ CERMAT, nový formát (`jaknastredni/cermat_jpz.py`)
   funguje pro roky 2024–2026 (obě kola), viz níže.
-- Scraper Atlas školství (`jaknastredni/atlas.py`) je implementován (druhý
-  zdroj do `web_profil`, `zdroj = 'atlas'`) — doposud nespuštěn na produkčních
-  datech, viz níže.
+- Scraper Atlas školství (`jaknastredni/atlas.py`) funguje a byl spuštěn na
+  všech 215 pražských SŠ nabízených Atlasem (druhý zdroj do `web_profil`,
+  `zdroj = 'atlas'`), viz níže.
 - Proces stažení dat a sestavení databáze je rozdělený na dva kroky
   (`jaknastredni.fetch_all` a `jaknastredni.build_db`), viz "Rychlý start".
 
@@ -73,9 +73,14 @@ scrapovaný profil ze zdroje `infoabsolvent` pro všech 211 pražských SŠ
 Stažené surové soubory zůstávají v `data/raw/msmt/`, `data/raw/cermat/`
 a `data/raw/csi/` s rokem/datem výstupu v názvu; `web_profil` je čistě
 odvozená data přímo v databázi, žádné syrové HTML se needukládá (viz níže
-u infoabsolventu). Scraper Atlas školství (`jaknastredni/atlas.py`, zdroj
-`atlas` ve stejné tabulce `web_profil`) je implementován, ale doposud
-nespuštěn na produkčních datech — viz bod 4 níže.
+u infoabsolventu). Druhý zdroj do `web_profil`, `atlas` (Atlas školství,
+`jaknastredni/atlas.py`), byl spuštěn na všech **215/215** pražských SŠ
+nabízených Atlasem (naposledy staženo 22. 9. 2026) — 738 řádků oborů, z toho
+703 (95 %) má i skutečný loňský počet přijatých (na rozdíl od infoabsolventu,
+který má jen loňský plán) a 86 řádků doporučený průměrný prospěch. Stejně
+jako u infoabsolventu se syrové HTML ukládá do `data/raw/atlas/`
+(`{atlas_id}.html` + `_manifest.json`), ne přímo redizo — to se dozví až
+import z detailu stránky, viz bod 4 níže.
 
 ## Rozhodnutí o vývoji a ukládání dat
 
@@ -249,21 +254,31 @@ Podrobně: [`docs/research/atlas-infoabsolvent.md`](docs/research/atlas-infoabso
   vyžaduje účet (nezjištěno). VOP definují službu „pro osobní potřebu" se
   zákazem poskytování třetím osobám — placenou část neautomatizovat.
   Vzhledem k tomu, že totéž je zdarma v CERMAT XLSX, není důvod platit.
-- **Scraper implementován** (`jaknastredni/atlas.py` → tabulka `web_profil`,
-  zdroj `atlas`, JSON blob v poli `data`, stejná architektura fetch/import
-  jako u infoabsolventu — viz bod 5 níže), **doposud nespuštěn na produkčních
-  datech**. Stahuje jen bezplatná pole (dny otevřených dveří, doplňující
-  informace, cizí jazyky, ubytování/stravování a tabulku oborů s KKOV,
-  plánovaným počtem přijímaných, **loňským skutečným počtem
-  přihlášených/přijatých** — na rozdíl od infoabsolventu, který uvádí jen
-  loňský PLÁN přijmout, ne kolik jich bylo skutečně přijato — přijímacími
-  zkouškami, PLP, OZP a doporučeným průměrným prospěchem, což je pole, které
-  žádný jiný ověřený zdroj v tomto projektu nemá). Placený odkaz "Statistika"
+- **Scraper implementován a spuštěn** (`jaknastredni/atlas.py` → tabulka
+  `web_profil`, zdroj `atlas`, JSON blob v poli `data`, stejná architektura
+  fetch/import jako u infoabsolventu — viz bod 5 níže). Stahuje jen
+  bezplatná pole (dny otevřených dveří, doplňující informace, cizí jazyky,
+  ubytování/stravování a tabulku oborů s KKOV, plánovaným počtem
+  přijímaných, **loňským skutečným počtem přihlášených/přijatých** — na
+  rozdíl od infoabsolventu, který uvádí jen loňský PLÁN přijmout, ne kolik
+  jich bylo skutečně přijato — přijímacími zkouškami, PLP, OZP, ročním
+  školným a doporučeným průměrným prospěchem, což je pole, které žádný jiný
+  ověřený zdroj v tomto projektu nemá). Placený odkaz "Statistika"
   (historické výsledky JPZ/maturit u maturitních oborů) se záměrně
   nestahuje ani nenásleduje — viz bod 1.4 a 3 v research dokumentu výše
   (VOP definují službu jako "pro osobní potřebu" se zákazem poskytování
   třetí osobě, a totéž je zdarma v CERMAT). REDIZO se na rozdíl od URL
   seznamu (interní ID Atlasu, `/ss{id}-slug`) čte až z textu detailu školy.
+  Živé stažení (22. 9. 2026) potvrdilo **215/215** škol z Atlasova seznamu
+  pro Prahu úspěšně staženo a naimportováno (0 chybí HTML, 0 bez REDIZO) —
+  o jednu víc než textový součet "Nalezeno 214 škol" v research dokumentu
+  (drobný rozdíl proti dřívějšímu průzkumu, neřešeno dál). Smoke test proti
+  živému webu zároveň odhalil, že první verze parseru (psaná jen podle
+  textového popisu struktury bez živého ověření) měla víc chybných
+  selektorů — `data-maxpages` je na vnořeném elementu, obor je rozložený do
+  dvou `<tr>` (hlavní řádek + řádek se školným/prospěchem), název oboru a
+  kód KKOV jsou oddělené elementy a číselné hodnoty používají pevnou mezeru
+  jako oddělovač tisíců — parser i testy byly opraveny podle skutečného HTML.
 
 ### 5. infoabsolvent.cz (NPI ČR) ✅
 Podrobně: [`docs/research/atlas-infoabsolvent.md`](docs/research/atlas-infoabsolvent.md)
@@ -395,11 +410,10 @@ JPZ). Rejstřík MŠMT je referenční množina.
    kritéria, školné, jazyky, vybavení~~ hotovo (`jaknastredni/infoabsolvent.py`,
    tabulka `web_profil`, zdroj `infoabsolvent`). ~~**Scraper Atlas
    školství** pro doporučený prospěch, skutečný loňský počet přijatých a
-   jako druhý zdroj pro křížovou kontrolu~~ implementováno
-   (`jaknastredni/atlas.py`, tabulka `web_profil`, zdroj `atlas`), doposud
-   nespuštěno na produkčních datech (viz bod 4 v "Zdroje dat" výše). Vždy
-   REDIZO z detailu/URL infoabsolventu, resp. z textu detailu Atlasu, ne
-   z interního ID Atlasu v URL seznamu.
+   jako druhý zdroj pro křížovou kontrolu~~ hotovo (`jaknastredni/atlas.py`,
+   tabulka `web_profil`, zdroj `atlas`, 215/215 škol, viz bod 4 v "Zdroje
+   dat" výše). Vždy REDIZO z detailu/URL infoabsolventu, resp. z textu
+   detailu Atlasu, ne z interního ID Atlasu v URL seznamu.
 5. Prezentace: inspirovat se agregátorem (bod 6), ale metriky počítat
    z oficiálních dat s uvedeným vzorcem.
 

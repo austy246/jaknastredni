@@ -1,0 +1,867 @@
+{
+  "stazeno": "2026-09-22",
+  "region": "hlm-praha",
+  "list_url": "https://www.atlasskolstvi.cz/stredni-skoly?region=hlm-praha",
+  "schools": [
+    {
+      "atlas_id": "16",
+      "url": "https://www.atlasskolstvi.cz/ss16-stredni-prumyslova-skola-strojnicka-skola-hlavniho-mesta-prahy-praha-1-betlemska-4287"
+    },
+    {
+      "atlas_id": "78",
+      "url": "https://www.atlasskolstvi.cz/ss78-stredni-skola-gastronomicka-a-hotelova-s-r-o"
+    },
+    {
+      "atlas_id": "3",
+      "url": "https://www.atlasskolstvi.cz/ss3-anglicko-ceske-gymnazium-amazon-s-r-o"
+    },
+    {
+      "atlas_id": "1370",
+      "url": "https://www.atlasskolstvi.cz/ss1370-gymnazium-fostra-international-s-r-o"
+    },
+    {
+      "atlas_id": "152",
+      "url": "https://www.atlasskolstvi.cz/ss152-obchodni-akademie-praha-s-r-o"
+    },
+    {
+      "atlas_id": "73",
+      "url": "https://www.atlasskolstvi.cz/ss73-michael--stredni-skola-gymnazium-a-vyssi-odborna-skola-s-r-o"
+    },
+    {
+      "atlas_id": "167",
+      "url": "https://www.atlasskolstvi.cz/ss167-stredni-skola-medialni-grafiky-a-tisku-s-r-o"
+    },
+    {
+      "atlas_id": "187",
+      "url": "https://www.atlasskolstvi.cz/ss187-stredni-odborna-skola-automobilni-informatiky-a-gymnazium"
+    },
+    {
+      "atlas_id": "161",
+      "url": "https://www.atlasskolstvi.cz/ss161-stredni-odborna-skola-umeleckoremeslna-s-r-o"
+    },
+    {
+      "atlas_id": "81",
+      "url": "https://www.atlasskolstvi.cz/ss81-skola-mezinarodnich-a-verejnych-vztahu-praha-stredni-odborna-skola-gymnazium-s-r-o"
+    },
+    {
+      "atlas_id": "68",
+      "url": "https://www.atlasskolstvi.cz/ss68-akademie-remesel-praha--stredni-skola-technicka"
+    },
+    {
+      "atlas_id": "1371",
+      "url": "https://www.atlasskolstvi.cz/ss1371-akademie-systemove-gastronomie--stredni-skola-s-r-o"
+    },
+    {
+      "atlas_id": "131",
+      "url": "https://www.atlasskolstvi.cz/ss131-art-econ--gymnazium-a-stredni-odborna-skola-praha-s-r-o"
+    },
+    {
+      "atlas_id": "55",
+      "url": "https://www.atlasskolstvi.cz/ss55-educanet--gymnazium-stredni-odborna-skola-a-zakladni-skola-praha-s-r-o"
+    },
+    {
+      "atlas_id": "183",
+      "url": "https://www.atlasskolstvi.cz/ss183-obchodni-akademie-praha-10-heroldovy-sady-1"
+    },
+    {
+      "atlas_id": "75",
+      "url": "https://www.atlasskolstvi.cz/ss75-stredni-prumyslova-skola-stavebni-josefa-gocara-praha-4-druzstevni-ochoz-3"
+    },
+    {
+      "atlas_id": "101",
+      "url": "https://www.atlasskolstvi.cz/ss101-stredni-skola-dostihoveho-sportu-a-jezdectvi"
+    },
+    {
+      "atlas_id": "172",
+      "url": "https://www.atlasskolstvi.cz/ss172-stredni-skola-podnikani-a-gastronomie"
+    },
+    {
+      "atlas_id": "1384",
+      "url": "https://www.atlasskolstvi.cz/ss1384-gaely--stredni-skola-s-r-o"
+    },
+    {
+      "atlas_id": "1398",
+      "url": "https://www.atlasskolstvi.cz/ss1398-gymnazium-a-sportovni-gymnazium-se-zamerenim-na-esporty-s-r-o"
+    },
+    {
+      "atlas_id": "351",
+      "url": "https://www.atlasskolstvi.cz/ss351-stredni-odborne-uciliste-tradicnich-remesel-a-vyssi-odborna-skola-spol-s-r-o"
+    },
+    {
+      "atlas_id": "154",
+      "url": "https://www.atlasskolstvi.cz/ss154-soukroma-stredni-odborna-skola-start-s-r-o"
+    },
+    {
+      "atlas_id": "156",
+      "url": "https://www.atlasskolstvi.cz/ss156-soukroma-stredni-skola-vypocetni-techniky-s-r-o"
+    },
+    {
+      "atlas_id": "163",
+      "url": "https://www.atlasskolstvi.cz/ss163-stredni-prumyslova-skola-zememericka-a-geograficke-gymnazium-praha"
+    },
+    {
+      "atlas_id": "51",
+      "url": "https://www.atlasskolstvi.cz/ss51-stredni-skola-knizni-kultury-s-r-o"
+    },
+    {
+      "atlas_id": "1",
+      "url": "https://www.atlasskolstvi.cz/ss1-1-slovanske-gymnazium-a-jazykova-skola-s-pravem-statni-jazykove-zkousky"
+    },
+    {
+      "atlas_id": "151",
+      "url": "https://www.atlasskolstvi.cz/ss151-bezpecnostne-pravni-akademie-s-r-o-stredni-skola"
+    },
+    {
+      "atlas_id": "141",
+      "url": "https://www.atlasskolstvi.cz/ss141-cirkevni-stredni-skola-jana-boska"
+    },
+    {
+      "atlas_id": "74",
+      "url": "https://www.atlasskolstvi.cz/ss74-eduso--stredni-odborna-skola-multimedialni-a-reklamni-tvorby-s-r-o"
+    },
+    {
+      "atlas_id": "1356",
+      "url": "https://www.atlasskolstvi.cz/ss1356-evropska-akademie-vzdelavani-stredni-odborne-uciliste-a-stredni-odborna-skola-s-r-o"
+    },
+    {
+      "atlas_id": "1402",
+      "url": "https://www.atlasskolstvi.cz/ss1402-gymnazium-bezpecnostne-pravni-s-r-o"
+    },
+    {
+      "atlas_id": "174",
+      "url": "https://www.atlasskolstvi.cz/ss174-gymnazium-bratri-capku-a-prvni-ceske-soukrome-stredni-odborne-uciliste-s-r-o"
+    },
+    {
+      "atlas_id": "125",
+      "url": "https://www.atlasskolstvi.cz/ss125-gymnazium-praha-8-u-libenskeho-zamku-1"
+    },
+    {
+      "atlas_id": "182",
+      "url": "https://www.atlasskolstvi.cz/ss182-hotelova-skola-praha-10-vrsovicka-43"
+    },
+    {
+      "atlas_id": "1317",
+      "url": "https://www.atlasskolstvi.cz/ss1317-krestanska-stredni-skola-zakladni-skola-a-materska-skola-elijas-praha-4-michle"
+    },
+    {
+      "atlas_id": "49",
+      "url": "https://www.atlasskolstvi.cz/ss49-obchodni-akademie-praha-3-kubelikova-37"
+    },
+    {
+      "atlas_id": "1331",
+      "url": "https://www.atlasskolstvi.cz/ss1331-scioskola-zizkov--stredni-skola-s-r-o"
+    },
+    {
+      "atlas_id": "102",
+      "url": "https://www.atlasskolstvi.cz/ss102-stredni-skola-a-vyssi-odborna-skola-umelecka-a-remeslna"
+    },
+    {
+      "atlas_id": "159",
+      "url": "https://www.atlasskolstvi.cz/ss159-skola-eu-praha-stredni-odborna-skola-a-gymnazium"
+    },
+    {
+      "atlas_id": "149",
+      "url": "https://www.atlasskolstvi.cz/ss149-the-english-college-in-prague--anglicke-gymnazium-o-p-s"
+    },
+    {
+      "atlas_id": "169",
+      "url": "https://www.atlasskolstvi.cz/ss169-vyssi-odborna-skola-informacnich-studii-a-stredni-skola-elektrotechniky-multimedii-a-informatiky"
+    },
+    {
+      "atlas_id": "1332",
+      "url": "https://www.atlasskolstvi.cz/ss1332-1-it-gymnazium-s-r-o"
+    },
+    {
+      "atlas_id": "111",
+      "url": "https://www.atlasskolstvi.cz/ss111-anglo-nemecka-obchodni-akademie-a-s"
+    },
+    {
+      "atlas_id": "1354",
+      "url": "https://www.atlasskolstvi.cz/ss1354-gymnazium-artion"
+    },
+    {
+      "atlas_id": "6",
+      "url": "https://www.atlasskolstvi.cz/ss6-gymnazium-jiriho-gutha-jarkovskeho-praha-1-truhlarska-22"
+    },
+    {
+      "atlas_id": "177",
+      "url": "https://www.atlasskolstvi.cz/ss177-gymnazium-praha-10-voderadska-2"
+    },
+    {
+      "atlas_id": "112",
+      "url": "https://www.atlasskolstvi.cz/ss112-obchodni-akademie-a-gymnazium-bubenec"
+    },
+    {
+      "atlas_id": "1393",
+      "url": "https://www.atlasskolstvi.cz/ss1393-school-for-future--gymnazium-a-zakladni-skola-s-r-o"
+    },
+    {
+      "atlas_id": "133",
+      "url": "https://www.atlasskolstvi.cz/ss133-soukroma-stredni-skola-a-zakladni-skola-1-kspa-praha-s-r-o"
+    },
+    {
+      "atlas_id": "157",
+      "url": "https://www.atlasskolstvi.cz/ss157-stredni-odborna-skola-a-stredni-odborne-uciliste-praha-cakovice"
+    },
+    {
+      "atlas_id": "114",
+      "url": "https://www.atlasskolstvi.cz/ss114-stredni-odborna-skola-civilniho-letectvi-praha-ruzyne"
+    },
+    {
+      "atlas_id": "139",
+      "url": "https://www.atlasskolstvi.cz/ss139-stredni-odborne-uciliste-kadernicke-praha-8-karlinske-namesti-8225"
+    },
+    {
+      "atlas_id": "186",
+      "url": "https://www.atlasskolstvi.cz/ss186-stredni-prumyslova-skola-a-gymnazium-na-trebesine"
+    },
+    {
+      "atlas_id": "38",
+      "url": "https://www.atlasskolstvi.cz/ss38-stredni-prumyslova-skola-elektrotechnicka-praha-2-jecna-30"
+    },
+    {
+      "atlas_id": "188",
+      "url": "https://www.atlasskolstvi.cz/ss188-stredni-skola-elektrotechniky-a-strojirenstvi"
+    },
+    {
+      "atlas_id": "40",
+      "url": "https://www.atlasskolstvi.cz/ss40-stredni-skola-obchodni"
+    },
+    {
+      "atlas_id": "79",
+      "url": "https://www.atlasskolstvi.cz/ss79-stredni-skola-podnikatelska-akademie-s-r-o"
+    },
+    {
+      "atlas_id": "22",
+      "url": "https://www.atlasskolstvi.cz/ss22-vyssi-odborna-skola-zdravotnicka-a-stredni-zdravotnicka-skola-a-gymnazium-praha-1-alsovo-nabrezi-6"
+    },
+    {
+      "atlas_id": "23",
+      "url": "https://www.atlasskolstvi.cz/ss23-divci-katolicka-stredni-skola"
+    },
+    {
+      "atlas_id": "1374",
+      "url": "https://www.atlasskolstvi.cz/ss1374-hermanek-praha-zakladni-skola-gymnazium-a-stredni-pedagogicka-skola-skolska-pravnicka-osoba"
+    },
+    {
+      "atlas_id": "137",
+      "url": "https://www.atlasskolstvi.cz/ss137-stredni-skola-designu-a-umeni-knizni-kultury-a-ekonomiky-nahorni"
+    },
+    {
+      "atlas_id": "1413",
+      "url": "https://www.atlasskolstvi.cz/ss1413-eruni-univerzitni-gymnazium-a-stredni-odborna-skola-praha-z-u"
+    },
+    {
+      "atlas_id": "21",
+      "url": "https://www.atlasskolstvi.cz/ss21-vyssi-odborna-skola-textilnich-remesel-a-stredni-umelecka-skola-textilnich-remesel-praha-1-u-pujcovny-9"
+    },
+    {
+      "atlas_id": "12",
+      "url": "https://www.atlasskolstvi.cz/ss12-masarykova-stredni-skola-chemicka-praha-1-kremencova-12"
+    },
+    {
+      "atlas_id": "160",
+      "url": "https://www.atlasskolstvi.cz/ss160-stredni-odborna-skola-jarov"
+    },
+    {
+      "atlas_id": "185",
+      "url": "https://www.atlasskolstvi.cz/ss185-stredni-prumyslova-skola-elektrotechnicka-a-gymnazium-v-uzlabine"
+    },
+    {
+      "atlas_id": "13",
+      "url": "https://www.atlasskolstvi.cz/ss13-obchodni-akademie-dusni"
+    },
+    {
+      "atlas_id": "36",
+      "url": "https://www.atlasskolstvi.cz/ss36-obchodni-akademie-vinohradska"
+    },
+    {
+      "atlas_id": "76",
+      "url": "https://www.atlasskolstvi.cz/ss76-stredni-skola--waldorfske-lyceum"
+    },
+    {
+      "atlas_id": "155",
+      "url": "https://www.atlasskolstvi.cz/ss155-stredni-skola-arcus-s-r-o"
+    },
+    {
+      "atlas_id": "41",
+      "url": "https://www.atlasskolstvi.cz/ss41-vyssi-odborna-skola-ekonomickych-studii-gymnazium-stredni-prumyslova-skola-potravinarskych-technologii-a-stredni-odborna-skola-prirodovedna-a-veterinarni-praha-2-podskalska-10"
+    },
+    {
+      "atlas_id": "25",
+      "url": "https://www.atlasskolstvi.cz/ss25-zakladni-skola-a-stredni-skola-karla-herforta-praha-1-josefska-4"
+    },
+    {
+      "atlas_id": "146",
+      "url": "https://www.atlasskolstvi.cz/ss146-gymnazium-praha-9-litomericka-726"
+    },
+    {
+      "atlas_id": "86",
+      "url": "https://www.atlasskolstvi.cz/ss86-zakladni-skola-a-stredni-skola-waldorfska"
+    },
+    {
+      "atlas_id": "2",
+      "url": "https://www.atlasskolstvi.cz/ss2-akademicke-gymnazium-a-jazykova-skola-s-pravem-statni-jazykove-zkousky-skoly-hlavniho-mesta-prahy"
+    },
+    {
+      "atlas_id": "69",
+      "url": "https://www.atlasskolstvi.cz/ss69-akademie-vsem--stredni-skola-s-r-o"
+    },
+    {
+      "atlas_id": "26",
+      "url": "https://www.atlasskolstvi.cz/ss26-arcibiskupske-gymnazium"
+    },
+    {
+      "atlas_id": "31",
+      "url": "https://www.atlasskolstvi.cz/ss31-cirkevni-stredni-zdravotnicka-skola-jana-pavla-ii"
+    },
+    {
+      "atlas_id": "32",
+      "url": "https://www.atlasskolstvi.cz/ss32-ceskoslovanska-akademie-obchodni-dr-edvarda-benese-stredni-odborna-skola-praha-2-resslova-8"
+    },
+    {
+      "atlas_id": "33",
+      "url": "https://www.atlasskolstvi.cz/ss33-ceskoslovanska-akademie-obchodni-stredni-odborna-skola-praha-2-resslova-5"
+    },
+    {
+      "atlas_id": "122",
+      "url": "https://www.atlasskolstvi.cz/ss122-euroskola-praha-stredni-odborna-skola-s-r-o"
+    },
+    {
+      "atlas_id": "70",
+      "url": "https://www.atlasskolstvi.cz/ss70-evangelicka-akademie--pedagogicke-lyceum-a-stredni-odborna-skola"
+    },
+    {
+      "atlas_id": "71",
+      "url": "https://www.atlasskolstvi.cz/ss71-g-a-p-education-stredni-skola-s-r-o"
+    },
+    {
+      "atlas_id": "44",
+      "url": "https://www.atlasskolstvi.cz/ss44-gymnazium-a-hudebni-skola-hlavniho-mesta-prahy-zakladni-umelecka-skola"
+    },
+    {
+      "atlas_id": "173",
+      "url": "https://www.atlasskolstvi.cz/ss173-gymnazium-altis-s-r-o"
+    },
+    {
+      "atlas_id": "142",
+      "url": "https://www.atlasskolstvi.cz/ss142-gymnazium-cakovice-praha-9-nam-25-brezna-100"
+    },
+    {
+      "atlas_id": "118",
+      "url": "https://www.atlasskolstvi.cz/ss118-gymnazium-duhovka-s-r-o"
+    },
+    {
+      "atlas_id": "56",
+      "url": "https://www.atlasskolstvi.cz/ss56-gymnazium-elisky-krasnohorske-praha-4-michle-ohradni-55"
+    },
+    {
+      "atlas_id": "57",
+      "url": "https://www.atlasskolstvi.cz/ss57-gymnazium-evolution-s-r-o"
+    },
+    {
+      "atlas_id": "87",
+      "url": "https://www.atlasskolstvi.cz/ss87-gymnazium-christiana-dopplera"
+    },
+    {
+      "atlas_id": "115",
+      "url": "https://www.atlasskolstvi.cz/ss115-gymnazium-international-a-stredni-odborna-skola-s-r-o"
+    },
+    {
+      "atlas_id": "143",
+      "url": "https://www.atlasskolstvi.cz/ss143-gymnazium-j-seiferta-o-p-s"
+    },
+    {
+      "atlas_id": "106",
+      "url": "https://www.atlasskolstvi.cz/ss106-gymnazium-jana-keplera-praha-6-parlerova-2"
+    },
+    {
+      "atlas_id": "4",
+      "url": "https://www.atlasskolstvi.cz/ss4-gymnazium-jana-nerudy-skola-hlavniho-mesta-prahy-praha-1-hellichova-3"
+    },
+    {
+      "atlas_id": "5",
+      "url": "https://www.atlasskolstvi.cz/ss5-gymnazium-jana-palacha-praha-1-s-r-o"
+    },
+    {
+      "atlas_id": "88",
+      "url": "https://www.atlasskolstvi.cz/ss88-gymnazium-jaroslava-heyrovskeho-praha-5-mezi-skolami-2475"
+    },
+    {
+      "atlas_id": "45",
+      "url": "https://www.atlasskolstvi.cz/ss45-gymnazium-karla-sladkovskeho-praha-3-sladkovskeho-namesti-8"
+    },
+    {
+      "atlas_id": "181",
+      "url": "https://www.atlasskolstvi.cz/ss181-gymnazium-kodanska-a-stredni-odborna-skola-a-s"
+    },
+    {
+      "atlas_id": "1377",
+      "url": "https://www.atlasskolstvi.cz/ss1377-gymnazium-kudykampus-s-r-o"
+    },
+    {
+      "atlas_id": "1405",
+      "url": "https://www.atlasskolstvi.cz/ss1405-gymnazium-laury-bassi-s-r-o"
+    },
+    {
+      "atlas_id": "89",
+      "url": "https://www.atlasskolstvi.cz/ss89-gymnazium-mezinarodnich-a-verejnych-vztahu-praha-s-r-o"
+    },
+    {
+      "atlas_id": "58",
+      "url": "https://www.atlasskolstvi.cz/ss58-gymnazium-milady-horakove"
+    },
+    {
+      "atlas_id": "46",
+      "url": "https://www.atlasskolstvi.cz/ss46-gymnazium-na-prazacce-praha-3-nad-ohradou-23"
+    },
+    {
+      "atlas_id": "59",
+      "url": "https://www.atlasskolstvi.cz/ss59-gymnazium-opatov-praha-4-konstantinova-1500"
+    },
+    {
+      "atlas_id": "90",
+      "url": "https://www.atlasskolstvi.cz/ss90-gymnazium-oty-pavla-praha-5-loucanska-520"
+    },
+    {
+      "atlas_id": "1345",
+      "url": "https://www.atlasskolstvi.cz/ss1345-gymnazium-pameti-naroda-s-r-o"
+    },
+    {
+      "atlas_id": "93",
+      "url": "https://www.atlasskolstvi.cz/ss93-gymnazium-pro-zrakove-postizene-a-stredni-odborna-skola-pro-zrakove-postizene-praha-5-radlicka-115"
+    },
+    {
+      "atlas_id": "7",
+      "url": "https://www.atlasskolstvi.cz/ss7-gymnazium-prof-jana-patocky-praha-1-jindrisska-36"
+    },
+    {
+      "atlas_id": "120",
+      "url": "https://www.atlasskolstvi.cz/ss120-gymnazium-prirodni-skola-z-u"
+    },
+    {
+      "atlas_id": "1399",
+      "url": "https://www.atlasskolstvi.cz/ss1399-gymnazium-se-sportovni-pripravou-seberov"
+    },
+    {
+      "atlas_id": "129",
+      "url": "https://www.atlasskolstvi.cz/ss129-gymnazium-thomase-manna-z-u"
+    },
+    {
+      "atlas_id": "1380",
+      "url": "https://www.atlasskolstvi.cz/ss1380-gymnazium-victoria-high-school-s-r-o"
+    },
+    {
+      "atlas_id": "175",
+      "url": "https://www.atlasskolstvi.cz/ss175-gymnazium-praha-10-omska-1300"
+    },
+    {
+      "atlas_id": "176",
+      "url": "https://www.atlasskolstvi.cz/ss176-gymnazium-praha-10-pripotocni-1337"
+    },
+    {
+      "atlas_id": "28",
+      "url": "https://www.atlasskolstvi.cz/ss28-gymnazium-praha-2-boticska-1"
+    },
+    {
+      "atlas_id": "60",
+      "url": "https://www.atlasskolstvi.cz/ss60-gymnazium-praha-4-budejovicka-680"
+    },
+    {
+      "atlas_id": "61",
+      "url": "https://www.atlasskolstvi.cz/ss61-gymnazium-praha-4-na-vitezne-plani-1160"
+    },
+    {
+      "atlas_id": "62",
+      "url": "https://www.atlasskolstvi.cz/ss62-gymnazium-praha-4-pisnicka-760"
+    },
+    {
+      "atlas_id": "63",
+      "url": "https://www.atlasskolstvi.cz/ss63-gymnazium-praha-4-postupicka-3150"
+    },
+    {
+      "atlas_id": "91",
+      "url": "https://www.atlasskolstvi.cz/ss91-gymnazium-praha-5-na-zatlance-11"
+    },
+    {
+      "atlas_id": "92",
+      "url": "https://www.atlasskolstvi.cz/ss92-gymnazium-praha-5-nad-kavalirkou-1"
+    },
+    {
+      "atlas_id": "107",
+      "url": "https://www.atlasskolstvi.cz/ss107-gymnazium-praha-6-arabska-14"
+    },
+    {
+      "atlas_id": "108",
+      "url": "https://www.atlasskolstvi.cz/ss108-gymnazium-praha-6-nad-aleji-1952"
+    },
+    {
+      "atlas_id": "119",
+      "url": "https://www.atlasskolstvi.cz/ss119-gymnazium-praha-7-nad-stolou-1"
+    },
+    {
+      "atlas_id": "126",
+      "url": "https://www.atlasskolstvi.cz/ss126-gymnazium-praha-8-ustavni-400"
+    },
+    {
+      "atlas_id": "144",
+      "url": "https://www.atlasskolstvi.cz/ss144-gymnazium-praha-9-ceskolipska-373"
+    },
+    {
+      "atlas_id": "145",
+      "url": "https://www.atlasskolstvi.cz/ss145-gymnazium-praha-9-chodovicka-2250"
+    },
+    {
+      "atlas_id": "147",
+      "url": "https://www.atlasskolstvi.cz/ss147-gymnazium-praha-9-spitalska-2"
+    },
+    {
+      "atlas_id": "110",
+      "url": "https://www.atlasskolstvi.cz/ss110-gymnazium-stredni-odborna-skola-a-prazska-tanecni-konzervator-s-r-o"
+    },
+    {
+      "atlas_id": "29",
+      "url": "https://www.atlasskolstvi.cz/ss29-gymnazium-stredni-odborna-skola-zakladni-skola-a-materska-skola-pro-sluchove-postizene-praha-2-jecna-27"
+    },
+    {
+      "atlas_id": "1415",
+      "url": "https://www.atlasskolstvi.cz/ss1415-gymnazium-zakladni-a-materska-skola-parentes-praha"
+    },
+    {
+      "atlas_id": "34",
+      "url": "https://www.atlasskolstvi.cz/ss34-jedlickuv-ustav-a-materska-skola-a-zakladni-skola-a-stredni-skola"
+    },
+    {
+      "atlas_id": "130",
+      "url": "https://www.atlasskolstvi.cz/ss130-karlinska-obchodni-akademie"
+    },
+    {
+      "atlas_id": "127",
+      "url": "https://www.atlasskolstvi.cz/ss127-karlinske-gymnazium-praha-8-pernerova-25"
+    },
+    {
+      "atlas_id": "64",
+      "url": "https://www.atlasskolstvi.cz/ss64-klasicke-gymnazium-modrany-a-zakladni-skola-s-r-o"
+    },
+    {
+      "atlas_id": "9",
+      "url": "https://www.atlasskolstvi.cz/ss9-konzervator-a-stredni-skola-jana-deyla-prispevkova-organizace"
+    },
+    {
+      "atlas_id": "66",
+      "url": "https://www.atlasskolstvi.cz/ss66-konzervator-a-vyssi-odborna-skola-jaroslava-jezka"
+    },
+    {
+      "atlas_id": "67",
+      "url": "https://www.atlasskolstvi.cz/ss67-konzervator-duncan-centre-praha-4-branicka-41"
+    },
+    {
+      "atlas_id": "134",
+      "url": "https://www.atlasskolstvi.cz/ss134-kralovska-stredni-skola-s-r-o"
+    },
+    {
+      "atlas_id": "180",
+      "url": "https://www.atlasskolstvi.cz/ss180-kralovske-gymnazium-petrovice-s-r-o"
+    },
+    {
+      "atlas_id": "178",
+      "url": "https://www.atlasskolstvi.cz/ss178-krestanske-gymnazium"
+    },
+    {
+      "atlas_id": "30",
+      "url": "https://www.atlasskolstvi.cz/ss30-lauderova-materska-skola-zakladni-skola-a-gymnazium-pri-zidovske-obci-v-praze"
+    },
+    {
+      "atlas_id": "8",
+      "url": "https://www.atlasskolstvi.cz/ss8-malostranske-gymnazium-praha-1-josefska-7"
+    },
+    {
+      "atlas_id": "1358",
+      "url": "https://www.atlasskolstvi.cz/ss1358-materska-skola-zakladni-skola-a-gymnazium-sv-augustina"
+    },
+    {
+      "atlas_id": "109",
+      "url": "https://www.atlasskolstvi.cz/ss109-mensa-gymnazium-o-p-s"
+    },
+    {
+      "atlas_id": "1376",
+      "url": "https://www.atlasskolstvi.cz/ss1376-meridian-cesko-britska-materska-skola-zakladni-skola-a-gymnazium-s-r-o"
+    },
+    {
+      "atlas_id": "72",
+      "url": "https://www.atlasskolstvi.cz/ss72-metropolitni-odborna-umelecka-stredni-skola-praha-4-s-r-o"
+    },
+    {
+      "atlas_id": "47",
+      "url": "https://www.atlasskolstvi.cz/ss47-mezinarodni-konzervator-praha--international-conservatory-prague-s-r-o"
+    },
+    {
+      "atlas_id": "1339",
+      "url": "https://www.atlasskolstvi.cz/ss1339-nase-lyceum--stredni-skola-s-r-o"
+    },
+    {
+      "atlas_id": "94",
+      "url": "https://www.atlasskolstvi.cz/ss94-nemecka-skola-v-praze-s-r-o--zahranicni-skola-zakladni-skola-a-gymnazium"
+    },
+    {
+      "atlas_id": "123",
+      "url": "https://www.atlasskolstvi.cz/ss123-obchodni-akademie-holesovice"
+    },
+    {
+      "atlas_id": "48",
+      "url": "https://www.atlasskolstvi.cz/ss48-obchodni-akademie-hovorcovicka"
+    },
+    {
+      "atlas_id": "35",
+      "url": "https://www.atlasskolstvi.cz/ss35-obchodni-akademie-skola-2000-s-r-o"
+    },
+    {
+      "atlas_id": "54",
+      "url": "https://www.atlasskolstvi.cz/ss54-odborne-uciliste-pro-zaky-s-vice-vadami-s-r-o"
+    },
+    {
+      "atlas_id": "42",
+      "url": "https://www.atlasskolstvi.cz/ss42-odborne-uciliste-vysehrad"
+    },
+    {
+      "atlas_id": "1404",
+      "url": "https://www.atlasskolstvi.cz/ss1404-ped-academy-gymnazium-s-r-o"
+    },
+    {
+      "atlas_id": "128",
+      "url": "https://www.atlasskolstvi.cz/ss128-porg--gymnazium-zakladni-skola-a-materska-skola-o-p-s"
+    },
+    {
+      "atlas_id": "10",
+      "url": "https://www.atlasskolstvi.cz/ss10-prazska-konzervator-praha-1-na-rejdisti-1"
+    },
+    {
+      "atlas_id": "179",
+      "url": "https://www.atlasskolstvi.cz/ss179-prazske-humanitni-gymnazium-skolska-pravnicka-osoba"
+    },
+    {
+      "atlas_id": "65",
+      "url": "https://www.atlasskolstvi.cz/ss65-rakouske-gymnazium-v-praze-o-p-s"
+    },
+    {
+      "atlas_id": "1378",
+      "url": "https://www.atlasskolstvi.cz/ss1378-scioskola-praha-holesovice--stredni-skola-s-r-o"
+    },
+    {
+      "atlas_id": "98",
+      "url": "https://www.atlasskolstvi.cz/ss98-smichovska-stredni-prumyslova-skola-gymnazium-a-hotelova-skola-radlicka-prispevkova-organizace"
+    },
+    {
+      "atlas_id": "153",
+      "url": "https://www.atlasskolstvi.cz/ss153-soukroma-stredni-odborna-skola-a-soukrome-stredni-odborne-uciliste-bean-s-r-o"
+    },
+    {
+      "atlas_id": "135",
+      "url": "https://www.atlasskolstvi.cz/ss135-soukroma-stredni-skola-gastronomie-s-r-o"
+    },
+    {
+      "atlas_id": "113",
+      "url": "https://www.atlasskolstvi.cz/ss113-soukroma-stredni-umelecka-skola-designu-s-r-o"
+    },
+    {
+      "atlas_id": "148",
+      "url": "https://www.atlasskolstvi.cz/ss148-soukrome-gymnazium-arcus-praha-9-s-r-o"
+    },
+    {
+      "atlas_id": "171",
+      "url": "https://www.atlasskolstvi.cz/ss171-soukrome-stredni-odborne-uciliste-athoz-spol-s-r-o"
+    },
+    {
+      "atlas_id": "164",
+      "url": "https://www.atlasskolstvi.cz/ss164-stredni-odborna-skola--centrum-odborne-pripravy-a-gymnazium"
+    },
+    {
+      "atlas_id": "158",
+      "url": "https://www.atlasskolstvi.cz/ss158-stredni-odborna-skola-logistiky-a-podnikani"
+    },
+    {
+      "atlas_id": "50",
+      "url": "https://www.atlasskolstvi.cz/ss50-stredni-odborna-skola-podnikatelska-profit-spol-s-r-o"
+    },
+    {
+      "atlas_id": "37",
+      "url": "https://www.atlasskolstvi.cz/ss37-stredni-odborna-skola-socialni-svate-zdislavy"
+    },
+    {
+      "atlas_id": "136",
+      "url": "https://www.atlasskolstvi.cz/ss136-stredni-odborna-skola-socialni-o-p-s"
+    },
+    {
+      "atlas_id": "99",
+      "url": "https://www.atlasskolstvi.cz/ss99-stredni-odborna-skola-praha-5-drtinova-3498"
+    },
+    {
+      "atlas_id": "84",
+      "url": "https://www.atlasskolstvi.cz/ss84-stredni-odborne-uciliste-praha-4-ohradni-57"
+    },
+    {
+      "atlas_id": "105",
+      "url": "https://www.atlasskolstvi.cz/ss105-stredni-odborne-uciliste-praha-radotin"
+    },
+    {
+      "atlas_id": "1418",
+      "url": "https://www.atlasskolstvi.cz/ss1418-stredni-pedagogicka-skola-sraz-s-r-o"
+    },
+    {
+      "atlas_id": "100",
+      "url": "https://www.atlasskolstvi.cz/ss100-stredni-prumyslova-skola-dopravni-a-s"
+    },
+    {
+      "atlas_id": "162",
+      "url": "https://www.atlasskolstvi.cz/ss162-stredni-prumyslova-skola-na-proseku"
+    },
+    {
+      "atlas_id": "15",
+      "url": "https://www.atlasskolstvi.cz/ss15-stredni-prumyslova-skola-sdelovaci-techniky-praha-1-panska-3"
+    },
+    {
+      "atlas_id": "77",
+      "url": "https://www.atlasskolstvi.cz/ss77-stredni-skola-a-materska-skola-aloyse-klara"
+    },
+    {
+      "atlas_id": "39",
+      "url": "https://www.atlasskolstvi.cz/ss39-stredni-skola-ekonomicka-se-sportovnim-zamerenim-s-r-o"
+    },
+    {
+      "atlas_id": "184",
+      "url": "https://www.atlasskolstvi.cz/ss184-stredni-skola-futurum-s-r-o"
+    },
+    {
+      "atlas_id": "191",
+      "url": "https://www.atlasskolstvi.cz/ss191-stredni-skola-gastronomie"
+    },
+    {
+      "atlas_id": "165",
+      "url": "https://www.atlasskolstvi.cz/ss165-stredni-skola-hotelnictvi-a-gastronomie-scmsd-praha-s-r-o"
+    },
+    {
+      "atlas_id": "166",
+      "url": "https://www.atlasskolstvi.cz/ss166-stredni-skola-kosmetiky-a-hotelnictvi-bean-s-r-o"
+    },
+    {
+      "atlas_id": "189",
+      "url": "https://www.atlasskolstvi.cz/ss189-stredni-skola-managementu-a-sluzeb-s-r-o"
+    },
+    {
+      "atlas_id": "103",
+      "url": "https://www.atlasskolstvi.cz/ss103-stredni-skola-zakladni-skola-a-materska-skola-pro-sluchove-postizene-praha-5-holeckova-4"
+    },
+    {
+      "atlas_id": "104",
+      "url": "https://www.atlasskolstvi.cz/ss104-stredni-skola-zakladni-skola-a-materska-skola-pro-sluchove-postizene-praha-5-vymolova-169"
+    },
+    {
+      "atlas_id": "192",
+      "url": "https://www.atlasskolstvi.cz/ss192-stredni-skola-zakladni-skola-a-materska-skola-praha-10-chotounska-476"
+    },
+    {
+      "atlas_id": "168",
+      "url": "https://www.atlasskolstvi.cz/ss168-stredni-zahradnicka-skola-a-stredni-odborne-uciliste-s-r-o"
+    },
+    {
+      "atlas_id": "190",
+      "url": "https://www.atlasskolstvi.cz/ss190-stredni-zdravotnicka-skola"
+    },
+    {
+      "atlas_id": "24",
+      "url": "https://www.atlasskolstvi.cz/ss24-skola-jaroslava-jezka-materska-skola-zakladni-skola-prakticka-skola-a-zakladni-umelecka-skola-pro-zrakove-postizene-praha-1-loretanska-19-a-17"
+    },
+    {
+      "atlas_id": "80",
+      "url": "https://www.atlasskolstvi.cz/ss80-skola-kavci-hory--materska-skola-zakladni-skola-a-stredni-odborna-skola-sluzeb-praha-4-k-sidlisti-840"
+    },
+    {
+      "atlas_id": "96",
+      "url": "https://www.atlasskolstvi.cz/ss96-tanecni-centrum-praha--konzervator-z-u"
+    },
+    {
+      "atlas_id": "11",
+      "url": "https://www.atlasskolstvi.cz/ss11-tanecni-konzervator-hlavniho-mesta-prahy-praha-1-krizovnicka-7"
+    },
+    {
+      "atlas_id": "138",
+      "url": "https://www.atlasskolstvi.cz/ss138-trivis--stredni-skola-verejnopravni-a-vyssi-odborna-skola-prevence-kriminality-a-krizoveho-rizeni-praha-s-r-o"
+    },
+    {
+      "atlas_id": "121",
+      "url": "https://www.atlasskolstvi.cz/ss121-trojske-gymnazium-s-r-o"
+    },
+    {
+      "atlas_id": "17",
+      "url": "https://www.atlasskolstvi.cz/ss17-vyssi-odborna-skola-a-stredni-prumyslova-skola-dopravni-praha-1-masna-18"
+    },
+    {
+      "atlas_id": "18",
+      "url": "https://www.atlasskolstvi.cz/ss18-vyssi-odborna-skola-a-stredni-prumyslova-skola-elektrotechnicka-frantiska-krizika-praha-1-na-prikope-16"
+    },
+    {
+      "atlas_id": "52",
+      "url": "https://www.atlasskolstvi.cz/ss52-vyssi-odborna-skola-a-stredni-umelecka-skola-vaclava-hollara-praha-3-hollarovo-namesti-2"
+    },
+    {
+      "atlas_id": "19",
+      "url": "https://www.atlasskolstvi.cz/ss19-vyssi-odborna-skola-graficka-a-stredni-prumyslova-skola-graficka-praha-1-hellichova-22"
+    },
+    {
+      "atlas_id": "124",
+      "url": "https://www.atlasskolstvi.cz/ss124-vyssi-odborna-skola-odevniho-navrharstvi-a-stredni-prumyslova-skola-odevni-praha-7-jablonskeho-3"
+    },
+    {
+      "atlas_id": "116",
+      "url": "https://www.atlasskolstvi.cz/ss116-vyssi-odborna-skola-pedagogicka-a-socialni-stredni-odborna-skola-pedagogicka-a-gymnazium-praha-6-evropska-33"
+    },
+    {
+      "atlas_id": "20",
+      "url": "https://www.atlasskolstvi.cz/ss20-vyssi-odborna-skola-stavebni-a-stredni-prumyslova-skola-stavebni-praha-1-dusni-17"
+    },
+    {
+      "atlas_id": "53",
+      "url": "https://www.atlasskolstvi.cz/ss53-vyssi-odborna-skola-umeleckoprumyslova-a-stredni-umeleckoprumyslova-skola-praha-3-zizkovo-namesti-1"
+    },
+    {
+      "atlas_id": "82",
+      "url": "https://www.atlasskolstvi.cz/ss82-vyssi-odborna-skola-zdravotnicka-a-stredni-zdravotnicka-skola-praha-4-5-kvetna-51"
+    },
+    {
+      "atlas_id": "170",
+      "url": "https://www.atlasskolstvi.cz/ss170-vyssi-policejni-skola-a-stredni-policejni-skola-ministerstva-vnitra-v-praze"
+    },
+    {
+      "atlas_id": "1400",
+      "url": "https://www.atlasskolstvi.cz/ss1400-zakladni-skola-a-gymnazium-avida-s-r-o"
+    },
+    {
+      "atlas_id": "1357",
+      "url": "https://www.atlasskolstvi.cz/ss1357-zakladni-skola-a-gymnazium-leonardo-v-academy"
+    },
+    {
+      "atlas_id": "1383",
+      "url": "https://www.atlasskolstvi.cz/ss1383-zakladni-skola-a-gymnazium-livingston-s-r-o"
+    },
+    {
+      "atlas_id": "1414",
+      "url": "https://www.atlasskolstvi.cz/ss1414-zakladni-skola-a-gymnazium-minehava-z-s"
+    },
+    {
+      "atlas_id": "1346",
+      "url": "https://www.atlasskolstvi.cz/ss1346-zakladni-skola-a-stredni-skola-praha-10-vachkova-941"
+    },
+    {
+      "atlas_id": "43",
+      "url": "https://www.atlasskolstvi.cz/ss43-zakladni-skola-a-stredni-skola-praha-2-vinohradska-54"
+    },
+    {
+      "atlas_id": "85",
+      "url": "https://www.atlasskolstvi.cz/ss85-zakladni-skola-a-stredni-skola-praha-4-kupeckeho-576"
+    },
+    {
+      "atlas_id": "117",
+      "url": "https://www.atlasskolstvi.cz/ss117-zakladni-skola-specialni-a-prakticka-skola-praha-6-rooseveltova-8"
+    }
+  ]
+}
