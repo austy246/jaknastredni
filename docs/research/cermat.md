@@ -170,15 +170,85 @@ Maturitní soubory jsou napříč 2015–2026 bezpečně importovatelné jedním
 parserem; JPZ nový formát (2024–2025) zůstává neověřený a je otevřenou
 otázkou pro příští importér (JPZ 2024+).
 
+## 13. Porovnání hlaviček JPZ starý formát 2017–2023 (ověřeno před importem importéru `cermat_jpz_old.py`)
+
+Staženo a porovnáno všech **7 souborů** `JPZ{rok}_skoly-skolobory_vysledky.xlsx`
+pro roky 2017–2023. Zjištění:
+
+- **Počet a název listů se mezi roky liší** — `main` list (`ciselniky`, pokud
+  je přítomen, se ignoruje):
+  - 2017–2020: dva listy, hlavní `JPZ{rok}_red` + `ciselniky`.
+  - 2021: dva listy, hlavní `JPZ2021` (bez přípony `_red`) + `ciselniky`.
+  - 2022: jeden list, `JPZ2022-radny a nahradni termin` (žádný `ciselniky`).
+  - 2023: jeden list, `List1` (žádný `ciselniky`).
+  - **Důsledek pro parser**: název hlavního listu nejde odvodit z roku ani
+    z pevného vzoru — bere se jediný list, jehož název (case-insensitive)
+    není `"ciselniky"`.
+- **Hlavička je vždy na 2. řádku** (1. řádek je sloučený titulek
+  `JPZ {rok} - VÝSLEDKY ŠKOL A OBOROVÝCH SKUPIN...`), stejně jako u maturity.
+- **Fixní úvodní sloupce (0–7) mají shodný název a pořadí ve všech 7
+  souborech**: `REDIZO / KRAJ / OBOROVÁ SKUPINA, OBOROVÁ SKUPINA, ROČNÍK,
+  NÁZEV ŠKOLY, ADRESA ŠKOLY, KRAJ (KÓD), KRAJ (NÁZEV), ZŘIZOVATEL`. Za nimi
+  následují dva shodně strukturované bloky `ČESKÝ JAZYK` a `MATEMATIKA`
+  (2022/2023 mají v titulku `MATEMATIKA*` s poznámkou o ukrajinských
+  uchazečích — sloupce samotné jsou beze změny).
+- **Potvrzený rozdíl v absenčních sloupcích** (mezi `KONALI` a `PRŮMĚRNÉ
+  PERCENTILOVÉ UMÍSTĚNÍ` v každém předmětovém bloku):
+  - 2017, 2018, 2019, 2021, 2022, 2023: jeden sloupec `NEKONALI`.
+  - **2020**: tři sloupce `OMLUVENI, NEOMLUVENI, VYLOUČENI` místo jednoho
+    `NEKONALI` (posouvá zbytek hlavičky o +2 sloupce oproti ostatním rokům).
+  - Cílový datový model (`jpz_skupina`) tyto sloupce vůbec nepotřebuje (žádné
+    pole "nekonali"), takže se prostě nemapují — parser hledá jen jména
+    `PŘIHLÁŠENI`, `KONALI`, `PRŮMĚRNÉ PERCENTILOVÉ UMÍSTĚNÍ`, `SMĚRODATNÁ
+    ODCHYLKA (PERCENTIL. UMÍSTĚNÍ)` (každé z nich se v hlavičce vyskytuje
+    přesně 2×, poprvé v bloku ČJ, podruhé v bloku MA) a je mu jedno, co přesně
+    je mezi `KONALI` a `PRŮMĚRNÉ PERCENTILOVÉ UMÍSTĚNÍ`.
+  - Přesně tohle dělá `jaknastredni/cermat_jpz_old.py` (funkce `_find_pair`).
+- **Počet datových řádků na list**: 3421 (2017) až 2056 (2021, hlubší pokles
+  patrně souvislost s covidovým ročníkem/změnou organizace přijímaček), po
+  filtru na číselné REDIZO klesá na 3364/3286/3218/3211/1997/3235/3258
+  školních řádků. Žádné duplicitní klíče `(redizo, oborová skupina, ročník)`
+  uvnitř jednoho ročníku nebyly nalezeny (ověřeno skriptem nad všemi
+  staženými soubory).
+- **Žádný sloupec typu `TŘÍDĚNÍ`** (na rozdíl od maturity) — školní řádky se
+  poznají výhradně podle toho, že 1. sloupec (`REDIZO / KRAJ / OBOROVÁ
+  SKUPINA`) obsahuje číslo. Krajské řádky mají v 1. sloupci buď text názvu
+  kraje (2017–2021), nebo `None` (2022, 2023 — kraj řádky mají prázdný 1.
+  sloupec, ale vyplněné `KRAJ (KÓD)`/`KRAJ (NÁZEV)`), celorepublikové řádky
+  mají text typu `"GYMNÁZIUM 8LETÉ CELKEM"`. Regexem `\d+(\.0)?` na
+  `str(hodnota).strip()` (a explicitním vyloučením `bool`, protože Python
+  `True`/`False` je `isinstance(..., int)`) se filtrují spolehlivě všechny
+  roky.
+- **REDIZO přichází jako `int`/`float` ve všech 7 souborech** (na rozdíl od
+  maturity, kde je to místy text) — normalizace na 9místný text se zleva
+  doplněnými nulami je ale stejná.
+- **`ZŘIZOVATEL` je v roce 2022 uložen jako text `'7'`, jinde jako číslo `7`**
+  — nepodstatné, sloupec se do `jpz_skupina` vůbec neukládá (schéma podle
+  `datovy-model.md` ho nepotřebuje).
+- **Ověřeno na referenční škole REDIZO 600006573** (Obchodní akademie,
+  Heroldovy sady), skupina `4LETÉ OBORY`, ročník 9: `PŘIHLÁŠENI/KONALI` ČJ
+  232/232, průměrný percentil ČJ 66,4, průměrný percentil MA 66,0 v roce
+  2017 — hodnoty se shodují s příkladem v oddílu 5 a se skutečným importem
+  do `jpz_skupina`. Trend 2017→2023 pro tuto školu (skupina `4LETÉ OBORY`):
+  přihlášeno 232→468, průměrný percentil ČJ 66,4→68,9, MA 66,0→70,6 —
+  hodnoty rostou plynule bez viditelných skoků na hranici 2019/2020, což
+  potvrzuje, že se rozdílný počet/název absenčních sloupců v 2020 promítl do
+  parsování korektně (jinak by dávkové posunutí sloupců u 2020 způsobilo
+  zjevně nesmyslné hodnoty).
+
+Soubory JPZ 2017–2023 jsou tedy bezpečně importovatelné jedním parserem,
+mapujícím sloupce podle jména (ne podle pozice), stejně jako maturita.
+JPZ nový formát (2024–2026) zůstává neověřený, viz oddíl 6, a je otevřenou
+otázkou pro příští importér (JPZ 2024+, tabulka `prijimaci_rizeni`).
+
 ## Přílohy
-Soubory JPZ (oddíl 5–6) zůstaly jen ve scratchpadu průzkumu, mimo repo:
-- `<scratchpad>/cermat/files/JPZ2017_skoly-skolobory_vysledky.xlsx`
-- `<scratchpad>/cermat/files/JPZ2020_skoly-skolobory_vysledky.xlsx`
-- `<scratchpad>/cermat/files/JPZ2023_skoly-skolobory_vysledky.xlsx`
+Soubory JPZ nového formátu (oddíl 6) zůstaly jen ve scratchpadu průzkumu,
+mimo repo:
 - `<scratchpad>/cermat/files/PZ2026_kolo1_skolobory_{vysledky,prihlasky,kapacity}.xlsx`
 - `<scratchpad>/cermat/files/PZ2024-2026_agregace_typskoly_region_prihlasky.xlsx`
 
-Soubory maturity `MZ{rok}{j,jap}_SC_skolobory.xlsx` (2015–2026, 24 souborů)
-jsou naimportované a uložené v repu v `data/raw/cermat/` (rozhodnutí uložit
-i syrová data do repa, ne jen do `.gitignore`d `data/`, viz README, sekce
-„Rozhodnutí o ukládání dat").
+Soubory maturity `MZ{rok}{j,jap}_SC_skolobory.xlsx` (2015–2026, 24 souborů) a
+JPZ starého formátu `JPZ{rok}_skoly-skolobory_vysledky.xlsx` (2017–2023, 7
+souborů) jsou naimportované a uložené v repu v `data/raw/cermat/`
+(rozhodnutí uložit i syrová data do repa, ne jen do `.gitignore`d `data/`,
+viz README, sekce „Rozhodnutí o ukládání dat").
