@@ -23,7 +23,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from . import cermat_jpz, cermat_jpz_old, cermat_mz, csi, infoabsolvent, msmt
+from . import atlas, cermat_jpz, cermat_jpz_old, cermat_mz, csi, infoabsolvent, msmt
 
 log = logging.getLogger(__name__)
 
@@ -41,7 +41,8 @@ def _stahni(popis: str, fn, *args, **kwargs) -> None:
         log.warning("%s selhalo: %s", popis, exc)
 
 
-def fetch_all(raw_dir: Path, *, rok_do: int | None = None, skip_infoabsolvent: bool = False) -> None:
+def fetch_all(raw_dir: Path, *, rok_do: int | None = None, skip_infoabsolvent: bool = False,
+              skip_atlas: bool = False) -> None:
     rok_do = rok_do or datetime.now().year
     cermat_dir = raw_dir / "cermat"
 
@@ -74,6 +75,14 @@ def fetch_all(raw_dir: Path, *, rok_do: int | None = None, skip_infoabsolvent: b
         infoabsolvent.check_robots_allows(session, ["/Skoly/Seznam/SOS", "/Skoly/Skola/"])
         _stahni("infoabsolvent", infoabsolvent.fetch_raw, session, raw_dir / "infoabsolvent")
 
+    if skip_atlas:
+        log.info("== atlasskolstvi.cz přeskočeno (--skip-atlas) ==")
+    else:
+        log.info("== atlasskolstvi.cz (scraping 1 req/s, ~4 minuty) ==")
+        atlas_session = atlas.RateLimitedSession()
+        atlas.check_robots_allows(atlas_session, ["/stredni-skoly", "/ss"])
+        _stahni("atlas", atlas.fetch_raw, atlas_session, raw_dir / "atlas")
+
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Stáhne syrová data ze všech zdrojů do data/raw/ (bez zápisu do DB).")
@@ -81,11 +90,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--rok-do", type=int, default=None, help="poslední rok k stažení (výchozí: aktuální rok)")
     p.add_argument("--skip-infoabsolvent", action="store_true",
                     help="přeskočit scraper infoabsolvent.cz (nejpomalejší krok, ~5 minut)")
+    p.add_argument("--skip-atlas", action="store_true",
+                    help="přeskočit scraper atlasskolstvi.cz (~4 minuty)")
     p.add_argument("-v", "--verbose", action="store_true")
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(levelname)s %(message)s")
 
-    fetch_all(args.raw_dir, rok_do=args.rok_do, skip_infoabsolvent=args.skip_infoabsolvent)
+    fetch_all(args.raw_dir, rok_do=args.rok_do, skip_infoabsolvent=args.skip_infoabsolvent,
+              skip_atlas=args.skip_atlas)
     log.info("Stažení dokončeno, syrová data jsou v %s", args.raw_dir)
     return 0
 
