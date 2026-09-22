@@ -233,10 +233,20 @@ def test_filtr_oblasti(conn):
     assert [v.nabidka.kod_kkov for v in it] == ["18-20-M/01"]
 
 
-def test_filtr_jazyka(conn):
+def test_jazyk_vazi_ale_nefiltruje(conn):
+    """Jazyk vyhazoval třetinu nabídky — nově jen zvýhodní školu, která ho učí."""
     nabidky = pruvodce.nacti_nabidky(conn)
-    nemcina = pruvodce.ohodnot(pruvodce.Profil(trida=9, jazyk="N", skolne_max=100000), nabidky)
-    assert [v.nabidka.redizo for v in nemcina] == ["600000003"]
+    bez = pruvodce.ohodnot(pruvodce.Profil(trida=9, skolne_max=100000), nabidky)
+    s_nemcinou = pruvodce.ohodnot(
+        pruvodce.Profil(trida=9, jazyk="N", skolne_max=100000), nabidky)
+    assert len(s_nemcinou) == len(bez)        # nic se nevyhodilo
+    uci = next(v for v in s_nemcinou if v.nabidka.redizo == "600000003")
+    neuci = next(v for v in s_nemcinou if v.nabidka.redizo == "600000001")
+    assert uci.slozky["jazyk"] == 1.0 and neuci.slozky["jazyk"] < 0.5
+    # Kdo na jazyku trvá, zapne si tvrdý filtr.
+    povinne = pruvodce.ohodnot(
+        pruvodce.Profil(trida=9, jazyk="N", jazyk_povinny=True, skolne_max=100000), nabidky)
+    assert [v.nabidka.redizo for v in povinne] == ["600000003"]
 
 
 def test_priorita_zvysi_vahu_sve_slozky(conn):
@@ -605,12 +615,53 @@ def test_scenare_zlepseni(conn):
     # Gymnázium má hranici ~154 b.; ze 120 na 160 je vidět skok přes ni.
     profil = pruvodce.Profil(trida=9, skor_cj=60, skor_ma=60)
     gympl = [n for n in nabidky if n.redizo == "600000001"]
-    scenare = pruvodce.scenare_zlepseni(profil, gympl, kroky=(0, 40))
-    assert [k for k, _, _ in scenare] == [0, 40]
-    assert scenare[1][1] == 160                 # 120 + 40 bodů
+    scenare = pruvodce.scenare_zlepseni(profil, gympl, kroky_bodu=(0, 10))
+    assert [k for k, _, _ in scenare] == [0, 10]
+    # +10 bodů v každém předmětu z 50 = +20 % skóru v každém = +40 celkem.
+    assert scenare[1][1] == 160
     assert scenare[1][2][0][1] > scenare[0][2][0][1]    # lepší skór = vyšší šance
     # Bez zadaného skóru nemá scénář co počítat.
     assert pruvodce.scenare_zlepseni(pruvodce.Profil(trida=9), gympl) == []
+
+
+def test_zlepseni_se_pocita_v_bodech_na_predmet(conn):
+    """CLI i web musí „+5 bodů" chápat stejně: na předmět, do obou."""
+    p = pruvodce.Profil(trida=9, skor_cj=38, skor_ma=70)
+    assert p.skor == 108
+    p.zlepseni_bodu = 5
+    assert p.skor == 128            # +10 % skóru v každém předmětu
+    # Strop 50 bodů na předmět se nepřekročí.
+    p2 = pruvodce.Profil(trida=9, skor_cj=96, skor_ma=96, zlepseni_bodu=20)
+    assert p2.skor == 200
+
+
+def test_terminy_se_pocitaji_z_dat(conn):
+    """Kdy jsou přijímačky víme z dat — ptát se na to nemá smysl."""
+    from datetime import date
+
+    nabidky = pruvodce.nacti_nabidky(conn)
+    for n in nabidky:
+        n.prihlasky_do, n.termin_jpz = "20.2.2026", "10. 4. 2026 a 13. 4. 2026"
+    t = pruvodce.terminy(nabidky, date(2026, 9, 22))
+    # Termín z dat je v minulosti -> posune se na nejbližší budoucí výskyt.
+    assert t["prihlasky_do"] == date(2027, 2, 20)
+    assert t["jpz"] == date(2027, 4, 10)
+    assert t["tydnu_do_jpz"] == 28 and t["tydnu_do_prihlasky"] == 21
+    # Bez dat se nic nevymýšlí.
+    for n in nabidky:
+        n.prihlasky_do = n.termin_jpz = None
+    assert pruvodce.terminy(nabidky, date(2026, 9, 22))["jpz"] is None
+
+
+def test_navrh_zlepseni_je_pravidlo_palce_ne_predpoved(conn):
+    lenoch = pruvodce.Profil(trida=9, priprava_ted="ne", hodin_tydne="do1", kurz="ne")
+    drtic = pruvodce.Profil(trida=9, priprava_ted="pravidelne", hodin_tydne="4az6", kurz="ano")
+    assert pruvodce.navrh_zlepseni(lenoch)[0] < pruvodce.navrh_zlepseni(drtic)[0]
+    # Bez odpovědí se posuvník nikam neposouvá.
+    assert pruvodce.navrh_zlepseni(pruvodce.Profil(trida=9)) == (
+        0.0, "Bez odpovědí na přípravu posuvník nikam neposouvám.")
+    # Text musí přiznat, že to není předpověď.
+    assert "předpověď" in pruvodce.navrh_zlepseni(drtic)[1]
 
 
 def test_sance_nikdy_neklesa_se_skorem(conn):

@@ -41,7 +41,9 @@ import re
 import sqlite3
 import statistics
 import sys
+import dataclasses
 from dataclasses import dataclass, field, asdict
+from datetime import date
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -80,12 +82,13 @@ SIGMA_MAX = 32.0
 # (viz PRIORITY a _vahy_profilu).
 SLOZKY_SKORE: dict[str, float] = {
     "zajem": 3.0,           # shoda oboru s tím, co uchazeče zajímá
-    "typ": 2.0,             # typ vzdělání odvozený z osobnostních otázek
+    "typ": 3.0,             # typ vzdělání odvozený z osobnostních otázek
     "dosazitelnost": 2.5,   # reálnost přijetí podle očekávaného skóre
     "kvalita": 1.5,         # maturitní výsledky školy, posun žáků, inspekce
     "blizkost": 1.5,        # městská část
     "cena": 1.0,            # školné
-    "prostredi": 1.0,       # velikost školy, jazyky, vybavení dle priorit
+    "prostredi": 1.0,       # velikost školy, vybavení dle priorit
+    "jazyk": 1.0,           # vyučuje škola jazyk, který uchazeč chce?
 }
 
 # Priority, ze kterých uchazeč vybírá max. 3 (klíč -> (popisek, složka skóre)).
@@ -94,7 +97,7 @@ PRIORITY: dict[str, tuple[str, str]] = {
     "kvalita": ("Kvalita výuky a výsledky maturit", "kvalita"),
     "blizkost": ("Ať to mám blízko", "blizkost"),
     "cena": ("Co nejnižší školné", "cena"),
-    "jazyky": ("Hodně jazyků", "prostredi"),
+    "jazyky": ("Hodně jazyků", "jazyk"),
     "maly_kolektiv": ("Menší škola, osobní přístup", "prostredi"),
     "sport": ("Sportovní zázemí", "prostredi"),
     "umeni": ("Umělecké a kreativní zaměření", "prostredi"),
@@ -113,6 +116,37 @@ VZOR_SKOLY_PRO_ZP = re.compile(
     r"|pro žáky se speciálními",
     re.IGNORECASE,
 )
+
+# Otázky na přípravu. Záměrně se **neptají na odhodlání** („jak moc se budeš
+# připravovat?" odpoví každý „hodně" a odpověď nemá informační hodnotu), ale
+# na chování, které už probíhá, a na čas, který reálně je. Slouží k jedinému:
+# nastavit výchozí polohu posuvníku zlepšení a upozornit, když se plán a cíl
+# rozcházejí. **Žádný převod hodin na body z nich nepočítáme** — data, která
+# by ho podložila, neexistují a vymýšlet si ho je přesně to, co u agregátorů
+# kritizujeme (README, zdroj 6).
+PRIPRAVA_OTAZKY: dict[str, tuple[str, dict[str, tuple[str, float]]]] = {
+    "priprava_ted": ("Připravuješ se na přijímačky už teď?", {
+        "ne":         ("Zatím vůbec", 0.0),
+        "obcas":      ("Občas, když si vzpomenu", 0.5),
+        "pravidelne": ("Pravidelně každý týden", 1.0),
+    }),
+    "hodin_tydne": ("Kolik hodin týdně na to reálně máš?", {
+        "do1":    ("Do hodiny", 0.25),
+        "2az3":   ("2–3 hodiny", 0.5),
+        "4az6":   ("4–6 hodin", 0.8),
+        "7plus":  ("7 a víc", 1.0),
+    }),
+    "kurz": ("Chodíš na přípravný kurz nebo doučování?", {
+        "ne":      ("Ne", 0.0),
+        "chystam": ("Chystám se", 0.5),
+        "ano":     ("Ano", 1.0),
+    }),
+}
+
+# Návrh, o kolik bodů **v každém předmětu** (z 50) posunout posuvník podle
+# odpovědí. Je to pravidlo palce pro výchozí polohu, ne předpověď — uživatel
+# si ho má přenastavit. Škála: 0 = nedělá nic, 1 = připravuje se naplno.
+MAX_NAVRH_BODU = 10
 
 # Pásma portfolia přihlášek (šance na přijetí). Tři přihlášky = tři role.
 PASMA_PORTFOLIA: dict[str, tuple[float, float]] = {
@@ -138,9 +172,20 @@ class Profil:
     skor_ma: float | None = None         # očekávaný % skór MA (0–100)
     skolne_max: int | None = None        # Kč/rok; None = nerozhoduje, 0 = jen bezplatné
     jazyk: str | None = None             # požadovaný jazyk ('N', 'Š', 'F', …)
+    # Jazyk normálně jen váží. Jako tvrdý filtr vyhazoval třetinu nabídky
+    # (138 -> 90) a měnil 3 z 5 škol v pětici — na otázku, která vypadá
+    # jako detail na konci formuláře, je to moc. Kdo na jazyku opravdu
+    # trvá, zapne si `jazyk_povinny`.
+    jazyk_povinny: bool = False
     prospech: float | None = None        # průměr známek na výstupním vysvědčení ZŠ
     specialni_potreby: bool = False      # zahrnout školy zřízené pro žáky se ZP
     talentove: bool = False              # zahrnout obory s talentovou zkouškou
+    # Zlepšení v **bodech na předmět** (z 50), ne na dvousetbodové škále —
+    # rodič uvažuje v bodech z přijímaček, ne v procentech skóru.
+    zlepseni_bodu: float = 0.0
+    priprava_ted: str | None = None      # 'ne' / 'obcas' / 'pravidelne'
+    hodin_tydne: str | None = None       # 'do1' / '2az3' / '4az6' / '7plus'
+    kurz: str | None = None              # 'ne' / 'chystam' / 'ano'
     # Osobnostní otázky, ze kterých se typ vzdělání **odvozuje**, místo aby
     # se na něj průvodce ptal přímo (viz oblasti.OSOBNOSTNI_OTAZKY).
     po_skole: str | None = None          # 'vysoka' / 'prace' / 'nevim'
@@ -155,11 +200,22 @@ class Profil:
         return {"po_skole": self.po_skole, "rozhodnuto": self.rozhodnuto, "praxe": self.praxe}
 
     @property
+    def priprava(self) -> dict[str, str | None]:
+        return {"priprava_ted": self.priprava_ted, "hodin_tydne": self.hodin_tydne,
+                "kurz": self.kurz}
+
+    @property
     def skor(self) -> float | None:
-        """Očekávaný součet % skóru ČJ + MA (škála 0–200, jako CERMAT)."""
+        """Očekávaný součet % skóru ČJ + MA (škála 0–200, jako CERMAT).
+
+        Zahrnuje `zlepseni_bodu`: bod navíc v jednom předmětu z 50 je
+        +2 % skóru v něm, a protože se počítá do obou předmětů, +4 na
+        dvousetbodové škále. Strop 50 bodů na předmět se nepřekročí.
+        """
         if self.skor_cj is None or self.skor_ma is None:
             return None
-        return self.skor_cj + self.skor_ma
+        pridat = self.zlepseni_bodu / 50 * 100
+        return min(100.0, self.skor_cj + pridat) + min(100.0, self.skor_ma + pridat)
 
     @classmethod
     def z_json(cls, data: dict[str, Any]) -> "Profil":
@@ -212,6 +268,7 @@ class Nabidka:
     pocet_jazyku: int | None = None
     dod: str | None = None
     prihlasky_do: str | None = None
+    termin_jpz: str | None = None        # text termínů jednotné zkoušky ze scrapu
     dalsi_kriteria: str | None = None
     talentova_zkouska: bool = False
     skolni_zkousky: tuple[str, ...] = ()   # ústní/písemná/praktická nad rámec JPZ
@@ -534,6 +591,7 @@ def _doplnit_obor(nab: Nabidka, o: dict[str, Any]) -> None:
         nab.lekarska_prohlidka = o.get("plp")
     pr = o.get("prijimaci_rizeni") or {}
     nab.prihlasky_do = nab.prihlasky_do or pr.get("prihlasky_podejte_do")
+    nab.termin_jpz = nab.termin_jpz or pr.get("terminy_jednotne_zkousky")
     nab.dalsi_kriteria = nab.dalsi_kriteria or pr.get("jina_kriteria_prijimani")
     if _kona_se(pr.get("talentova_zkouska")):
         nab.talentova_zkouska = True
@@ -935,7 +993,7 @@ def projde_filtrem(nab: Nabidka, profil: Profil) -> bool:
             return False
     if profil.skolne_max is not None and not _vejde_se_do_skolneho(nab, profil.skolne_max):
         return False
-    if profil.jazyk and not _uci_jazyk(nab, profil.jazyk):
+    if profil.jazyk and profil.jazyk_povinny and not _uci_jazyk(nab, profil.jazyk):
         return False
     return True
 
@@ -970,6 +1028,14 @@ def ohodnot(profil: Profil, nabidky: Iterable[Nabidka]) -> list[Vysledek]:
 
     vahy = _vahy_profilu(profil)
     preference = oblasti.preference_typu(profil.osobnostni)
+    # Preference typu se normalizuje proti tomu, co prošlo filtrem — stejně
+    # jako `kvalita`. Surové hodnoty se u jedné nabídky mačkají do pásma
+    # kolem 0,75 (průměr ze tří tabulek táhne ke středu) a složka pak
+    # prakticky nic neřídila: přepnutí z „půjdu na vysokou" na „chci rovnou
+    # pracovat" neměnilo v pětici ani jeden obor. Po roztažení na plný
+    # rozsah rozhoduje pořadí typů, ne jejich absolutní hodnota.
+    hodnoty_typu = [preference.get(n.typ, 0.5) for n in vybrane]
+    typ_dolni, typ_horni = min(hodnoty_typu), max(hodnoty_typu)
     # Kvalita se normalizuje proti tomu, co je v nabídce skutečně k mání —
     # percentil maturit se mezi gymnázii a učňáky liší o desítky bodů, takže
     # absolutní práh by u odborných oborů „vypnul" celou složku.
@@ -982,12 +1048,13 @@ def ohodnot(profil: Profil, nabidky: Iterable[Nabidka]) -> list[Vysledek]:
         p, zdroj = sance_prijeti(nab, profil.skor)
         slozky = {
             "zajem": _skore_zajem(nab, profil),
-            "typ": preference.get(nab.typ, 0.5),
+            "typ": _normalizuj(preference.get(nab.typ, 0.5), typ_dolni, typ_horni),
             "dosazitelnost": _skore_dosazitelnost(p, nab, profil),
             "kvalita": _skore_kvalita(nab, mez_dolni, mez_horni),
             "blizkost": _skore_blizkost(nab, profil),
             "cena": _skore_cena(nab, profil),
             "prostredi": _skore_prostredi(nab, profil),
+            "jazyk": _skore_jazyk(nab, profil),
         }
         skore = 100.0 * sum(slozky[k] * vahy[k] for k in slozky) / sum(vahy.values())
         vysledky.append(
@@ -1003,6 +1070,13 @@ def ohodnot(profil: Profil, nabidky: Iterable[Nabidka]) -> list[Vysledek]:
         )
     vysledky.sort(key=lambda v: v.skore, reverse=True)
     return vysledky
+
+
+def _normalizuj(hodnota: float, dolni: float, horni: float) -> float:
+    """Roztáhne hodnotu na 0–1 podle rozsahu, který je mezi kandidáty k mání."""
+    if horni <= dolni:
+        return 0.5
+    return (hodnota - dolni) / (horni - dolni)
 
 
 def _skore_zajem(nab: Nabidka, profil: Profil) -> float:
@@ -1070,10 +1144,7 @@ def _skore_prostredi(nab: Nabidka, profil: Profil) -> float:
     slozky: list[float] = []
     vybaveni = (nab.vybaveni or "").lower()
     for p in profil.priority[:3]:
-        if p == "jazyky":
-            pocet = nab.pocet_jazyku or (len(nab.jazyky.split(",")) if nab.jazyky else 0)
-            slozky.append(min(1.0, pocet / 3))
-        elif p == "maly_kolektiv":
+        if p == "maly_kolektiv":
             if nab.velikost_skoly:
                 slozky.append(min(1.0, max(0.0, (600 - nab.velikost_skoly) / 500)))
         elif p == "sport":
@@ -1083,6 +1154,15 @@ def _skore_prostredi(nab: Nabidka, profil: Profil) -> float:
         elif p == "praxe":
             slozky.append(1.0 if nab.typ in ("H", "E", "L0") else (0.6 if nab.typ == "M" else 0.2))
     return statistics.mean(slozky) if slozky else 0.5
+
+
+def _skore_jazyk(nab: Nabidka, profil: Profil) -> float:
+    """Učí škola jazyk, který uchazeč chce? Bez požadavku je složka neutrální."""
+    if not profil.jazyk:
+        return 0.5
+    if not nab.jazyky:
+        return 0.4        # údaj chybí — netrestat plnou vahou, ale ani odměnit
+    return 1.0 if _uci_jazyk(nab, profil.jazyk) else 0.15
 
 
 def _duvody(nab: Nabidka, profil: Profil, slozky: dict[str, float], p: float | None) -> list[str]:
@@ -1410,28 +1490,107 @@ def prubeh_pruvodce() -> Profil:
     )
 
 
-def scenare_zlepseni(profil: Profil, nabidky: list[Nabidka], kroky=(0, 16, 32, 48),
-                    ) -> list[tuple[int, int, list[tuple[str, float | None]]]]:
+def scenare_zlepseni(profil: Profil, nabidky: list[Nabidka],
+                     kroky_bodu: tuple[float, ...] = (0, 3, 6, 10),
+                     ) -> list[tuple[float, int, list[tuple[str, float | None]]]]:
     """Jak se šance mění, když se uchazeč do přijímaček zlepší.
 
-    Nejčastější reálná situace: skór je ze zkoušky nanečisto rok před
-    termínem a dítě se bude učit. Statický odhad k dnešnímu dni je pak
-    zbytečně pesimistický a hlavně neukazuje to podstatné — kolik bodů
-    dělí „nemá šanci" od „reálné". `kroky` jsou body navíc na škále 0–200
-    (16 bodů ≈ +8 bodů v jednom předmětu z 50).
+    `kroky_bodu` jsou **body na předmět** (z 50), ne procenta skóru — rodič
+    uvažuje v bodech z přijímaček nanečisto. Dřív se CLI a web v téhle
+    jednotce rozcházely: stejně vypadající „+8" znamenalo v každém z nich
+    něco jiného.
 
-    Vrací pro každý krok (body navíc, celkový skór, [(popis, šance), …])
-    pro nabídky, které dostane na vstupu — pořadí se zachová.
+    Vrací pro každý krok (body na předmět, celkový % skór, [(popis, šance)]).
     """
-    if profil.skor is None:
+    if profil.skor_cj is None or profil.skor_ma is None:
         return []
     out = []
-    for krok in kroky:
-        skor = min(200.0, profil.skor + krok)
-        out.append((krok, int(skor),
+    for krok in kroky_bodu:
+        varianta = dataclasses.replace(profil, zlepseni_bodu=profil.zlepseni_bodu + krok)
+        skor = varianta.skor
+        out.append((krok, round(skor),
                     [(f"{n.organizace[:34]} ({n.kod_kkov})", sance_prijeti(n, skor)[0])
                      for n in nabidky]))
     return out
+
+
+# Termíny přijímacího řízení. Datum se bere ze scrapu infoabsolventu (pole
+# `terminy_jednotne_zkousky` a `prihlasky_podejte_do` u oborů) — v datech je
+# ročník, pro který se zrovna scrapovalo, takže se posune na nejbližší
+# budoucí výskyt téhož dne a měsíce. Ptát se uchazeče „kdy máš přijímačky"
+# nemá smysl, když to víme přesně.
+_DATUM = re.compile(r"(\d{1,2})\s*\.\s*(\d{1,2})\s*\.\s*(\d{4})")
+
+
+def _nejblizsi_termin(texty: Iterable[str | None], dnes: date) -> date | None:
+    """Nejčastější datum z textů, posunuté na nejbližší budoucí výskyt."""
+    nalezene: list[date] = []
+    for text in texty:
+        if not text:
+            continue
+        m = _DATUM.search(text)
+        if not m:
+            continue
+        den, mesic, rok = (int(x) for x in m.groups())
+        try:
+            nalezene.append(date(rok, mesic, den))
+        except ValueError:
+            continue
+    if not nalezene:
+        return None
+    nejcastejsi = statistics.mode([(d.month, d.day) for d in nalezene])
+    mesic, den = nejcastejsi
+    for rok in (dnes.year, dnes.year + 1):
+        try:
+            kandidat = date(rok, mesic, den)
+        except ValueError:
+            continue
+        if kandidat >= dnes:
+            return kandidat
+    return None
+
+
+def terminy(nabidky: Iterable[Nabidka], dnes: date | None = None) -> dict[str, Any]:
+    """Termín přihlášky, termín JPZ a kolik týdnů do nich zbývá."""
+    dnes = dnes or date.today()
+    nabidky = list(nabidky)
+    prihlasky = _nejblizsi_termin((n.prihlasky_do for n in nabidky), dnes)
+    jpz = _nejblizsi_termin((n.termin_jpz for n in nabidky), dnes)
+    return {
+        "dnes": dnes,
+        "prihlasky_do": prihlasky,
+        "jpz": jpz,
+        "tydnu_do_prihlasky": None if prihlasky is None else (prihlasky - dnes).days // 7,
+        "tydnu_do_jpz": None if jpz is None else (jpz - dnes).days // 7,
+    }
+
+
+def navrh_zlepseni(profil: Profil) -> tuple[float, str]:
+    """Kolik bodů na předmět navrhnout jako výchozí polohu posuvníku.
+
+    **Není to předpověď.** Žádná veřejná data nevážou hodiny přípravy na
+    body z JPZ — soubory uchazečů CERMAT obsahují výsledek, ne přípravu.
+    Je to pravidlo palce, které jen posune posuvník tam, kde ho uchazeč
+    nejspíš chce mít, a vrátí k tomu větu, aby bylo vidět, na čem stojí.
+    Uživatel si to má přenastavit.
+    """
+    slozky = [
+        varianty[odpoved][1]
+        for klic, (_otazka, varianty) in PRIPRAVA_OTAZKY.items()
+        if (odpoved := profil.priprava.get(klic)) in varianty
+    ]
+    if not slozky:
+        return 0.0, "Bez odpovědí na přípravu posuvník nikam neposouvám."
+    miraz = statistics.mean(slozky)
+    body = round(MAX_NAVRH_BODU * miraz)
+    if body == 0:
+        return 0.0, ("Podle odpovědí se zatím nepřipravuješ — beru dnešní body "
+                     "jako výchozí. Posuvníkem si zkus, co by udělalo zlepšení.")
+    return float(body), (
+        f"Podle odpovědí navrhuju počítat s +{body:.0f} body v každém předmětu. "
+        "Je to pravidlo palce, ne předpověď — kolik bodů příprava reálně přinese, "
+        "z veřejných dat nikdo neví. Přenastav si to."
+    )
 
 
 def vypis_kartu(poradi: int, v: Vysledek, role: str | None = None) -> None:
@@ -1529,9 +1688,9 @@ def main(argv: list[str] | None = None) -> int:
     scenare = scenare_zlepseni(profil, [v.nabidka for v in nejlepsi])
     if scenare:
         print("\n=== Co udělá příprava ===")
-        print("Šance u pětice výše, když se do přijímaček zlepšíš "
-              "(16 bodů ≈ +8 bodů v jednom předmětu z 50):")
-        hlavicka = " " * 40 + "".join(f"{f'+{k} b.':>10}" for k, _, _ in scenare)
+        print("Šance u pětice výše podle toho, o kolik bodů se zlepšíš "
+              "v KAŽDÉM předmětu (z 50):")
+        hlavicka = " " * 40 + "".join(f"{f'+{k:.0f} b.':>10}" for k, _, _ in scenare)
         print(hlavicka)
         print(" " * 40 + "".join(f"{f'({c}/200)':>10}" for _, c, _ in scenare))
         for i, (popis, _) in enumerate(scenare[0][2]):
