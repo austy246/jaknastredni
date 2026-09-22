@@ -27,6 +27,7 @@ import json
 import logging
 import sys
 from dataclasses import asdict
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +82,9 @@ def export(conn) -> dict[str, Any]:
     """Data pro webový prototyp: nabídky + všechny konstanty hodnocení."""
     nabidky = pruvodce.nacti_nabidky(conn)
     return {
+        # Datum generování patří na stránku: nasazená verze může být týdny
+        # stará a uchazeč nemá jak poznat, jestli čte letošní, nebo loňská data.
+        "vygenerovano": date.today().strftime("%-d. %-m. %Y"),
         "nabidky": [nabidka_do_dictu(n) for n in nabidky],
         "konstanty": {
             "roky_jpz": pruvodce.ROKY_JPZ,

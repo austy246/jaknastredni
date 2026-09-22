@@ -1,13 +1,16 @@
-# Sestaví databázi jaknastredni.db čistě z data/raw/ (bez sítě, viz
-# jaknastredni/build_db.py a README.md, sekce "Rychlý start"). Databáze se
-# neverzuje v repu, proto ji tenhle workflow sestavuje znovu při každém
-# nasazení a nahrává jako artefakt.
+# Sestaví databázi `data/jaknastredni.db` čistě z `data/raw/` (bez sítě, viz
+# jaknastredni/build_db.py a README.md, sekce "Rychlý start"), vyexportuje
+# z ní data pro webového průvodce a nasadí ho na GitHub Pages.
 #
-# Skutečné nasazení (zkopírování artefaktu na server / do běžící aplikace)
-# zatím neexistuje — projekt zatím nemá vlastní aplikaci, jen sběr dat. Až
-# vznikne, přidá se sem krok, který výsledný soubor doručí tam, kde ho
-# aplikace čte.
-name: Build database
+# Ani databáze, ani `web/data.js` se neverzují — obojí jsou odvozené
+# artefakty (README, "Rozhodnutí o vývoji a ukládání dat"), takže se při
+# každém nasazení staví znovu. Po `git clone` je v repu jen `web/index.html`
+# a bez `export_web` je stránka prázdná; tenhle workflow je to jediné místo,
+# kde se obojí spojí dohromady.
+#
+# Pages se zapínají samy (`configure-pages` s `enablement: true`), není
+# potřeba nic klikat v nastavení repozitáře.
+name: Build database and deploy site
 
 on:
   push:
@@ -15,8 +18,21 @@ on:
     paths:
       - "data/raw/**"
       - "jaknastredni/**"
+      - "web/**"
       - ".github/workflows/build-db.yml"
   workflow_dispatch: {}
+
+# Potřeba pro nasazení na Pages přes OIDC (actions/deploy-pages).
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Souběžná nasazení by si přepisovala výsledek; rozdělaný běh se ale
+# nepřerušuje, ať se nezveřejní napůl sestavená stránka.
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -37,8 +53,29 @@ jobs:
       - name: Build database (offline, jen z data/raw/)
         run: python -m jaknastredni.build_db --db data/jaknastredni.db -v
 
+      - name: Export dat pro web
+        run: python -m jaknastredni.export_web --db data/jaknastredni.db -o web/data.js -v
+
       - uses: actions/upload-artifact@v4
         with:
           name: jaknastredni-db
           path: data/jaknastredni.db
           retention-days: 30
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

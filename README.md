@@ -427,8 +427,10 @@ z dat a ukazuje, kolik týdnů zbývá. Výstup:
   jistota) — od roku 2024 se podávají tři přihlášky a pořadí priorit se
   nevyplatí taktizovat, což průvodce uživateli říká natvrdo.
 
-Klikací prototyp je `web/index.html` (statická stránka, žádný server) —
-data si bere z `web/data.js`, který se generuje z databáze:
+Průvodce běží na **https://austy246.github.io/jaknastredni/** — statická
+stránka bez serveru, nasazuje ji workflow `.github/workflows/build-db.yml`
+při každém pushi do `main` (sestaví databázi z `data/raw/`, vyexportuje
+`web/data.js` a nasadí `web/` na GitHub Pages). Lokálně:
 
 ```bash
 python -m jaknastredni.export_web --db data/jaknastredni.db -o web/data.js

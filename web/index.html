@@ -360,9 +360,18 @@
       hranice; nejistota (σ = 18 až 32 bodů) vychází z naměřeného meziročního
       rozptylu hranic. Stoprocentní jistota neexistuje — škola si k jednotné
       zkoušce přidává vlastní kritéria, která ve veřejných datech nejsou.</p>
-    <p>Prototyp k návrhu <code>docs/pruvodce-ux.md</code>; zdrojem pravdy o
-      hodnocení je <code>jaknastredni/pruvodce.py</code>, tahle stránka čte jeho
-      konstanty z <code>data.js</code>.</p>
+    <p><b>Není to oficiální nástroj.</b> Je to osobní open-source projekt, ne
+      služba MŠMT, CERMATu ani žádné školy. Čísla jsou odvozená z veřejných dat
+      a můžou být zastaralá nebo chybná — <b>před podáním přihlášky si všechno
+      ověřte přímo u školy</b>. Šance na přijetí je odhad z minulých let, ne
+      příslib: školy si kritéria mění a k jednotné zkoušce přidávají vlastní body.</p>
+    <p>Zdrojový kód, syrová data i popis výpočtu:
+      <a href="https://github.com/austy246/jaknastredni" target="_blank" rel="noopener">github.com/austy246/jaknastredni</a>.
+      Návrh je v <code>docs/pruvodce-ux.md</code>, zdrojem pravdy o hodnocení je
+      <code>jaknastredni/pruvodce.py</code> — tahle stránka čte jeho konstanty
+      z <code>data.js</code>, takže se od něj nemůže rozejít.
+      Našli jste chybu? <a href="https://github.com/austy246/jaknastredni/issues" target="_blank" rel="noopener">Založte issue</a>.</p>
+    <p id="stav-dat"></p>
   </footer>
 </div>
 
@@ -905,6 +914,16 @@
       + " ne předpověď — kolik bodů příprava reálně přinese, z veřejných dat nikdo neví.";
   }
 
+  function vykresliStavDat() {
+    var el2 = document.getElementById("stav-dat");
+    if (!el2) return;
+    var nab = D.nabidky.length;
+    var sMerenim = D.nabidky.filter(function (n) { return n.fit || n.bez_jpz; }).length;
+    el2.textContent = "Databáze: " + nab + " denních nabídek pražských středních škol, "
+      + "u " + sMerenim + " z nich je šance spočítaná z naměřených dat."
+      + (D.vygenerovano ? " Data vygenerována " + D.vygenerovano + "." : "");
+  }
+
   function vykresliTerminy() {
     var t = D.terminy, box = document.getElementById("terminy");
     if (!t || (!t.jpz && !t.prihlasky_do)) { box.hidden = true; return; }
@@ -1041,6 +1060,7 @@
   }
 
   vykresliTerminy();
+  vykresliStavDat();
   zmena();
 })();
 </script>
