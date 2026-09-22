@@ -427,10 +427,16 @@ z dat a ukazuje, kolik týdnů zbývá. Výstup:
   jistota) — od roku 2024 se podávají tři přihlášky a pořadí priorit se
   nevyplatí taktizovat, což průvodce uživateli říká natvrdo.
 
-Průvodce běží na **https://austy246.github.io/jaknastredni/** — statická
+Průvodce má běžet na **https://austy246.github.io/jaknastredni/** — statická
 stránka bez serveru, nasazuje ji workflow `.github/workflows/build-db.yml`
 při každém pushi do `main` (sestaví databázi z `data/raw/`, vyexportuje
-`web/data.js` a nasadí `web/` na GitHub Pages). Lokálně:
+`web/data.js` a nasadí `web/` na GitHub Pages).
+
+**Jednorázový krok:** Pages je potřeba zapnout v Settings → Pages → Source
+„GitHub Actions". Workflow to zkouší udělat sám (`enablement: true`), ale
+`GITHUB_TOKEN` nemá právo web Pages založit — API vrátí „Resource not
+accessible by integration". Dokud se to nezapne, workflow nespadne, jen
+nasazení přeskočí a databázi nahraje jako artefakt. Lokálně:
 
 ```bash
 python -m jaknastredni.export_web --db data/jaknastredni.db -o web/data.js

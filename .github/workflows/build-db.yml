@@ -8,8 +8,12 @@
 # a bez `export_web` je stránka prázdná; tenhle workflow je to jediné místo,
 # kde se obojí spojí dohromady.
 #
-# Pages se zapínají samy (`configure-pages` s `enablement: true`), není
-# potřeba nic klikat v nastavení repozitáře.
+# POZOR: Pages se musí **jednou ručně zapnout** v Settings → Pages →
+# Source: "GitHub Actions". `enablement: true` na to nestačí — `GITHUB_TOKEN`
+# nemá právo web Pages založit (API vrátí "Resource not accessible by
+# integration"), oprávnění `pages: write` stačí jen na nasazení do už
+# existujícího webu. Dokud Pages zapnuté nejsou, workflow **nespadne**:
+# sestaví databázi, nahraje ji jako artefakt a nasazení jen přeskočí.
 name: Build database and deploy site
 
 on:
@@ -62,16 +66,30 @@ jobs:
           path: data/jaknastredni.db
           retention-days: 30
 
-      - uses: actions/configure-pages@v5
+      # Když Pages nejsou zapnuté, tenhle krok selže — ale build databáze
+      # kvůli tomu nemá být červený, ta na Pages nezávisí.
+      - id: pages
+        uses: actions/configure-pages@v5
+        continue-on-error: true
         with:
           enablement: true
 
-      - uses: actions/upload-pages-artifact@v3
+      - if: steps.pages.outcome == 'success'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: web
 
+      - if: steps.pages.outcome != 'success'
+        run: |
+          echo "::warning::Pages nejsou zapnuté, nasazení přeskočeno." \
+               "Zapni je v Settings → Pages → Source: GitHub Actions a spusť workflow znovu."
+
+    outputs:
+      pages_ready: ${{ steps.pages.outcome }}
+
   deploy:
     needs: build
+    if: needs.build.outputs.pages_ready == 'success'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
