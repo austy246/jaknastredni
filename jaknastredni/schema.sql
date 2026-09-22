@@ -148,6 +148,21 @@ CREATE TABLE IF NOT EXISTS maturita (
 );
 CREATE INDEX IF NOT EXISTS ix_maturita_redizo ON maturita(redizo);
 
+-- Inspekční zprávy ČŠI (opendata.csicr.cz, dataset 69). Bez cizího klíče na
+-- organizace: dataset zahrnuje všechny typy škol/zařízení v celé ČR od roku
+-- 2003, i školy mimo Prahu a mezitím zaniklé, které v rejstříku MŠMT nejsou;
+-- filtrování na Prahu se dělá JOINem v dotazech (nebo --jen-praha při importu).
+CREATE TABLE IF NOT EXISTS inspekce (
+    redizo      TEXT NOT NULL,
+    datum_od    TEXT NOT NULL,      -- začátek inspekční činnosti, ISO YYYY-MM-DD
+    nazev       TEXT NOT NULL,      -- název školy v době inspekce (ne osobní údaj)
+    datum_do    TEXT,               -- konec inspekční činnosti; NULL, pokud chybí/nevalidní
+    pdf_url     TEXT,               -- přímý odkaz na PDF zprávy (LinkIZ)
+    portal_url  TEXT,               -- odkaz na stránku školy na portal.csicr.cz
+    PRIMARY KEY (redizo, datum_od)
+);
+CREATE INDEX IF NOT EXISTS ix_inspekce_redizo ON inspekce(redizo);
+
 -- Pohled: střední školy s organizací (nejčastější dotaz).
 CREATE VIEW IF NOT EXISTS v_stredni_skola AS
 SELECT s.izo, s.redizo, o.nazev AS organizace, s.nazev AS skola, s.druh,
