@@ -23,6 +23,9 @@ kvalita, maturitní výsledky, uplatnění absolventů apod.).
   funguje pro roky 2024–2026 (obě kola), viz níže.
 - Proces stažení dat a sestavení databáze je rozdělený na dva kroky
   (`jaknastredni.fetch_all` a `jaknastredni.build_db`), viz "Rychlý start".
+- Nad hotovou databází běží **průvodce výběrem školy**
+  (`jaknastredni/pruvodce.py`) — z odpovědí uchazeče vybere 5 nejlepších
+  nabídek a návrh tří přihlášek, viz níže a [`docs/pruvodce-ux.md`](docs/pruvodce-ux.md).
 
 ## Rychlý start
 
@@ -39,6 +42,13 @@ pip install -e ".[dev]"
 python -m jaknastredni.fetch_all -v        # stáhne vše ze všech zdrojů do data/raw/ (~7–8 minut)
 python -m jaknastredni.build_db  -v        # sestaví data/jaknastredni.db jen z data/raw/ (~1 minuta, offline)
 python -m pytest
+```
+
+Nad hotovou databází se pak dá spustit průvodce výběrem školy:
+
+```bash
+python -m jaknastredni.pruvodce --db data/jaknastredni.db              # interaktivní dotazník
+python -m jaknastredni.pruvodce --profil profil.json --json            # neinteraktivně, JSON výstup
 ```
 
 Jednotlivé importéry jdou pořád spustit i samostatně (stáhnou i naimportují
@@ -352,6 +362,39 @@ routing výpočtu.
 
 Rozdíly jsou malé a vysvětlitelné (dobíhající školy, konzervatoře, školy bez
 JPZ). Rejstřík MŠMT je referenční množina.
+
+## Průvodce výběrem školy
+
+Podrobný návrh UX (proč které otázky, jak se počítá skóre a šance, co se
+zobrazuje na kartě): [`docs/pruvodce-ux.md`](docs/pruvodce-ux.md).
+Implementace: [`jaknastredni/pruvodce.py`](jaknastredni/pruvodce.py) +
+[`jaknastredni/oblasti.py`](jaknastredni/oblasti.py).
+
+Průvodce nic nestahuje a do databáze nezapisuje — jen ji čte. Základní
+jednotkou je **nabídka = škola × obor** (623 denních nabídek pražských SŠ),
+protože přihláška se podává na obor a všechna čísla (kapacita, poměr
+přihlášek, hranice přijetí) jsou oborová.
+
+Devět otázek (povinná jen první — ze které třídy se uchazeč hlásí), z nich
+tvrdé filtry (třída, typ vzdělání, oblast zájmu, školné, jazyk) a průhledné
+vážené skóre shody ze šesti složek (`zajem`, `dosazitelnost`, `kvalita`,
+`blizkost`, `cena`, `prostredi`). Výstup:
+
+- **5 nejlepších nabídek**, nejvýš jedna od každé školy, každá s důvody
+  (`+`) i varováními (`!`);
+- **návrh tří přihlášek** rozložený podle rizika (sen / realistická /
+  jistota) — od roku 2024 se podávají tři přihlášky a pořadí priorit se
+  nevyplatí taktizovat, což průvodce uživateli říká natvrdo.
+
+**Šance na přijetí** se počítá ze zveřejněného minimálního % skóru přijatých
+(`prijimaci_rizeni.skor_prijati_min_cjma`, 2024+) jako normální rozdělení
+kolem očekávané hranice. Nejistota není odhad od stolu: směrodatná odchylka
+meziroční změny hranice je v datech 20,4 bodu (598 dvojic škola×obor
+2024→2025 a 2025→2026), proto σ = 18 až 32. Uchazeč přesně na loňské hranici
+dostane ~50 %, ne jistotu. Kde hranice chybí, použije se poměr přihlášek ku
+kapacitě; kde chybí i ten (učňovské obory bez JPZ), se šance **neodhaduje** a
+karta to napíše. Žádné neprůhledné „skóre obtížnosti" jako u agregátorů
+(zdroj 6) — vzorec je v dokumentaci i v kódu.
 
 ## Doporučený postup
 
