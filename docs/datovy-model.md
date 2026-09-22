@@ -32,16 +32,16 @@ organizace (REDIZO) ──< zrizovatel
                │      ──< obor (KKOV, forma, délka)
                │
                ├──< prijimaci_rizeni   (CERMAT JPZ 2024+, rok × kolo × KKOV × ročník)   [plán]
-               ├──< jpz_skupina        (CERMAT JPZ 2017–2023, rok × skupina oborů)       [plán]
-organizace ────┼──< maturita           (CERMAT MZ 2015+, rok × období × SMO16 × předmět) [hotovo]
+organizace ────┼──< jpz_skupina        (CERMAT JPZ 2017–2023, rok × skupina oborů)       [hotovo]
+               ├──< maturita           (CERMAT MZ 2015+, rok × období × SMO16 × předmět) [hotovo]
                ├──< inspekce           (ČŠI, datum × PDF)                                [hotovo]
                └──< web_profil         (infoabsolvent / Atlas, datum scrapování)         [plán]
 ```
 
-Plné čáry jsou implementované (importéry MŠMT, CERMAT maturita a ČŠI),
-hranaté závorky označují tabulky navržené pro další importéry. CERMAT do
-roku 2023, maturita a ČŠI inspekce nemají IZO, proto se váží na organizaci
-(REDIZO), ne na školu.
+Plné čáry jsou implementované (importéry MŠMT, CERMAT maturita, CERMAT JPZ
+2017–2023 a ČŠI), hranaté závorky označují tabulky navržené pro další
+importéry. CERMAT do roku 2023, maturita a ČŠI inspekce nemají IZO, proto se
+váží na organizaci (REDIZO), ne na školu.
 
 ## Implementované tabulky (MŠMT)
 
@@ -68,7 +68,7 @@ Stav po importu pražského snapshotu z 22. 9. 2026:
 | střední školy (`C00`) | 219 |
 | aktivní obory na SŠ | 779 (190 různých KKOV) |
 
-## Implementované tabulky (CERMAT maturita)
+## Implementované tabulky (CERMAT maturita, JPZ 2017–2023, ČŠI)
 
 ### `maturita` — CERMAT MZ 2015+
 Klíč `(redizo, rok, obdobi, smo16, predmet)`; `obdobi` je `j` (jarní) nebo
@@ -83,7 +83,19 @@ Prahu a zaniklé školy, které v rejstříku MŠMT nejsou; filtr na Prahu se d�
 JOINem v dotazech (nebo `--jen-praha` při importu). Zdroj:
 [`research/cermat.md`](research/cermat.md), oddíly 4, 7, 9, 10.
 
-## Implementované tabulky (ČŠI)
+### `jpz_skupina` — CERMAT JPZ, starý formát 2017–2023
+Klíč `(redizo, skupina_oboru, rocnik, rok)`. Sloupce: `prihlaseni_cj,
+konali_cj, prumerny_percentil_cj, smerodatna_odchylka_cj` a stejná čtveřice
+pro `_ma`. Bez IZO a bez KKOV (jen hrubá "oborová skupina" typu `GY8`, `LYC`,
+`4LETÉ OBORY`), metrika úspěšnosti je průměrné percentilové umístění (0–100
+percentil), ne bodové skóre. Zdrojový list nemá sloupec typu `TŘÍDĚNÍ` —
+školní řádky se poznají jen podle číselného REDIZO v 1. sloupci (krajské a
+celorepublikové součty mají tam text nebo prázdno). Rok 2020 má tři sloupce
+absence (`OMLUVENI/NEOMLUVENI/VYLOUČENI`) místo jednoho (`NEKONALI`) — do
+`jpz_skupina` se nepromítají, mapování je podle jména sloupce, ne pozice.
+Bez cizího klíče na `organizace` (stejný důvod jako `maturita`), filtr na
+Prahu přes JOIN nebo `--jen-praha`. Naimportováno 21 569 řádků za 2017–2023.
+Zdroj: [`research/cermat.md`](research/cermat.md), oddíly 3, 5, 9, 13.
 
 ### `inspekce` — seznam inspekčních zpráv
 Klíč `(redizo, datum_od)`, oba jsou ISO `YYYY-MM-DD`. Sloupce: `nazev`
@@ -104,11 +116,6 @@ spojené s `_kapacity` a `_prihlasky` přes `ID_SO`: kapacita, index poptávky,
 přihlášky celkem a podle priority 1–5, přijatí, konali ČJ/MA, % skór a
 percentil (průměr/min/max) zvlášť za všechny a za přijaté, důvody nepřijetí.
 Zdroj: [`research/cermat.md`](research/cermat.md), oddíl 6.
-
-### `jpz_skupina` — CERMAT JPZ, starý formát 2017–2023
-Klíč `(redizo, skupina_oboru, rocnik, rok)`. Přihlášeni, konali, průměrné
-percentilové umístění a směrodatná odchylka za ČJ a MA. Bez IZO a KKOV, jen
-pro dlouhé trendy.
 
 ### `web_profil` — scrapované doplňky
 Klíč `(redizo, zdroj, stazeno)`. JSON s poli, která rejstřík nemá: přijímací
