@@ -34,13 +34,14 @@ organizace (REDIZO) ──< zrizovatel
                ├──< prijimaci_rizeni   (CERMAT JPZ 2024+, rok × kolo × KKOV × ročník)   [plán]
                ├──< jpz_skupina        (CERMAT JPZ 2017–2023, rok × skupina oborů)       [plán]
 organizace ────┼──< maturita           (CERMAT MZ 2015+, rok × období × SMO16 × předmět) [hotovo]
-               ├──< inspekce           (ČŠI, datum × PDF)                                [plán]
+               ├──< inspekce           (ČŠI, datum × PDF)                                [hotovo]
                └──< web_profil         (infoabsolvent / Atlas, datum scrapování)         [plán]
 ```
 
-Plné čáry jsou implementované (importéry MŠMT a CERMAT maturita), hranaté
-závorky označují tabulky navržené pro další importéry. CERMAT do roku 2023 a
-maturita nemají IZO, proto se váží na organizaci (REDIZO), ne na školu.
+Plné čáry jsou implementované (importéry MŠMT, CERMAT maturita a ČŠI),
+hranaté závorky označují tabulky navržené pro další importéry. CERMAT do
+roku 2023, maturita a ČŠI inspekce nemají IZO, proto se váží na organizaci
+(REDIZO), ne na školu.
 
 ## Implementované tabulky (MŠMT)
 
@@ -82,6 +83,19 @@ Prahu a zaniklé školy, které v rejstříku MŠMT nejsou; filtr na Prahu se d�
 JOINem v dotazech (nebo `--jen-praha` při importu). Zdroj:
 [`research/cermat.md`](research/cermat.md), oddíly 4, 7, 9, 10.
 
+## Implementované tabulky (ČŠI)
+
+### `inspekce` — seznam inspekčních zpráv
+Klíč `(redizo, datum_od)`, oba jsou ISO `YYYY-MM-DD`. Sloupce: `nazev`
+(název školy v době inspekce, ne osobní údaj), `datum_do`, `pdf_url` (přímý
+odkaz na PDF zprávy), `portal_url` (odkaz na portal.csicr.cz). Bez cizího
+klíče na `organizace` — dataset zahrnuje všechny typy škol/zařízení v celé
+ČR od roku 2003, i školy mimo Prahu a zaniklé školy, které v rejstříku MŠMT
+nejsou; filtr na Prahu se dělá JOINem v dotazech (nebo `--jen-praha` při
+importu). PDF zprávy se v tomto importéru nestahují (jen seznam/metadata),
+extrakce textu (sekce „Závěry", „Silné stránky" apod.) zůstává budoucí krok
+pro užší seznam škol. Zdroj: [`research/csi.md`](research/csi.md).
+
 ## Plánované tabulky (návrh)
 
 ### `prijimaci_rizeni` — CERMAT JPZ, nový formát 2024+
@@ -95,11 +109,6 @@ Zdroj: [`research/cermat.md`](research/cermat.md), oddíl 6.
 Klíč `(redizo, skupina_oboru, rocnik, rok)`. Přihlášeni, konali, průměrné
 percentilové umístění a směrodatná odchylka za ČJ a MA. Bez IZO a KKOV, jen
 pro dlouhé trendy.
-
-### `inspekce` — ČŠI
-Klíč `(redizo, datum_od)`. `datum_do`, `pdf_url`, `portal_url`, později
-extrahovaný text sekcí `silne_stranky`, `prilezitosti`, `doporuceni`.
-Zdroj: dataset 69 na opendata.csicr.cz.
 
 ### `web_profil` — scrapované doplňky
 Klíč `(redizo, zdroj, stazeno)`. JSON s poli, která rejstřík nemá: přijímací
