@@ -46,6 +46,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from . import db, oblasti
+from .cermat_uchazeci import PASMO_BEZ_JPZ
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +59,19 @@ ROKY_JPZ: dict[int, float] = {2026: 3.0, 2025: 2.0, 2024: 1.0}
 # medián |změny| 12 bodů, p90 32 bodů (598 dvojic škola×obor 2024→2025 a
 # 2025→2026). Odhad šance proto nikdy nepoužívá menší nejistotu než tohle —
 # viz docs/pruvodce-ux.md, oddíl „Šance na přijetí".
+# Empirická míra přijetí (tabulka `prijimacky_pasmo`, importér
+# `jaknastredni.cermat_uchazeci`) je přednostní zdroj odhadu šance. Okno je
+# ±10 bodů kolem uchazečova skóru; když v něm není dost věcně posouzených
+# přihlášek, rozšíří se na ±20 a teprve pak se sáhne po odhadu z hranice.
+# MIN_VZOREK drží odhad mimo pásma, kde by o něm rozhodovali tři lidé.
+OKNO_PASMA = 10
+OKNO_PASMA_SIROKE = 20
+MIN_VZOREK = 10
+# Síla smršťování k modelovému odhadu: u vzorku 10 má naměřený podíl váhu
+# 10/15, u vzorku 100 váhu 100/105. Brání tomu, aby "0 ze 12" znamenalo
+# tvrdou nulu — škola může letos vzít víc lidí, kritéria se mění.
+SMRSTENI = 5.0
+
 SIGMA_ZAKLAD = 18.0
 SIGMA_JEDEN_ROK = 24.0   # jen jeden rok dat = ještě větší nejistota
 SIGMA_MAX = 32.0
@@ -66,6 +80,7 @@ SIGMA_MAX = 32.0
 # (viz PRIORITY a _vahy_profilu).
 SLOZKY_SKORE: dict[str, float] = {
     "zajem": 3.0,           # shoda oboru s tím, co uchazeče zajímá
+    "typ": 2.0,             # typ vzdělání odvozený z osobnostních otázek
     "dosazitelnost": 2.5,   # reálnost přijetí podle očekávaného skóre
     "kvalita": 1.5,         # maturitní výsledky školy, posun žáků, inspekce
     "blizkost": 1.5,        # městská část
@@ -125,7 +140,19 @@ class Profil:
     jazyk: str | None = None             # požadovaný jazyk ('N', 'Š', 'F', …)
     prospech: float | None = None        # průměr známek na výstupním vysvědčení ZŠ
     specialni_potreby: bool = False      # zahrnout školy zřízené pro žáky se ZP
+    talentove: bool = False              # zahrnout obory s talentovou zkouškou
+    # Osobnostní otázky, ze kterých se typ vzdělání **odvozuje**, místo aby
+    # se na něj průvodce ptal přímo (viz oblasti.OSOBNOSTNI_OTAZKY).
+    po_skole: str | None = None          # 'vysoka' / 'prace' / 'nevim'
+    rozhodnuto: str | None = None        # 'obor' / 'otevreno' / 'nevim'
+    praxe: str | None = None             # 'hodne' / 'stredne' / 'teorie'
+    typy_vyloucene: list[str] = field(default_factory=list)  # co uchazeč nechce
     priority: list[str] = field(default_factory=list)  # klíče PRIORITY, max 3
+
+    @property
+    def osobnostni(self) -> dict[str, str | None]:
+        """Odpovědi na osobnostní otázky ve tvaru, který čeká `oblasti`."""
+        return {"po_skole": self.po_skole, "rozhodnuto": self.rozhodnuto, "praxe": self.praxe}
 
     @property
     def skor(self) -> float | None:
@@ -169,6 +196,10 @@ class Nabidka:
     # nejvyšší povolený počet žáků oboru přes všechny ročníky (u čtyřletého
     # oboru zhruba 4× roční nábor), ne počet míst pro letošní přijímačky.
     zamereni: tuple[str, ...] = ()
+    # Naměřená míra přijetí z CERMAT souborů uchazečů 2024+:
+    # pásmo % skóru (dolní mez, -1 = obor bez JPZ) -> rok -> (přijato,
+    # věcně posouzeno). Rok se drží zvlášť, aby šel novější vážit výš.
+    pasma: dict[int, dict[int, tuple[int, int]]] = field(default_factory=dict)
     # infoabsolvent.cz / Atlas školství (tabulka web_profil)
     skolne: int | None = None
     plan_prijmout: int | None = None
@@ -217,6 +248,7 @@ class Vysledek:
     sance_zdroj: str
     duvody: list[str]
     varovani: list[str]
+    dalsi_obory: list[str] = field(default_factory=list)
 
     def do_dictu(self) -> dict[str, Any]:
         d = asdict(self.nabidka)
@@ -226,6 +258,7 @@ class Vysledek:
         d["sance_zdroj"] = self.sance_zdroj
         d["duvody"] = self.duvody
         d["varovani"] = self.varovani
+        d["dalsi_obory"] = self.dalsi_obory
         return d
 
 
@@ -275,6 +308,7 @@ def nacti_nabidky(conn: sqlite3.Connection) -> list[Nabidka]:
         )
 
     _doplnit_prijimacky(conn, nabidky)
+    _doplnit_pasma(conn, nabidky)
     _doplnit_web_profil(conn, nabidky)
     _doplnit_kvalitu(conn, nabidky)
     return list(nabidky.values())
@@ -354,6 +388,36 @@ def _doplnit_prijimacky(conn: sqlite3.Connection, nabidky: dict[tuple[str, str],
         nab.hranice = _dokonci_vazene(a["hranice"])
         nab.prumer_prijatych = _dokonci_vazene(a["prumer"])
         nab.poptavka = _dokonci_vazene(a["poptavka"])
+
+
+def _doplnit_pasma(conn: sqlite3.Connection, nabidky: dict[tuple[str, str], Nabidka]) -> None:
+    """Naměřená míra přijetí po bodových pásmech (CERMAT soubory uchazečů).
+
+    Klíčem je REDIZO + KKOV (soubory uchazečů IZO neuvádějí), takže víc škol
+    jedné organizace se stejným oborem sdílí jedna čísla — v pražských datech
+    vzácné, viz komentář u tabulky v schema.sql.
+
+    Bere jen **1. kolo**: druhé kolo je jiná hra (zbylá místa, jiná skladba
+    uchazečů) a míchat je dohromady by zkreslilo. Roky 2024–2026 se sčítají,
+    protože jeden ročník dává u malých oborů vzorek několika lidí.
+    """
+    podle_redizo_kkov: dict[tuple[str, str], list[Nabidka]] = {}
+    for nab in nabidky.values():
+        podle_redizo_kkov.setdefault((nab.redizo, nab.kod_kkov), []).append(nab)
+
+    for r in conn.execute(
+        """
+        SELECT redizo, kod_kkov, rok, pasmo_od,
+               SUM(prijato) AS prijato,
+               SUM(prijato + nedostatecna_kapacita + nesplneni_podminek) AS posouzeno
+          FROM prijimacky_pasmo
+         WHERE kolo = 1
+         GROUP BY redizo, kod_kkov, rok, pasmo_od
+        """
+    ):
+        for nab in podle_redizo_kkov.get((r["redizo"], r["kod_kkov"]), ()):
+            if r["posouzeno"]:
+                nab.pasma.setdefault(r["pasmo_od"], {})[r["rok"]] = (r["prijato"] or 0, r["posouzeno"])
 
 
 def _secti(soucasne: int | None, pridat: int | None) -> int | None:
@@ -619,27 +683,176 @@ def odhad_hranice(nab: Nabidka) -> tuple[float, float] | None:
     return stred, min(max(SIGMA_ZAKLAD, rozpeti), SIGMA_MAX)
 
 
+def _prevazuje_bez_jpz(nab: Nabidka) -> bool:
+    """Rozhoduje o přijetí na tenhle obor něco jiného než jednotná zkouška?
+
+    Pozná se podle toho, že uchazečů **bez** % skóru je aspoň tolik co
+    s ním: u oborů s výučním listem se JPZ nekoná, takže bodovaní uchazeči
+    jsou jen ti, kdo si vedle toho podali i maturitní obor. Odhadovat z nich
+    šanci by bylo nejen nepřesné, ale i nemonotonní — nad jejich rozsahem
+    by odhad spadl na úplně jiný zdroj.
+    """
+    bez = nab.pasma.get(PASMO_BEZ_JPZ)
+    if not bez:
+        return False
+    pocet_bez = sum(n for _p, n in bez.values())
+    pocet_s = sum(n for pasmo, podle_roku in nab.pasma.items() if pasmo != PASMO_BEZ_JPZ
+                  for _p, n in podle_roku.values())
+    return pocet_bez >= pocet_s
+
+
+def _monotonni_pasma(pasma: dict[int, dict[int, tuple[int, int]]]) -> dict[int, tuple[float, int]]:
+    """Vyhladí naměřené míry přijetí tak, aby se skórem neklesaly.
+
+    Skutečná šance na přijetí je v bodech neklesající — víc bodů uchazeči
+    uškodit nemůže. Naměřená čísla ale neklesající nejsou: v pásmu, kde je
+    osm lidí, rozhodne jeden. Bez vyhlazení pak průvodce ukáže nesmysl typu
+    „se 140 body máš 90 %, se 156 body 79 %" a rozumně ztratí důvěru.
+
+    Používá se **PAVA** (pool adjacent violators) — standardní řešení
+    isotonické regrese: dokud je nějaké pásmo nižší než to před ním, slijí
+    se do jednoho bloku se společným (vahou váženým) podílem. Váha je počet
+    věcně posouzených přihlášek, takže velká pásma táhnou malá, ne naopak.
+
+    Vrací pásmo -> (vyhlazený podíl, skutečný počet posouzených přihlášek).
+    """
+    body: list[tuple[int, float, float, int]] = []
+    for pasmo, podle_roku in sorted(pasma.items()):
+        if pasmo == PASMO_BEZ_JPZ:
+            continue
+        vaz_prijato = vaz_posouzeno = 0.0
+        posouzeno = 0
+        for rok, (p, n) in podle_roku.items():
+            vaha = ROKY_JPZ.get(rok, 1.0)
+            vaz_prijato += p * vaha
+            vaz_posouzeno += n * vaha
+            posouzeno += n
+        if vaz_posouzeno:
+            body.append((pasmo, vaz_prijato / vaz_posouzeno, vaz_posouzeno, posouzeno))
+
+    bloky: list[list] = []      # [[pásma], součet vah×podíl, součet vah]
+    for pasmo, podil, vaha, _n in body:
+        bloky.append([[pasmo], podil * vaha, vaha])
+        while len(bloky) >= 2 and (bloky[-2][1] / bloky[-2][2]) > (bloky[-1][1] / bloky[-1][2]):
+            posledni = bloky.pop()
+            bloky[-1][0] += posledni[0]
+            bloky[-1][1] += posledni[1]
+            bloky[-1][2] += posledni[2]
+
+    vzorky = {pasmo: n for pasmo, _p, _v, n in body}
+    out: dict[int, tuple[float, int]] = {}
+    for pasma_bloku, soucet, vaha in bloky:
+        podil = soucet / vaha
+        for pasmo in pasma_bloku:
+            out[pasmo] = (podil, vzorky[pasmo])
+    return out
+
+
+def _empiricka_sance(nab: Nabidka, skor: float | None,
+                     ) -> tuple[float, int, int, int | None] | None:
+    """(vážený podíl přijatých, přijato, posouzeno, okno), nebo None.
+
+    Sčítá pásma v okně ±`OKNO_PASMA` kolem uchazečova skóru; když je vzorek
+    menší než `MIN_VZOREK`, zkusí širší okno a teprve pak to vzdá. Skór
+    `None` znamená obor bez jednotné zkoušky — sáhne se do pásma
+    `PASMO_BEZ_JPZ`, kde jsou uchazeči, kteří JPZ nekonali.
+    """
+    if not nab.pasma:
+        return None
+
+    bez_jpz = nab.pasma.get(PASMO_BEZ_JPZ)
+    if skor is not None and bez_jpz and _prevazuje_bez_jpz(nab):
+        # Obor, kde většina uchazečů jednotnou zkoušku vůbec nekoná (typicky
+        # výuční list). Pár bodovaných uchazečů, co se sem hlásili vedle
+        # maturitního oboru, o přijetí nevypovídá — vybírá se podle něčeho
+        # jiného. Skór proto ignorujeme a použijeme míru přijetí za obor.
+        skor = None
+
+    if skor is None:
+        # Obor bez jednotné zkoušky — jediné pásmo, vyhlazovat není co.
+        data = bez_jpz
+        if not data:
+            return None
+        vaz_prijato = vaz_posouzeno = 0.0
+        prijato = posouzeno = 0
+        for rok, (p, n) in data.items():
+            vaha = ROKY_JPZ.get(rok, 1.0)
+            vaz_prijato += p * vaha
+            vaz_posouzeno += n * vaha
+            prijato += p
+            posouzeno += n
+        if not posouzeno:
+            return None
+        return vaz_prijato / vaz_posouzeno, prijato, posouzeno, None
+
+    vyhlazena = _monotonni_pasma(nab.pasma)
+    if vyhlazena:
+        # Nad (pod) rozsahem naměřených pásem se skór **neextrapoluje** ani
+        # nepropadne na slabší zdroj odhadu — vezme se krajní hodnota
+        # vyhlazené křivky. Propadnutí na poměr přihlášek by znamenalo, že
+        # uchazeč se 150 body má menší šanci než se 140, což je nesmysl a
+        # v datech to dělalo skoky přes 40 procentních bodů.
+        skor = min(max(skor, min(vyhlazena)), max(vyhlazena))
+    # O tom, jestli se naměřená data použijí, se rozhoduje **jednou za
+    # nabídku**, ne zvlášť pro každé skóre. Kdyby o tom rozhodoval vzorek
+    # v okolí uchazečova skóru, přepnul by odhad uprostřed rozsahu na jinou
+    # metodu — a na tom přepnutí vznikne útes: „se 170 body 95 %, se 180
+    # body 52 %". V pražských datech to dělalo přes sto takových skoků.
+    # Buď o nabídce data máme, nebo ne.
+    celkem = sum(n for _p, n in vyhlazena.values())
+    if celkem < MIN_VZOREK:
+        return None
+    moje_pasmo = max((p for p in vyhlazena if p <= skor), default=min(vyhlazena))
+    podil, _n = vyhlazena[moje_pasmo]
+    # Vzorek „v okolí" je jen pro text na kartě, na číslo nemá vliv.
+    v_okoli = sum(n for pasmo, (_p, n) in vyhlazena.items()
+                  if moje_pasmo - OKNO_PASMA <= pasmo <= moje_pasmo + OKNO_PASMA)
+    return podil, round(podil * max(v_okoli, 1)), max(v_okoli, 1), celkem
+
+
 def sance_prijeti(nab: Nabidka, skor: float | None) -> tuple[float | None, str]:
     """Odhad pravděpodobnosti přijetí (0–1) a slovní zdroj odhadu.
 
-    Tři úrovně podle toho, co o nabídce víme:
+    Čtyři úrovně podle toho, co o nabídce víme:
 
-    1. **Známá hranice přijetí** (min. % skór posledního přijatého, CERMAT
-       2024+): normální rozdělení kolem očekávané hranice — jak moc je
-       uchazečův skór nad/pod ní v poměru k meziročnímu rozptylu.
-    2. **Jen poměr přihlášek ku kapacitě** (`index_poptavky`): hrubý odhad
-       z pásem, posunutý podle toho, jak silný uchazeč je proti průměru.
-    3. **Nic z toho** (typicky učňovské obory bez JPZ): None — karta pak
-       ukáže „data chybí", ne vymyšlené procento.
+    1. **Naměřený podíl přijatých** v okolí uchazečova skóru (CERMAT soubory
+       uchazečů 2024+, tabulka `prijimacky_pasmo`). Tohle není model, ale
+       pozorování: ze 124 lidí s podobným skórem se jich dostalo tolik a
+       tolik. Smršťuje se k úrovni 2 podle velikosti vzorku (`SMRSTENI`), ať
+       „0 z 12" neznamená tvrdou nulu.
+    2. **Známá hranice přijetí** (min. % skór posledního přijatého): normální
+       rozdělení kolem očekávané hranice. Pozor, je to ocasová hodnota —
+       proti naměřeným datům vychází systematicky optimisticky (u některých
+       škol až o 40 procentních bodů), proto je až druhá.
+    3. **Poměr přihlášek ku kapacitě** (`index_poptavky`), případně loňský
+       poměr přihlášených ku přijatým z Atlasu — hrubý odhad z pásem.
+    4. **Nic z toho**: None — karta ukáže „data chybí", ne vymyšlené číslo.
 
     Odhad nikdy nejde na 0 % ani 100 %: škola si přidává vlastní kritéria
     (prospěch, talentovka, pohovor), která v datech nejsou.
     """
     odhad = odhad_hranice(nab)
+    modelova = None
     if odhad is not None and skor is not None:
         stred, sigma = odhad
-        p = _normalni_cdf((skor - stred) / sigma)
-        return _omez(p), f"z hranice přijetí {stred:.0f}/200 b. (roky {_roky(nab.hranice)})"
+        modelova = _omez(_normalni_cdf((skor - stred) / sigma))
+
+    empiricka = _empiricka_sance(nab, skor)
+    if empiricka is not None:
+        podil, prijato, vzorek, celkem = empiricka
+        kotva = modelova if modelova is not None else podil
+        # Váha smrštění je **celkový** vzorek nabídky, ne lokální: konstantní
+        # váha drží výsledek monotonní (konvexní kombinace dvou neklesajících
+        # funkcí), kdežto váha měnící se se skórem ji zase rozbije.
+        vaha = celkem if celkem is not None else vzorek
+        p = (podil * vaha + SMRSTENI * kotva) / (vaha + SMRSTENI)
+        kde = (f"±{OKNO_PASMA} b." if celkem is not None else "bez jednotné zkoušky")
+        return _omez(p), (f"naměřeno: přijato {prijato} z {vzorek} uchazečů "
+                          f"s podobným skórem ({kde}, 1. kola 2024–2026)")
+
+    if modelova is not None:
+        stred, _sigma = odhad
+        return modelova, f"z hranice přijetí {stred:.0f}/200 b. (roky {_roky(nab.hranice)})"
 
     poptavka = _posledni(nab.poptavka)
     if poptavka is not None:
@@ -708,14 +921,38 @@ def projde_filtrem(nab: Nabidka, profil: Profil) -> bool:
         return False
     if profil.typy and nab.typ not in profil.typy:
         return False
+    if nab.typ in profil.typy_vyloucene:
+        return False
+    if nab.talentova_zkouska and not profil.talentove:
+        # Talentovka je jiná vstupní brána, ne nižší laťka: obor s ní má
+        # hranici JPZ nižší proto, že se vybírá podle talentu, ne podle
+        # menšího zájmu. Kdo na talentovky nechodí, tam nemá co dělat —
+        # a v pětici by zabíral místo. 52 nabídek (48 uměleckých, 4 sportovní
+        # gymnázia). Přihláška se navíc podává dřív, do 30. 11.
+        return False
     if profil.oblasti_zajmu:
         if not set(oblasti.oblasti_oboru(nab.kod_kkov)) & set(profil.oblasti_zajmu):
             return False
-    if profil.skolne_max is not None and (nab.skolne or 0) > profil.skolne_max:
+    if profil.skolne_max is not None and not _vejde_se_do_skolneho(nab, profil.skolne_max):
         return False
     if profil.jazyk and not _uci_jazyk(nab, profil.jazyk):
         return False
     return True
+
+
+def _vejde_se_do_skolneho(nab: Nabidka, strop: int) -> bool:
+    """Vejde se nabídka do zadaného stropu školného?
+
+    Past: chybějící údaj **nesmí** projít jako nula. Školné u oboru často
+    chybí i u škol, které si účtují statisíce (PORG má u gymnázia 199 100 Kč,
+    ale u pedagogického oboru v datech nic) — filtr „jen do 30 tisíc" by pak
+    takovou školu tiše propustil. U veřejného zřizovatele je neuvedené
+    školné bezpečně nula (kraj ani obec školné nevybírají), u soukromého a
+    církevního je to neznámá, a ta se do stropu nevejde.
+    """
+    if nab.skolne is not None:
+        return nab.skolne <= strop
+    return nab.zrizovatel_verejny
 
 
 def _uci_jazyk(nab: Nabidka, jazyk: str) -> bool:
@@ -732,6 +969,7 @@ def ohodnot(profil: Profil, nabidky: Iterable[Nabidka]) -> list[Vysledek]:
         return []
 
     vahy = _vahy_profilu(profil)
+    preference = oblasti.preference_typu(profil.osobnostni)
     # Kvalita se normalizuje proti tomu, co je v nabídce skutečně k mání —
     # percentil maturit se mezi gymnázii a učňáky liší o desítky bodů, takže
     # absolutní práh by u odborných oborů „vypnul" celou složku.
@@ -744,6 +982,7 @@ def ohodnot(profil: Profil, nabidky: Iterable[Nabidka]) -> list[Vysledek]:
         p, zdroj = sance_prijeti(nab, profil.skor)
         slozky = {
             "zajem": _skore_zajem(nab, profil),
+            "typ": preference.get(nab.typ, 0.5),
             "dosazitelnost": _skore_dosazitelnost(p, nab, profil),
             "kvalita": _skore_kvalita(nab, mez_dolni, mez_horni),
             "blizkost": _skore_blizkost(nab, profil),
@@ -930,21 +1169,31 @@ def vyber_top(vysledky: list[Vysledek], pocet: int = 5, max_na_skolu: int = 1) -
     pětice se tím ochudí o skutečné alternativy. Omezuje se na organizaci
     (REDIZO), ne na IZO: jedna právnická osoba může mít víc škol na stejné
     adrese a pro uchazeče je to pořád „ta samá škola".
+
+    Vynechaný obor ale **nesmí zmizet beze stopy** — jinak se uchazeč
+    nedozví, že táž škola nabízí i obor, který by chtěl víc (nebo na který
+    má výrazně vyšší šanci). Zapíše se proto do `dalsi_obory` té nabídky,
+    která se zobrazila. Proto se prochází celý seznam, ne jen prvních pět.
     """
     out: list[Vysledek] = []
-    pocty: dict[str, int] = {}
+    zobrazene: dict[str, list[Vysledek]] = {}
     for v in vysledky:
         redizo = v.nabidka.redizo
-        if pocty.get(redizo, 0) >= max_na_skolu:
+        uz_zobrazene = zobrazene.setdefault(redizo, [])
+        if len(uz_zobrazene) >= max_na_skolu:
+            posledni = uz_zobrazene[-1]
+            if len(posledni.dalsi_obory) < 3:
+                sance = "šance neznámá" if v.sance is None else f"šance {v.sance * 100:.0f} %"
+                posledni.dalsi_obory.append(f"{v.nabidka.obor} ({v.nabidka.kod_kkov}, {sance})")
             continue
-        pocty[redizo] = pocty.get(redizo, 0) + 1
-        out.append(v)
-        if len(out) == pocet:
-            break
+        if len(out) < pocet:
+            uz_zobrazene.append(v)
+            out.append(v)
     return out
 
 
-def poznamky(profil: Profil, vysledky: list[Vysledek]) -> list[str]:
+def poznamky(profil: Profil, vysledky: list[Vysledek],
+             vsechny_nabidky: list[Nabidka] | None = None) -> list[str]:
     """Co uchazeči říct o samotném výsledku — hlavně nesplněná přání.
 
     Filtr může tiše „sníst" celé kritérium (v Praze 6 a 7 prostě není
@@ -965,6 +1214,21 @@ def poznamky(profil: Profil, vysledky: list[Vysledek]) -> list[str]:
             "Bez očekávaného skóru z přijímaček je šance jen hrubý odhad z poměru "
             "přihlášek — zkus průvodce znovu po přijímačkách nanečisto."
         )
+    doporucene = oblasti.doporucene_typy(profil.osobnostni, profil.trida)
+    if doporucene and any(profil.osobnostni.values()):
+        out.append("Podle odpovědí ti sedí: "
+                   + ", ".join(oblasti.popis_typu(t) for t in doporucene)
+                   + ". Ostatní typy se nevyřadily, jen jsou níž.")
+    if not profil.talentove:
+        out.append("Obory s talentovou zkouškou (umělecké, sportovní gymnázia) jsem vynechal "
+                   "— mají jinou vstupní zkoušku a dřívější přihlášku. Zapni je, pokud "
+                   "syn/dcera sport nebo umění dělá závodně.")
+    if profil.skolne_max is not None:
+        vynechane = sum(1 for n in vsechny_nabidky or ()
+                        if n.skolne is None and not n.zrizovatel_verejny)
+        if vynechane:
+            out.append(f"{vynechane} nabídek soukromých škol jsem vynechal, protože u nich "
+                       "školné v datech chybí — nešlo ověřit, že se do stropu vejdou.")
     bez_dat = sum(1 for v in vysledky if v.sance is None)
     if bez_dat:
         out.append(
@@ -1066,38 +1330,45 @@ def prubeh_pruvodce() -> Profil:
         )[0]
     )
 
-    typy_pro_tridu = [
-        (kod, popis) for kod, (popis, td, _) in oblasti.TYPY.items()
-        if td == trida and kod not in oblasti.TYPY_MIMO_ZS
-    ]
-    typy = _zeptej_se_vyber("2) Jaký typ vzdělání tě zajímá?", typy_pro_tridu, vic=True)
+    # Otázky 2–4: typ vzdělání se neptá přímo, odvozuje se (viz
+    # oblasti.OSOBNOSTNI_OTAZKY). Čtrnáctiletý netuší, co je „lyceum".
+    osobnostni: dict[str, str | None] = {}
+    for i, (klic, (otazka, varianty)) in enumerate(oblasti.OSOBNOSTNI_OTAZKY.items(), start=2):
+        odpoved = _zeptej_se_vyber(
+            f"{i}) {otazka}",
+            [(kod, popis) for kod, (popis, _) in varianty.items()],
+        )
+        osobnostni[klic] = odpoved[0] if odpoved else None
 
     oblasti_zajmu = _zeptej_se_vyber(
-        "3) Které oblasti tě baví?",
+        "5) Které oblasti tě baví?",
         [(k, popis) for k, (popis, _) in oblasti.OBLASTI.items()],
         vic=True,
     )
 
-    obvody = _zeptej_se_vyber(
-        "4) Kde by to mělo být? (kde bydlíš / kam se ti dobře jezdí)",
-        [(f"Praha {i}", f"Praha {i}") for i in range(1, 11)],
+    mestske_casti = _zeptej_se_vyber(
+        "6) Kde bydlíte? (městská část, klidně víc)",
+        [(f"Praha {i}", f"Praha {i}") for i in range(1, 23)],
         vic=True,
     )
+    # Data MŠMT znají jen správní obvody Praha 1–10, lidé svoji MČ.
+    obvody = sorted({oblasti.obvod(mc) for mc in mestske_casti})
 
-    print("\n5) Jak ti vyjdou přijímačky? Zadej očekávaný % skór z JPZ")
-    print("   (např. z přijímaček nanečisto; 0–100 za každý předmět, Enter = nevím).")
-    skor_cj = _zeptej_se_cislo("   Český jazyk [0-100]:", 100)
-    skor_ma = _zeptej_se_cislo("   Matematika  [0-100]:", 100)
+    print("\n7) Jak ti vyjdou přijímačky? Zadej body z přijímaček nanečisto")
+    print("   (0–50 za každý předmět, jako na skutečné JPZ; Enter = nevím).")
+    body_cj = _zeptej_se_cislo("   Český jazyk [0-50]:", 50)
+    body_ma = _zeptej_se_cislo("   Matematika  [0-50]:", 50)
+    # CERMAT pracuje s % skórem 0–100 za předmět, uchazeč s body z 50.
+    skor_cj = None if body_cj is None else body_cj / 50 * 100
+    skor_ma = None if body_ma is None else body_ma / 50 * 100
+    if skor_cj is not None and skor_ma is not None:
+        print(f"   => {skor_cj + skor_ma:.0f} z 200 bodů % skóru")
 
-    # Otázku na prospěch zvládne odpovědět každý (na rozdíl od otázky 5) a
-    # školy ho promítají do vlastních bodů. Využije se, jen když je v
-    # databázi Atlas školství — ten jediný doporučený prospěch uvádí.
     prospech = _zeptej_se_cislo(
-        "\n6) Jaký máš průměr na vysvědčení? [1-5, Enter = přeskočit]:", 5
-    )
+        "\n8) Jaký máš průměr na vysvědčení? [1-5, Enter = přeskočit]:", 5)
 
     skolne = _zeptej_se_vyber(
-        "7) Kolik můžete dát za školné?",
+        "9) Kolik můžete dát za školné?",
         [("0", "jen školy bez školného"),
          ("30000", "do 30 000 Kč/rok"),
          ("80000", "do 80 000 Kč/rok"),
@@ -1106,20 +1377,24 @@ def prubeh_pruvodce() -> Profil:
     skolne_max = int(skolne[0]) if skolne and skolne[0] else None
 
     priority = _zeptej_se_vyber(
-        "8) Co je pro tebe nejdůležitější? (vyber až 3)",
+        "10) Co je pro tebe nejdůležitější? (vyber až 3)",
         [(k, popis) for k, (popis, _) in PRIORITY.items()],
         vic=True,
     )[:3]
 
     jazyk = _zeptej_se_vyber(
-        "9) Chceš mít jistotu konkrétního jazyka?",
+        "11) Chceš mít jistotu konkrétního jazyka?",
         [("N", "němčina"), ("Š", "španělština"), ("F", "francouzština"),
          ("R", "ruština"), ("I", "italština"), ("", "nezáleží")],
     )
 
+    talentove = _zeptej_se_vyber(
+        "12) Děláš sport nebo umění závodně (chodil bys na talentovky)?",
+        [("", "ne"), ("ano", "ano, ukaž i obory s talentovou zkouškou")],
+    )
+
     return Profil(
         trida=trida,
-        typy=typy,
         oblasti_zajmu=oblasti_zajmu,
         obvody=obvody,
         skor_cj=skor_cj,
@@ -1128,7 +1403,35 @@ def prubeh_pruvodce() -> Profil:
         jazyk=jazyk[0] if jazyk and jazyk[0] else None,
         prospech=prospech,
         priority=priority,
+        talentove=bool(talentove and talentove[0]),
+        po_skole=osobnostni.get("po_skole"),
+        rozhodnuto=osobnostni.get("rozhodnuto"),
+        praxe=osobnostni.get("praxe"),
     )
+
+
+def scenare_zlepseni(profil: Profil, nabidky: list[Nabidka], kroky=(0, 16, 32, 48),
+                    ) -> list[tuple[int, int, list[tuple[str, float | None]]]]:
+    """Jak se šance mění, když se uchazeč do přijímaček zlepší.
+
+    Nejčastější reálná situace: skór je ze zkoušky nanečisto rok před
+    termínem a dítě se bude učit. Statický odhad k dnešnímu dni je pak
+    zbytečně pesimistický a hlavně neukazuje to podstatné — kolik bodů
+    dělí „nemá šanci" od „reálné". `kroky` jsou body navíc na škále 0–200
+    (16 bodů ≈ +8 bodů v jednom předmětu z 50).
+
+    Vrací pro každý krok (body navíc, celkový skór, [(popis, šance), …])
+    pro nabídky, které dostane na vstupu — pořadí se zachová.
+    """
+    if profil.skor is None:
+        return []
+    out = []
+    for krok in kroky:
+        skor = min(200.0, profil.skor + krok)
+        out.append((krok, int(skor),
+                    [(f"{n.organizace[:34]} ({n.kod_kkov})", sance_prijeti(n, skor)[0])
+                     for n in nabidky]))
+    return out
 
 
 def vypis_kartu(poradi: int, v: Vysledek, role: str | None = None) -> None:
@@ -1152,6 +1455,8 @@ def vypis_kartu(poradi: int, v: Vysledek, role: str | None = None) -> None:
         print(f"   Letos škola plánuje přijmout {nab.plan_prijmout} žáků")
     if nab.skolni_zkousky:
         print(f"   Škola má navíc: {', '.join(nab.skolni_zkousky)}")
+    if v.dalsi_obory:
+        print(f"   Táž škola nabízí i: {'; '.join(v.dalsi_obory)}")
     for d in v.duvody:
         print(f"   + {d}")
     for w in v.varovani:
@@ -1198,7 +1503,7 @@ def main(argv: list[str] | None = None) -> int:
 
     nejlepsi = vyber_top(vysledky, args.pocet)
     trojice = portfolio(vysledky)
-    hlasky = poznamky(profil, vysledky)
+    hlasky = poznamky(profil, vysledky, nabidky)
 
     if args.json:
         print(json.dumps(
@@ -1220,6 +1525,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  ({h})")
     for i, v in enumerate(nejlepsi, 1):
         vypis_kartu(i, v)
+
+    scenare = scenare_zlepseni(profil, [v.nabidka for v in nejlepsi])
+    if scenare:
+        print("\n=== Co udělá příprava ===")
+        print("Šance u pětice výše, když se do přijímaček zlepšíš "
+              "(16 bodů ≈ +8 bodů v jednom předmětu z 50):")
+        hlavicka = " " * 40 + "".join(f"{f'+{k} b.':>10}" for k, _, _ in scenare)
+        print(hlavicka)
+        print(" " * 40 + "".join(f"{f'({c}/200)':>10}" for _, c, _ in scenare))
+        for i, (popis, _) in enumerate(scenare[0][2]):
+            radek = f"{popis[:38]:<40}"
+            for _krok, _celkem, hodnoty in scenare:
+                p_ = hodnoty[i][1]
+                radek += f"{('—' if p_ is None else f'{p_ * 100:.0f} %'):>10}"
+            print(radek)
 
     print("\n=== Návrh tří přihlášek ===")
     print("Pořadí priorit vyplň podle toho, kam opravdu chceš — algoritmus "

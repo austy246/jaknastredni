@@ -41,7 +41,7 @@ než holé „90 %".
 
 ## Průchod otázkami
 
-Devět otázek, z toho **povinná jediná** (první). Každá další jen zužuje;
+Dvanáct otázek, z toho **povinná jediná** (první). Každá další jen zužuje;
 kdo nic nevyplní, dostane pětici škol s nejlepšími maturitními výsledky,
 kam se dá dostat. Pořadí je od nejvíc rozhodujícího filtru k nejjemnějšímu,
 aby se dalo kdykoli odejít s rozumným výsledkem.
@@ -49,14 +49,17 @@ aby se dalo kdykoli odejít s rozumným výsledkem.
 | # | Otázka | Typ | Co dělá | Z čeho v datech |
 |---|---|---|---|---|
 | 1 | Ze které třídy se hlásíš? (5./7./9.) | výběr, povinné | tvrdý filtr | poslední dvojčíslí KKOV (`K/81`, `K/61`, ostatní) |
-| 2 | Jaký typ vzdělání? (gymnázium, lyceum, SOŠ, obor s výučním listem) | víc možností | tvrdý filtr | písmeno KKOV (`K`/`M`/`L`/`H`/`E`) |
-| 3 | Které oblasti tě baví? (11 oblastí) | víc možností | tvrdý filtr + skóre `zajem` | první dvojčíslí KKOV → `oblasti.OBLASTI` |
-| 4 | Kde by to mělo být? (Praha 1–10) | víc možností | skóre `blizkost` | `organizace.obvod_prahy` + `misto_vyuky` |
-| 5 | Očekávaný % skór z přijímaček (ČJ, MA) | 2× číslo 0–100 | šance na přijetí | `prijimaci_rizeni.skor_prijati_min_cjma` |
-| 6 | Průměr na vysvědčení | číslo 1–5 | skóre `dosazitelnost` | `doporuceny_prospech` (Atlas školství) |
-| 7 | Kolik můžete dát za školné? | výběr | tvrdý filtr + skóre `cena` | `web_profil` → `skolne_rocne` |
-| 8 | Co je pro tebe nejdůležitější? (max 3) | víc možností | mění váhy složek | — |
-| 9 | Chceš mít jistotu konkrétního jazyka? | výběr | tvrdý filtr | `web_profil` → `vyucovane_jazyky` |
+| 2 | Co chceš dělat, až školu dodělᚠ| výběr | skóre `typ` | — |
+| 3 | Víš už, čemu se chceš věnovat? | výběr | skóre `typ` | — |
+| 4 | Kolik chceš praxe? | výběr | skóre `typ` | — |
+| 5 | Které oblasti tě baví? (12 oblastí) | víc možností | tvrdý filtr + skóre `zajem` | první dvojčíslí KKOV → `oblasti.OBLASTI` |
+| 6 | Kde bydlíš? (Praha 1–22) | víc možností | skóre `blizkost` | `obvod_prahy` + `misto_vyuky`, přes `MC_NA_OBVOD` |
+| 7 | Body z přijímaček nanečisto (ČJ, MA) | 2× číslo 0–50 | šance na přijetí | `prijimacky_pasmo` |
+| 8 | Průměr na vysvědčení | číslo 1–5 | skóre `dosazitelnost` | `doporuceny_prospech` (Atlas školství) |
+| 9 | Kolik můžete dát za školné? | výběr | tvrdý filtr + skóre `cena` | `web_profil` → `skolne_rocne` |
+| 10 | Co je pro tebe nejdůležitější? (max 3) | víc možností | mění váhy složek | — |
+| 11 | Chceš mít jistotu konkrétního jazyka? | výběr | tvrdý filtr | `web_profil` → `vyucovane_jazyky` |
+| 12 | Děláš sport/umění závodně? | výběr | tvrdý filtr | `talentova_zkouska` |
 
 (Desátá možnost — školy zřízené pro žáky se zdravotním postižením —
 není otázka ve formuláři, ale přepínač `Profil.specialni_potreby`;
@@ -67,6 +70,21 @@ Proč zrovna takhle:
 - **Otázka 1 je první a povinná**, protože jediná dělí nabídku na tři skoro
   nepřekrývající se světy (41 osmiletých, 17 šestiletých, 565 čtyřletých
   nabídek). Bez ní nejde ukázat ani rozumný výchozí seznam.
+- **Na typ vzdělání se průvodce neptá, odvozuje ho** (otázky 2–4). Čtrnáctiletý
+  netuší, jestli chce „lyceum" nebo „čtyřletý maturitní obor" — a kdyby to
+  věděl, nepotřebuje průvodce. Ptáme se proto na tři věci, na které odpovědět
+  umí (co po škole, jak moc má jasno, kolik praxe), a typ z nich spočítáme
+  (`oblasti.OSOBNOSTNI_OTAZKY`, `preference_typu`). Není to filtr, ale váha:
+  ostatní typy zůstávají ve výsledku, jen níž. Odvozený typ se pak ukáže nad
+  výsledkem jako **zjištění** („podle odpovědí ti sedí lyceum, SOŠ,
+  gymnázium"), ne jako něco, co musel uchazeč vyplnit.
+- **Otázka 6 se ptá na městskou část, ne na správní obvod.** Data MŠMT mají
+  jen obvody Praha 1–10, ale nikdo neřekne „bydlím ve správním obvodu Praha
+  4" — řekne „v Praze 12". `oblasti.MC_NA_OBVOD` to přeloží (Modřany a Kamýk
+  jsou v rejstříku pod Prahou 4, ověřeno v datech).
+- **Otázka 7 se ptá na body z 50, ne na procenta.** Uchazeč dostane
+  z přijímaček nanečisto „19 bodů z češtiny", ne „38 %". Převod na % skór,
+  se kterým pracuje CERMAT, dělá formulář.
 - **Otázka 3 se ptá na oblasti, ne na obory.** Skupin oborů je v pražské
   nabídce 27 a jejich oficiální názvy („Obecně odborná příprava") uchazeči
   nic neříkají. `oblasti.py` je mapuje na 11 srozumitelných oblastí, které
@@ -88,6 +106,21 @@ Proč zrovna takhle:
   hrubá náhrada dojezdové doby MHD (viz „Co návrh zatím neumí").
 
 ### Co se do výsledku nedostane vůbec
+
+**Obory s talentovou zkouškou** (52 nabídek: 48 uměleckých, 4 sportovní
+gymnázia) bez zaškrtnutí otázky 12. Není to přísnost, ale oprava chyby:
+talentovka je **jiná vstupní brána, ne nižší laťka**. Gymnázium Přípotoční má
+u sportovního oboru hranici JPZ o 34 bodů nižší než u akademického na téže
+adrese — ne proto, že by o něj byl menší zájem, ale protože se vybírá podle
+talentu. Průvodce to bral jako snadnější cestu a stavěl sportovní gymnázium
+na první místo uchazeči, který o sportu neřekl ani slovo. Naměřená data to
+potvrzují: u sportovního oboru je míra přijetí napříč bodovými pásmy plochá
+(25 / 56 / 24 / 25 %), body tam prakticky nerozhodují.
+
+**Soukromé školy s neuvedeným školným**, když je zadaný strop (28 nabídek).
+Chybějící údaj se nesmí brát jako nula: PORG má u gymnázia 199 100 Kč, ale
+u pedagogického oboru v datech nic — filtr „do 30 tisíc" takovou školu tiše
+propouštěl. U veřejného zřizovatele je neuvedené školné bezpečně nula.
 
 Šest pražských organizací jsou školy **zřízené pro žáky se zdravotním
 postižením** (podle názvu: „pro sluchově postižené", „pro zrakově
@@ -119,6 +152,7 @@ Váhy jsou v `SLOZKY_SKORE`, zvolená priorita svou složku zdvojnásobí:
 | Složka | Váha | Co měří |
 |---|---|---|
 | `zajem` | 3,0 | jak přesně obor sedí do zvolených oblastí |
+| `typ` | 2,0 | typ vzdělání odvozený z osobnostních otázek |
 | `dosazitelnost` | 2,5 | reálnost přijetí (šance + doporučený prospěch) |
 | `kvalita` | 1,5 | maturitní výsledky školy, úspěšnost, posun žáků |
 | `blizkost` | 1,5 | zvolený obvod (1,0) / sousední (0,6) / jinde (0,2) |
@@ -142,41 +176,94 @@ to, že ji CERMAT nevykázal. Místo toho se to napíše do `varovani`.
 ## Šance na přijetí
 
 Nejdůležitější a nejnebezpečnější číslo v celém průvodci. Počítá se ve
-třech úrovních podle toho, co o nabídce víme (`sance_prijeti`):
+čtyřech úrovních podle toho, co o nabídce víme (`sance_prijeti`):
 
-**1. Známá hranice přijetí** (467 z 803 pražských nabídek 2026). CERMAT od
-roku 2024 zveřejňuje minimální % skór přijatého uchazeče
-(`skor_prijati_min_cjma`, škála 0–200 = součet % skóru z ČJ a MA).
-Očekávaná hranice pro příští rok je vážený průměr let 2024–2026 (nejnovější
-rok váží 3×) a šance je normální rozdělení kolem ní:
+**1. Naměřený podíl přijatých** (550 z 623 nabídek). CERMAT zveřejňuje
+soubory uchazečů — jeden řádek = jeden anonymizovaný uchazeč, jeho % skór
+a až pět přihlášek s výsledkem. Importér `jaknastredni.cermat_uchazeci` z nich
+spočítá tabulku `prijimacky_pasmo`: kolik lidí se v jakém bodovém pásmu na
+který obor hlásilo a kolik jich vzali. Odhad pak **není model, ale
+pozorování**: „ze 115 uchazečů s podobným skórem se jich dostalo 39".
 
-```
-šance = Φ((očekávaný skór uchazeče − očekávaná hranice) / σ)
-```
+Do jmenovatele jdou jen **věcně posouzené** přihlášky (přijatí plus
+nepřijatí pro nedostatečnou kapacitu nebo nesplnění podmínek). Kdo byl
+nepřijat proto, že se dostal na vyšší prioritu, posouzen nebyl a nepočítá se
+— jinak by každá druhá volba vypadala nedostupně.
 
-`σ` **není odhad od stolu** — vychází z naměřeného meziročního rozptylu
-hranic: na 598 dvojicích škola×obor (2024→2025 a 2025→2026) je směrodatná
-odchylka meziroční změny 20,4 bodu, medián |změny| 12 bodů, p90 32 bodů.
-Odtud `SIGMA_ZAKLAD = 18`, u škol s rozkolísanou hranicí až 32, u nabídek
-s jediným rokem dat 24. Uchazeč přesně na loňské hranici tak dostane zhruba
-50 %, ne 100 % — což je přesně ta zpráva, kterou potřebuje slyšet.
+**2. Známá hranice přijetí** (min. % skór posledního přijatého): normální
+rozdělení kolem očekávané hranice, σ = 18 až 32 podle naměřeného meziročního
+rozptylu (směrodatná odchylka meziroční změny je 20,4 bodu na 598 dvojicích
+škola×obor). Slouží jako záloha a zároveň jako **kotva smršťování** pro
+úroveň 1.
 
-**2. Jen poměr přihlášek ku kapacitě** (`index_poptavky`). Hrubý odhad
-z pásem (≤ 0,9 → 92 %; ≤ 1,2 → 80 %; ≤ 2 → 60 %; ≤ 4 → 35 %; víc → 18 %),
-posunutý podle toho, jak silný uchazeč je proti průměru. Používá se tam,
-kde škola hranici nevykázala. Pozor: `index_poptavky < 1` **neznamená**, že
-vezmou všechny — v roce 2026 bylo takových nabídek 81 a jen v 15 z nich se
-počet přijatých rovnal počtu přihlášených (zbytek uchazečů se dostal na
-školu s vyšší prioritou).
+**3. Poměr přihlášek ku kapacitě** (`index_poptavky`), případně loňský poměr
+přihlášených ku přijatým z Atlasu. Hrubý odhad z pásem.
 
-**3. Nic z toho** — typicky učňovské obory bez jednotné zkoušky. Šance je
-`None` a karta ukáže „data chybí", ne vymyšlené procento. Až bude
-v databázi Atlas školství (loňský **skutečný** počet přijatých, ne jen
-plán), pokryje i tuhle skupinu — kód už s tím počítá (`loni_prijati`).
+**4. Nic z toho**: None — karta ukáže „data chybí", ne vymyšlené procento.
+
+### Proč naměřená data, když hranice přijetí existuje
+
+Hranice je **minimální** skór přijatého, tedy ocasová hodnota — často jeden
+uchazeč, který se dostal na body za prospěch nebo v rozřazení při shodě.
+Odhad postavený na ní je systematicky optimistický. Měřeno proti skutečnosti
+u profilu se 108 body z 200:
+
+| Škola / obor | odhad z hranice | naměřeno |
+|---|---|---|
+| Gymnázium Písnická | 24 % | **10 %** |
+| SPŠ elektrotechnická V Úžlabině (IT) | 53 % | **29 %** |
+| SOŠ automobilní a informatiky (IT) | 62 % | **49 %** |
+| Gymnázium Přípotoční — sportovní příprava | 44 % | **22 %** |
+
+Dát rodiči 24 %, když se z jeho pásma nedostal ani jeden ze čtrnácti, je ta
+nejhorší chyba, jakou tenhle nástroj může udělat.
+
+### Tři věci, které musely doplnit surová čísla
+
+**Vyhlazení (`_monotonni_pasma`).** V pásmu o osmi lidech rozhodne jeden,
+takže naměřené podíly po pásmech skáčou nahoru a dolů. Bez úpravy průvodce
+tvrdil „se 140 body 90 %, se 156 body 79 %" — nesmysl, protože víc bodů
+uchazeči uškodit nemůže. Řeší to **isotonická regrese metodou PAVA**: dokud
+je pásmo nižší než to před ním, slijí se do bloku se společným, vahou
+váženým podílem. Váha je počet posouzených přihlášek, takže velká pásma
+táhnou malá.
+
+**Rozhodnutí o metodě jednou za nabídku.** Dřív se o použití naměřených dat
+rozhodovalo podle vzorku v okolí uchazečova skóru — jenže pak odhad uprostřed
+rozsahu přepnul na jinou metodu a na tom přepnutí vznikl útes („se 170 body
+95 %, se 180 body 52 %"). Teď platí: buď o nabídce data máme (aspoň
+`MIN_VZOREK` posouzených přihlášek celkem), nebo ne. Nad i pod rozsahem
+naměřených pásem se drží krajní hodnota křivky. **Výsledek je ověřený
+testem: napříč všemi 623 nabídkami a celým rozsahem skóre šance ani jednou
+neklesne s rostoucími body** (`test_sance_nikdy_neklesa_se_skorem`).
+
+**Obory, kde nerozhoduje jednotná zkouška.** U oborů s výučním listem se JPZ
+nekoná — v roce 2026 nemělo % skór 37 004 ze 156 210 uchazečů. Bodovaní
+uchazeči u takového oboru jsou jen ti, kdo si vedle toho podali i maturitní
+obor, a odhadovat z nich šanci je nepřesné i nemonotonní. Pozná se to podle
+toho, že uchazečů bez skóru je aspoň tolik co s ním (`_prevazuje_bez_jpz`);
+pak se skór ignoruje a použije se míra přijetí za obor jako celek.
+
+### Smršťování
+
+Naměřený podíl se míchá s odhadem z hranice (úroveň 2) vahou podle velikosti
+vzorku: `(podíl × N + SMRSTENI × kotva) / (N + SMRSTENI)`, kde `SMRSTENI = 5`.
+Brání tomu, aby „0 z 12" znamenalo tvrdou nulu — škola může letos vzít víc
+lidí a kritéria se mění. Váha je **celkový** vzorek nabídky, ne lokální:
+konstantní váha drží výsledek monotonní, protože konvexní kombinace dvou
+neklesajících funkcí je neklesající.
 
 Odhad se vždy ořízne na 3–97 %. Stoprocentní jistota neexistuje, protože
-škola si k JPZ přidává vlastní kritéria (prospěch, pohovor, talentovka),
-která v datech nejsou — a pokud je přidává, je to napsané ve `varovani`.
+škola si k JPZ přidává vlastní kritéria (prospěch, talentovka, pohovor),
+která v datech nejsou.
+
+### Co soubory uchazečů neobsahují
+
+**Žádný údaj o základní škole ani o známkách.** Odhadnout šanci „podle
+vysvědčení" tedy z veřejných dat nejde a tenhle soubor je nejblíž, co
+existuje. Jediný náznak vazby známka → přijetí je `doporuceny_prospech`
+z Atlasu školství (72 nabídek) a text „body za prospěch" v kritériích škol —
+což je doporučení školy, ne změřený vztah.
 
 ## Karta výsledku
 
@@ -196,6 +283,12 @@ Pořadí informací na kartě odpovídá tomu, v jakém pořadí se rodič ptá:
    inspekční zpráva.
 8. **Den otevřených dveří a odkaz na inspekční zprávy ČŠI** — jediné dvě
    akce, které může uživatel hned udělat.
+
+Když má škola víc oborů, zobrazí se jen jeden — ale ostatní se **nesmějí
+ztratit**: vypíšou se pod kartou jako „táž škola nabízí i …" s vlastní šancí.
+Bez toho se uchazeč nedozvěděl, že Gymnázium Přípotoční má vedle sportovního
+oboru i akademický, na který je zrovna 37 bodů krátký — což je užitečná
+informace sama o sobě.
 
 Pod pěticí je **návrh tří přihlášek** s rolemi sen (šance 10–45 %),
 realistická (45–82 %) a jistota (82 % a výš). V každém pásmu se vybírá

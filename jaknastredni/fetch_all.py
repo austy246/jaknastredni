@@ -23,7 +23,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from . import atlas, cermat_jpz, cermat_jpz_old, cermat_mz, csi, infoabsolvent, msmt
+from . import (atlas, cermat_jpz, cermat_jpz_old, cermat_mz, cermat_uchazeci, csi,
+               infoabsolvent, msmt)
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +64,12 @@ def fetch_all(raw_dir: Path, *, rok_do: int | None = None, skip_infoabsolvent: b
         for kolo in (1, 2):
             for soubor in ("vysledky", "prihlasky", "kapacity"):
                 _stahni(f"PZ{rok} kolo{kolo} {soubor}", cermat_jpz.download, rok, kolo, soubor, raw_dir=cermat_dir)
+
+    log.info("== CERMAT soubory uchazečů (%d-%d, ~16 MB na kolo 1) ==", ROK_JPZ_NOVY_OD, rok_do)
+    for rok in range(ROK_JPZ_NOVY_OD, rok_do + 1):
+        for kolo in (1, 2):
+            _stahni(f"PZ{rok} kolo{kolo} uchazeči", cermat_uchazeci.download, rok, kolo,
+                    raw_dir=cermat_dir)
 
     log.info("== ČŠI inspekce ==")
     _stahni("ČŠI", csi.download, raw_dir=raw_dir / "csi")

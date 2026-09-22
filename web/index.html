@@ -225,9 +225,19 @@
     </div>
 
     <div class="q">
-      <header><span class="cislo">2</span><h3>Jaký typ vzdělání tě zajímá?</h3></header>
-      <p class="hint">Nic nezaškrtnuto = všechny typy.</p>
-      <div class="chips" id="q-typy"></div>
+      <header><span class="cislo">2</span><h3>Co chceš dělat, až tuhle školu dodělᚂ</h3></header>
+      <p class="hint">Na typ školy (gymnázium, lyceum, učňák) se neptám — vyjde z odpovědí.</p>
+      <div class="chips" id="q-po-skole"></div>
+    </div>
+
+    <div class="q">
+      <header><span class="cislo">11</span><h3>Víš už, čemu se chceš věnovat?</h3></header>
+      <div class="chips" id="q-rozhodnuto"></div>
+    </div>
+
+    <div class="q">
+      <header><span class="cislo">10</span><h3>Jak moc chceš dělat věci rukama a chodit na praxi?</h3></header>
+      <div class="chips" id="q-praxe"></div>
     </div>
 
     <div class="q">
@@ -238,17 +248,23 @@
 
     <div class="q">
       <header><span class="cislo">4</span><h3>Kde by to mělo být?</h3></header>
-      <p class="hint">Nefiltruje, jen zvýhodní. Sousední městská část dostane půl bodu — dojezd MHD zatím v datech nemáme.</p>
+      <p class="hint">Vyber svoji městskou část (Praha 1–22). Nefiltruje, jen zvýhodní; dojezd MHD zatím v datech nemáme.</p>
       <div class="chips" id="q-obvody"></div>
     </div>
 
     <div class="q">
       <header><span class="cislo">5</span><h3>Jak ti vyjdou přijímačky?</h3></header>
-      <p class="hint">Očekávaný % skór za každý předmět (třeba z přijímaček nanečisto). Prázdné = nevím.</p>
+      <p class="hint">Body z přijímaček nanečisto, 0–50 za každý předmět jako na skutečné JPZ. Prázdné = nevím.</p>
       <div class="radky">
-        <div class="pole"><label for="skor-cj">Český jazyk (0–100)</label><input type="number" id="skor-cj" min="0" max="100" step="1" placeholder="—"></div>
-        <div class="pole"><label for="skor-ma">Matematika (0–100)</label><input type="number" id="skor-ma" min="0" max="100" step="1" placeholder="—"></div>
-        <p class="soucet" id="soucet">Celkem <b>—</b> z 200 bodů</p>
+        <div class="pole"><label for="skor-cj">Český jazyk (0–50 b.)</label><input type="number" id="skor-cj" min="0" max="50" step="1" placeholder="—"></div>
+        <div class="pole"><label for="skor-ma">Matematika (0–50 b.)</label><input type="number" id="skor-ma" min="0" max="50" step="1" placeholder="—"></div>
+        <p class="soucet" id="soucet">Celkem <b>—</b> z 200 % skóru</p>
+      </div>
+      <div class="radky">
+        <div class="pole" style="flex:1;min-width:260px">
+          <label for="zlepseni">Když se do dubna zlepšíš o <b id="zlepseni-popis">0</b> bodů (z 50 v každém předmětu)</label>
+          <input type="range" id="zlepseni" min="0" max="20" step="1" value="0" style="width:100%">
+        </div>
       </div>
     </div>
 
@@ -275,6 +291,13 @@
     <div class="q">
       <header><span class="cislo">9</span><h3>Chceš mít jistotu konkrétního jazyka?</h3></header>
       <div class="chips" id="q-jazyk"></div>
+    </div>
+
+    <div class="q">
+      <header><span class="cislo">12</span><h3>Děláš sport nebo umění závodně?</h3></header>
+      <p class="hint">Obory s talentovou zkouškou mají jinou vstupní zkoušku a přihlášku už do 30. 11.
+        Bez zaškrtnutí je do výsledku nepouštím.</p>
+      <div class="chips" id="q-talentove"></div>
     </div>
   </form>
 
@@ -323,11 +346,14 @@
   "use strict";
   var D = window.JNS_DATA;
   var K = D.konstanty, C = D.ciselniky;
+  C.osobnostni = D.osobnostni;
   var NAB = D.nabidky;
 
   // ---- stav formuláře ----
-  var stav = { trida: 9, typy: [], oblasti: [], obvody: [], skorCj: null, skorMa: null,
-               prospech: null, skolneMax: null, jazyk: null, priority: [] };
+  var stav = { trida: 9, oblasti: [], obvody: [], skorCj: null, skorMa: null,
+               prospech: null, skolneMax: null, jazyk: null, priority: [],
+               talentove: false, zlepseni: 0,
+               osobnostni: { po_skole: null, rozhodnuto: null, praxe: null } };
 
   // ---- pomocné ----
   function el(tag, cls, text) {
@@ -373,11 +399,42 @@
     for (var i = 0; i < pasma.length; i++) if (p <= pasma[i][0]) return pasma[i][1];
     return 0.18;
   }
+  // Naměřená míra přijetí. Vyhlazenou monotonní křivku (`fit`) počítá
+  // Python a posílá ji v datech — JavaScript ji jen čte, takže isotonická
+  // regrese má jednu implementaci. Zdroj pravdy: jaknastredni/pruvodce.py.
+  function empiricka(n, skor) {
+    if (n.bez_jpz && (skor == null || n.bez_jpz_prevazuje)) {
+      // Obor, kde se o přijetí nerozhoduje jednotnou zkouškou (výuční list).
+      return { podil: n.bez_jpz[0] / n.bez_jpz[1], prijato: n.bez_jpz[0],
+               vzorek: n.bez_jpz[1], vaha: n.bez_jpz[1], bezJpz: true };
+    }
+    if (!n.fit || skor == null) return null;
+    var pasma = Object.keys(n.fit).map(Number).sort(function (a, b) { return a - b; });
+    // Nad i pod rozsahem naměřených dat se drží krajní hodnota křivky —
+    // propadnout na slabší odhad by znamenalo skok dolů při vyšším skóru.
+    var s = Math.max(pasma[0], Math.min(skor, pasma[pasma.length - 1]));
+    var moje = pasma[0];
+    for (var i = 0; i < pasma.length; i++) if (pasma[i] <= s) moje = pasma[i];
+    var podil = n.fit[String(moje)];
+    return { podil: podil, prijato: Math.round(podil * n.fit_n), vzorek: n.fit_n,
+             vaha: n.fit_n, bezJpz: false };
+  }
+
   function sancePrijeti(n, skor) {
     var o = odhadHranice(n);
-    if (o && skor != null) {
-      return { p: omez(normCdf((skor - o.stred) / o.sigma)),
-               zdroj: "z hranice přijetí " + Math.round(o.stred) + "/200 b.",
+    var modelova = (o && skor != null) ? omez(normCdf((skor - o.stred) / o.sigma)) : null;
+
+    var emp = empiricka(n, skor);
+    if (emp) {
+      var kotva = modelova != null ? modelova : emp.podil;
+      var p = (emp.podil * emp.vaha + K.smrsteni * kotva) / (emp.vaha + K.smrsteni);
+      var kde = emp.bezJpz ? "obor bez jednotné zkoušky"
+                           : "±" + K.okno_pasma + " b., 1. kola 2024–2026";
+      return { p: omez(p), stred: o ? o.stred : undefined,
+               zdroj: "naměřeno na " + emp.vzorek + " uchazečích (" + kde + ")" };
+    }
+    if (modelova != null) {
+      return { p: modelova, zdroj: "z hranice přijetí " + Math.round(o.stred) + "/200 b.",
                stred: o.stred };
     }
     var poptavka = posledni(cisla(n.poptavka || {}));
@@ -409,12 +466,19 @@
   function projdeFiltrem(n) {
     if (n.trida_prihlasky !== stav.trida) return false;
     if (n.jen_pro_zp || n.typ === "C") return false;
-    if (stav.typy.length && stav.typy.indexOf(n.typ) < 0) return false;
+    // Talentovka je jiná vstupní brána, ne nižší laťka — bez vyžádání ven.
+    if (n.talentova_zkouska && !stav.talentove) return false;
     if (stav.oblasti.length) {
       var o = oblastiOboru(n.kod_kkov);
       if (!stav.oblasti.some(function (x) { return o.indexOf(x) >= 0; })) return false;
     }
-    if (stav.skolneMax != null && (n.skolne || 0) > stav.skolneMax) return false;
+    if (stav.skolneMax != null) {
+      // Chybějící školné se nesmí brát jako nula: PORG má u gymnázia
+      // 199 100 Kč, ale u jiného oboru v datech nic. U veřejného
+      // zřizovatele je neuvedené školné bezpečně nula, u soukromého neznámá.
+      if (n.skolne != null) { if (n.skolne > stav.skolneMax) return false; }
+      else if (!n.zrizovatel_verejny) return false;
+    }
     if (stav.jazyk && !uciJazyk(n, stav.jazyk)) return false;
     return true;
   }
@@ -454,12 +518,14 @@
     var perc = vybrane.map(function (n) { return n.maturita_percentil; }).filter(function (x) { return x != null; });
     var dolni = perc.length ? Math.min.apply(null, perc) : 0;
     var horni = perc.length ? Math.max.apply(null, perc) : 100;
+    var preference = preferenceTypu();
     var v = vahy(), soucetVah = 0;
     for (var k in v) soucetVah += v[k];
 
     return vybrane.map(function (n) {
       var s = sancePrijeti(n, skor);
       var slozky = {};
+      slozky.typ = preference[n.typ] !== undefined ? preference[n.typ] : 0.5;
 
       if (!stav.oblasti.length) slozky.zajem = 0.5;
       else {
@@ -505,12 +571,22 @@
   }
 
   function vyberTop(vysledky, pocet) {
-    var out = [], pouzite = {};
-    for (var i = 0; i < vysledky.length && out.length < pocet; i++) {
-      var r = vysledky[i].n.redizo;
-      if (pouzite[r]) continue;
-      pouzite[r] = 1;
-      out.push(vysledky[i]);
+    // Vynechaný obor téže školy nesmí zmizet beze stopy — přidá se jako
+    // poznámka k té zobrazené, jinak se uchazeč nedozví, že škola nabízí
+    // i obor, který chce víc (nebo na který má vyšší šanci).
+    var out = [], zobrazena = {};
+    for (var i = 0; i < vysledky.length; i++) {
+      var v = vysledky[i], r = v.n.redizo;
+      if (zobrazena[r]) {
+        var cil = zobrazena[r];
+        if (!cil.dalsiObory) cil.dalsiObory = [];
+        if (cil.dalsiObory.length < 3) {
+          var sance = v.sance == null ? "šance neznámá" : "šance " + Math.round(v.sance * 100) + " %";
+          cil.dalsiObory.push(v.n.obor + " (" + v.n.kod_kkov + ", " + sance + ")");
+        }
+        continue;
+      }
+      if (out.length < pocet) { zobrazena[r] = v; out.push(v); }
     }
     return out;
   }
@@ -618,6 +694,11 @@
     var h = cisla(n.hranice || {});
     if (Object.keys(h).length) k.appendChild(osa(h));
 
+    if (v.dalsiObory && v.dalsiObory.length) {
+      var dal = el("p", "obor");
+      dal.textContent = "Táž škola nabízí i: " + v.dalsiObory.join("; ");
+      k.appendChild(dal);
+    }
     var d = duvody(v);
     if (d.length) {
       var ul = el("ul", "duvody");
@@ -698,30 +779,62 @@
       document.querySelectorAll('input[name="' + jmeno + '"]:checked'),
       function (i) { return i.value; });
   }
-  function postavTypy() {
-    var polozky = [];
-    for (var kod in C.typy) {
-      var t = C.typy[kod];
-      if (t.trida === stav.trida && kod !== "L5" && kod !== "N" && kod !== "C")
-        polozky.push({ hodnota: kod, popis: t.popis.charAt(0).toUpperCase() + t.popis.slice(1) });
+  // Typ vzdělání se neodvozuje z otázky na typ, ale z osobnostních odpovědí
+  // — tabulky posílá Python v C.osobnostni, aby měl pravidlo jedno místo.
+  function preferenceTypu() {
+    var tabulky = [];
+    for (var klic in C.osobnostni) {
+      var odpoved = stav.osobnostni[klic];
+      var varianty = C.osobnostni[klic].varianty;
+      if (odpoved && varianty[odpoved]) tabulky.push(varianty[odpoved].typy);
     }
-    chips("q-typy", polozky, "checkbox", "typy", zmena);
+    var out = {};
+    for (var typ in C.typy) {
+      if (typ === "L5" || typ === "N") continue;
+      if (!tabulky.length) { out[typ] = 0.5; continue; }
+      var suma = 0;
+      tabulky.forEach(function (t) { suma += (t[typ] !== undefined ? t[typ] : 0.3); });
+      out[typ] = suma / tabulky.length;
+    }
+    return out;
+  }
+
+  function doporuceneTypy() {
+    var skore = preferenceTypu(), dostupne = [];
+    for (var typ in skore) if (C.typy[typ] && C.typy[typ].trida === stav.trida)
+      dostupne.push([typ, skore[typ]]);
+    if (!dostupne.length) return [];
+    var nej = Math.max.apply(null, dostupne.map(function (x) { return x[1]; }));
+    return dostupne.filter(function (x) { return x[1] >= nej * 0.75; })
+                   .sort(function (a, b) { return b[1] - a[1]; })
+                   .map(function (x) { return x[0]; });
   }
 
   function zmena() {
-    stav.typy = zaskrtnute("typy");
     stav.oblasti = zaskrtnute("oblasti");
-    stav.obvody = zaskrtnute("obvody");
+    ["po_skole", "rozhodnuto", "praxe"].forEach(function (k) {
+      stav.osobnostni[k] = zaskrtnute(k)[0] || null;
+    });
+    stav.talentove = !!zaskrtnute("talentove")[0];
+    // Data MŠMT znají jen správní obvody Praha 1–10, lidé svoji MČ (Praha 12).
+    stav.obvody = zaskrtnute("obvody").map(function (mc) {
+      return C.mc_na_obvod[mc] || mc;
+    }).filter(function (o, i, a) { return a.indexOf(o) === i; });
     stav.priority = zaskrtnute("priority").slice(0, 3);
     var jaz = zaskrtnute("jazyk")[0];
     stav.jazyk = jaz || null;
     var sk = zaskrtnute("skolne")[0];
     stav.skolneMax = (sk === undefined || sk === "") ? null : Number(sk);
-    stav.skorCj = cislo("skor-cj", 0, 100);
-    stav.skorMa = cislo("skor-ma", 0, 100);
+    // Uchazeč zadává body z 50, CERMAT počítá % skór 0–100 na předmět.
+    var bodyCj = cislo("skor-cj", 0, 50), bodyMa = cislo("skor-ma", 0, 50);
+    stav.zlepseni = cislo("zlepseni", 0, 20) || 0;
+    document.getElementById("zlepseni-popis").textContent = "+" + stav.zlepseni;
+    stav.skorCj = bodyCj == null ? null : Math.min(50, bodyCj + stav.zlepseni) / 50 * 100;
+    stav.skorMa = bodyMa == null ? null : Math.min(50, bodyMa + stav.zlepseni) / 50 * 100;
     stav.prospech = cislo("prospech", 1, 5);
     var soucet = document.querySelector("#soucet b");
-    soucet.textContent = (stav.skorCj != null && stav.skorMa != null) ? (stav.skorCj + stav.skorMa) : "—";
+    soucet.textContent = (stav.skorCj != null && stav.skorMa != null)
+      ? Math.round(stav.skorCj + stav.skorMa) : "—";
     vykresli();
   }
   function cislo(id, min, max) {
@@ -732,7 +845,6 @@
   }
   function zmenaTridy(e) {
     stav.trida = Number(e.target.value);
-    postavTypy();
     zmena();
   }
 
@@ -744,6 +856,14 @@
     })) out.push("V " + stav.obvody.join(", ") + " nic, co by odpovídalo ostatním podmínkám, není — ukazuju nejbližší okolí.");
     if (stav.skorCj == null || stav.skorMa == null)
       out.push("Bez očekávaného skóru z přijímaček je šance jen hrubý odhad z poměru přihlášek — vyplň otázku 5.");
+    var typy = doporuceneTypy();
+    var maOdpoved = Object.keys(stav.osobnostni).some(function (k) { return stav.osobnostni[k]; });
+    if (typy.length && maOdpoved)
+      out.push("Podle odpovědí ti sedí: " + typy.map(function (t) { return C.typy[t].popis; }).join(", ")
+               + ". Ostatní typy se nevyřadily, jen jsou níž.");
+    if (!stav.talentove)
+      out.push("Obory s talentovou zkouškou jsem vynechal — mají jinou vstupní zkoušku a přihlášku "
+               + "už do 30. 11. Zapni je v poslední otázce, pokud sport nebo umění děláš závodně.");
     var bez = vysledky.filter(function (v) { return v.sance == null; }).length;
     if (bez) out.push("U " + bez + " z " + vysledky.length + " vyhovujících nabídek nejsou data o přijímacím řízení (obory bez jednotné zkoušky) — šance se u nich neodhaduje.");
     return out;
@@ -789,13 +909,25 @@
     { hodnota: "9", popis: "9. třída — všechno ostatní", vychozi: true }
   ], "radio", "trida", zmenaTridy);
 
+  [["po_skole", "q-po-skole"], ["rozhodnuto", "q-rozhodnuto"], ["praxe", "q-praxe"]]
+    .forEach(function (par) {
+      var varianty = C.osobnostni[par[0]].varianty;
+      chips(par[1], Object.keys(varianty).map(function (kod) {
+        return { hodnota: kod, popis: varianty[kod].popis };
+      }), "radio", par[0], zmena);
+    });
+
+  chips("q-talentove", [{ hodnota: "", popis: "Ne", vychozi: true },
+                        { hodnota: "ano", popis: "Ano, ukaž i obory s talentovkou" }],
+        "radio", "talentove", zmena);
+
   chips("q-oblasti", Object.keys(C.oblasti).map(function (k) {
     return { hodnota: k, popis: C.oblasti[k].popis };
   }), "checkbox", "oblasti", zmena);
 
-  var obvody = [];
-  for (var i = 1; i <= 10; i++) obvody.push({ hodnota: "Praha " + i, popis: "Praha " + i });
-  chips("q-obvody", obvody, "checkbox", "obvody", zmena);
+  var casti = [];
+  for (var i = 1; i <= 22; i++) casti.push({ hodnota: "Praha " + i, popis: "Praha " + i });
+  chips("q-obvody", casti, "checkbox", "obvody", zmena);
 
   chips("q-skolne", [
     { hodnota: "0", popis: "Jen bez školného" },
@@ -825,7 +957,6 @@
       + "jehož scraper zatím není v databázi. Do té doby otázka výsledek neovlivní.";
   }
 
-  postavTypy();
   zmena();
 })();
 </script>

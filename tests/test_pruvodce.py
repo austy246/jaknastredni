@@ -347,6 +347,26 @@ def test_portfolio_nedava_tri_prihlasky_na_jednu_skolu(conn):
 # Export pro webový prototyp
 # --------------------------------------------------------------------------
 
+def test_export_nezahodi_nulove_skolne(conn):
+    """Regrese: v Pythonu je `0 == False`, takže test na prázdnotu zahodil nulu.
+
+    Soukromá škola s nulovým školným pak v JSONu údaj neměla, web ho četl
+    jako „neznámé" a vyřadil ji z filtru na cenu — 10 nabídek rozdílu proti
+    Pythonu, přičemž obě strany počítaly „správně".
+    """
+    from jaknastredni import export_web
+
+    conn.execute("UPDATE organizace SET typ_zrizovatele = '5' WHERE redizo = '600000002'")
+    conn.commit()
+    nabidka = next(n for n in pruvodce.nacti_nabidky(conn) if n.redizo == "600000002")
+    nabidka.skolne = 0
+    assert export_web.nabidka_do_dictu(nabidka)["skolne"] == 0
+    # Prázdné hodnoty se vynechat mají, False taky.
+    assert not export_web._prazdne(0)
+    assert export_web._prazdne(None) and export_web._prazdne(False)
+    assert export_web._prazdne("") and export_web._prazdne([]) and export_web._prazdne({})
+
+
 def test_export_web_nese_nabidky_i_konstanty(conn):
     from jaknastredni import export_web
 
@@ -446,3 +466,187 @@ def test_sance_z_atlasu_kdyz_obor_nema_jpz(conn):
     assert p is not None and "loni přijatých" in zdroj
     # 40/20 = 2.0x -> pásmo 60 %, ne 92 % jako kdyby se počítalo z plánu 24.
     assert p == pytest.approx(0.6, abs=0.01)
+
+
+# --------------------------------------------------------------------------
+# Empirická šance, talentovky, sourozenecké obory, školné
+# --------------------------------------------------------------------------
+
+def _pasmo(conn, redizo, kkov, rok, pasmo_od, prijato, kapacita_ne=0, podminky_ne=0, vyssi=0):
+    conn.execute(
+        """INSERT OR REPLACE INTO prijimacky_pasmo
+           (redizo, kod_kkov, rok, kolo, pasmo_od, prihlasek, prijato,
+            nedostatecna_kapacita, nesplneni_podminek, vyssi_priorita, vzdal_se)
+           VALUES (?,?,?,1,?,?,?,?,?,?,0)""",
+        (redizo, kkov, rok, pasmo_od,
+         prijato + kapacita_ne + podminky_ne + vyssi, prijato, kapacita_ne, podminky_ne, vyssi),
+    )
+    conn.commit()
+
+
+def test_empiricka_sance_prebije_odhad_z_hranice(conn):
+    """Naměřený podíl je přednostní zdroj — model z hranice je optimistický."""
+    for rok in (2024, 2025, 2026):
+        _pasmo(conn, "600000001", "79-41-K/41", rok, 150, prijato=0, kapacita_ne=8)
+    gympl = next(n for n in pruvodce.nacti_nabidky(conn) if n.redizo == "600000001")
+    assert gympl.pasma[150][2026] == (0, 8)
+    p, zdroj = pruvodce.sance_prijeti(gympl, 154.0)
+    assert "naměřeno" in zdroj
+    # Model sám by dal ~50 % (uchazeč přesně na hranici), naměřeno 0 z 24.
+    assert p < 0.2
+
+
+def test_empiricka_sance_se_smrsti_u_maleho_vzorku(conn):
+    """Vzorek pod MIN_VZOREK se nepoužije, i kdyby vypadal jednoznačně."""
+    _pasmo(conn, "600000001", "79-41-K/41", 2026, 150, prijato=0, kapacita_ne=3)
+    gympl = next(n for n in pruvodce.nacti_nabidky(conn) if n.redizo == "600000001")
+    _p, zdroj = pruvodce.sance_prijeti(gympl, 154.0)
+    assert "naměřeno" not in zdroj and "hranice přijetí" in zdroj
+
+
+def test_novejsi_rok_vazi_vic(conn):
+    """Škola, která loni brala mnohem snáz, nesmí být tažena dolů rokem 2024."""
+    _pasmo(conn, "600000001", "79-41-K/41", 2024, 150, prijato=0, kapacita_ne=20)
+    _pasmo(conn, "600000001", "79-41-K/41", 2026, 150, prijato=20, kapacita_ne=0)
+    gympl = next(n for n in pruvodce.nacti_nabidky(conn) if n.redizo == "600000001")
+    p, _ = pruvodce.sance_prijeti(gympl, 152.0)
+    assert p > 0.5          # nevážený průměr by dal 0,5; 2026 váží 3×, 2024 1×
+
+
+def test_talentovky_se_bez_vyzadani_nenabizeji(conn):
+    conn.execute(
+        "INSERT INTO web_profil (redizo, zdroj, stazeno, data) VALUES (?,?,?,?)",
+        ("600000002", "infoabsolvent", "2026-09-22", json.dumps({
+            "obory": [{"kod_kkov": "18-20-M/01", "forma_studia": "Denní",
+                       "prijimaci_rizeni": {"talentova_zkouska": "hra na nástroj"}}],
+        }, ensure_ascii=False)),
+    )
+    conn.commit()
+    nabidky = pruvodce.nacti_nabidky(conn)
+    assert any(n.talentova_zkouska for n in nabidky)
+    bezne = pruvodce.ohodnot(pruvodce.Profil(trida=9), nabidky)
+    assert all(not v.nabidka.talentova_zkouska for v in bezne)
+    s_talentem = pruvodce.ohodnot(pruvodce.Profil(trida=9, talentove=True), nabidky)
+    assert any(v.nabidka.talentova_zkouska for v in s_talentem)
+
+
+def test_vyber_top_hlasi_dalsi_obory_teze_skoly(conn):
+    """Vynechaný obor nesmí zmizet beze stopy — patří jako poznámka ke kartě."""
+    _obor(conn, "100000001", "78-42-M/02", "Lyceum")
+    _pz(conn, "100000001", "600000001", "78-42-M/02", 2026,
+        kapacita=30, prihlasky=40, prijati=30, hranice=60.0)
+    conn.commit()
+    vysledky = pruvodce.ohodnot(pruvodce.Profil(trida=9), pruvodce.nacti_nabidky(conn))
+    top = pruvodce.vyber_top(vysledky, pocet=5, max_na_skolu=1)
+    gympl = next(v for v in top if v.nabidka.redizo == "600000001")
+    assert any("78-42-M/02" in d or "79-41-K/41" in d for d in gympl.dalsi_obory)
+
+
+def test_chybejici_skolne_u_soukrome_skoly_neprojde_stropem(conn):
+    """Regrese: neuvedené školné se nesmí brát jako nula."""
+    conn.execute("UPDATE organizace SET typ_zrizovatele = '5' WHERE redizo = '600000004'")
+    conn.commit()
+    nabidky = pruvodce.nacti_nabidky(conn)
+    soukroma = next(n for n in nabidky if n.redizo == "600000004")
+    assert soukroma.skolne is None and not soukroma.zrizovatel_verejny
+    levne = pruvodce.ohodnot(pruvodce.Profil(trida=9, skolne_max=30000), nabidky)
+    assert all(v.nabidka.redizo != "600000004" for v in levne)
+    # Veřejná škola bez uvedeného školného projít smí — kraj školné nevybírá.
+    verejna = next(n for n in nabidky if n.redizo == "600000001")
+    assert verejna.skolne is None and verejna.zrizovatel_verejny
+    assert any(v.nabidka.redizo == "600000001" for v in levne)
+
+
+# --------------------------------------------------------------------------
+# Odvození typu z osobnostních otázek
+# --------------------------------------------------------------------------
+
+def test_typ_se_odvodi_z_osobnostnich_otazek():
+    akademik = oblasti.preference_typu(
+        {"po_skole": "vysoka", "rozhodnuto": "otevreno", "praxe": "teorie"})
+    remeslnik = oblasti.preference_typu(
+        {"po_skole": "prace", "rozhodnuto": "obor", "praxe": "hodne"})
+    assert akademik["G4"] > akademik["H"]
+    assert remeslnik["H"] > remeslnik["G4"]
+    assert oblasti.doporucene_typy(
+        {"po_skole": "prace", "rozhodnuto": "obor", "praxe": "hodne"})[0] == "H"
+
+
+def test_bez_odpovedi_je_preference_neutralni():
+    assert set(oblasti.preference_typu({}).values()) == {0.5}
+    assert oblasti.preference_typu({"po_skole": "nesmysl"}) == oblasti.preference_typu({})
+
+
+def test_preference_typu_meni_poradi(conn):
+    nabidky = pruvodce.nacti_nabidky(conn)
+    remeslnik = pruvodce.Profil(trida=9, po_skole="prace", rozhodnuto="obor", praxe="hodne")
+    akademik = pruvodce.Profil(trida=9, po_skole="vysoka", rozhodnuto="otevreno", praxe="teorie")
+    ucnak_u_remeslnika = next(v for v in pruvodce.ohodnot(remeslnik, nabidky)
+                              if v.nabidka.typ == "H")
+    ucnak_u_akademika = next(v for v in pruvodce.ohodnot(akademik, nabidky)
+                             if v.nabidka.typ == "H")
+    assert ucnak_u_remeslnika.slozky["typ"] > ucnak_u_akademika.slozky["typ"]
+
+
+def test_mestska_cast_se_prelozi_na_spravni_obvod():
+    """Lidé znají svoji MČ (Praha 12), data mají jen správní obvody 1–10."""
+    assert oblasti.obvod("Praha 12") == "Praha 4"
+    assert oblasti.obvod("Praha 22") == "Praha 10"
+    assert oblasti.obvod("Praha 6") == "Praha 6"
+    assert oblasti.obvod("neznámo") == "neznámo"
+    # Mapa sousednosti nesmí obsahovat obvody, které v datech neexistují.
+    v_datech = set(oblasti.MC_NA_OBVOD.values())
+    for sousedi in oblasti.SOUSEDNI_OBVODY.values():
+        assert set(sousedi) <= v_datech
+
+
+def test_scenare_zlepseni(conn):
+    nabidky = pruvodce.nacti_nabidky(conn)
+    # Gymnázium má hranici ~154 b.; ze 120 na 160 je vidět skok přes ni.
+    profil = pruvodce.Profil(trida=9, skor_cj=60, skor_ma=60)
+    gympl = [n for n in nabidky if n.redizo == "600000001"]
+    scenare = pruvodce.scenare_zlepseni(profil, gympl, kroky=(0, 40))
+    assert [k for k, _, _ in scenare] == [0, 40]
+    assert scenare[1][1] == 160                 # 120 + 40 bodů
+    assert scenare[1][2][0][1] > scenare[0][2][0][1]    # lepší skór = vyšší šance
+    # Bez zadaného skóru nemá scénář co počítat.
+    assert pruvodce.scenare_zlepseni(pruvodce.Profil(trida=9), gympl) == []
+
+
+def test_sance_nikdy_neklesa_se_skorem(conn):
+    """Víc bodů nesmí nikdy znamenat menší šanci.
+
+    Regrese: naměřená data jsou po pásmech rozkolísaná (v pásmu o osmi
+    lidech rozhodne jeden) a odhad navíc přepínal mezi metodami podle toho,
+    kolik dat bylo zrovna kolem uchazečova skóru. Na obojím vznikaly skoky
+    typu „se 170 body 95 %, se 180 body 52 %". Řeší to isotonická regrese
+    (`_monotonni_pasma`) plus rozhodnutí o metodě jednou za nabídku.
+    """
+    # Rozkolísaná data: pásmo 130 je „lepší" než 140, vzorky jsou malé.
+    for pasmo, prijato, ne in [(110, 0, 9), (120, 2, 8), (130, 7, 8),
+                               (140, 3, 9), (150, 8, 9), (160, 9, 9)]:
+        _pasmo(conn, "600000001", "79-41-K/41", 2026, pasmo, prijato=prijato, kapacita_ne=ne)
+    gympl = next(n for n in pruvodce.nacti_nabidky(conn) if n.redizo == "600000001")
+    sance = [pruvodce.sance_prijeti(gympl, s)[0] for s in range(0, 201, 5)]
+    assert all(a <= b + 1e-9 for a, b in zip(sance, sance[1:])), sance
+
+
+def test_vyhlazeni_slije_porusujici_pasma(conn):
+    pasma = {110: {2026: (0, 10)}, 120: {2026: (8, 10)}, 130: {2026: (2, 10)}}
+    vyhlazena = pruvodce._monotonni_pasma(pasma)
+    hodnoty = [vyhlazena[p][0] for p in sorted(vyhlazena)]
+    assert hodnoty == sorted(hodnoty)
+    # 120 a 130 se slijí do jednoho bloku: (8+2)/(10+10) = 0,5.
+    assert vyhlazena[120][0] == pytest.approx(0.5)
+    assert vyhlazena[130][0] == pytest.approx(0.5)
+
+
+def test_obor_bez_jpz_ignoruje_skor(conn):
+    """U učňovských oborů rozhoduje něco jiného než jednotná zkouška."""
+    _pasmo(conn, "600000004", "23-51-H/01", 2026, pruvodce.PASMO_BEZ_JPZ,
+           prijato=40, kapacita_ne=10)
+    _pasmo(conn, "600000004", "23-51-H/01", 2026, 80, prijato=1, kapacita_ne=0)
+    ucnak = next(n for n in pruvodce.nacti_nabidky(conn) if n.redizo == "600000004")
+    assert pruvodce._prevazuje_bez_jpz(ucnak)
+    assert (pruvodce.sance_prijeti(ucnak, 80)[0]
+            == pytest.approx(pruvodce.sance_prijeti(ucnak, 180)[0]))

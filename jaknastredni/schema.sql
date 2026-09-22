@@ -306,3 +306,43 @@ SELECT s.izo, s.redizo, o.nazev AS organizace, s.nazev AS skola, s.druh,
        (SELECT COUNT(*) FROM obor b WHERE b.izo = s.izo AND b.dobihajici = 0) AS pocet_oboru
 FROM skola s JOIN organizace o ON o.redizo = s.redizo
 WHERE s.druh IN ('C00', 'E00');
+
+-- Empirická úspěšnost přijetí podle bodového pásma, spočítaná ze souborů
+-- uchazečů CERMAT (`PZ{rok}_kolo{k}_uchazeci_prihlasky_vysledky.xlsx`, 2024+).
+-- Jeden zdrojový řádek = jeden uchazeč s % skórem a až pěti přihláškami
+-- (REDIZO + KKOV + forma + přijat/nepřijat + důvod nepřijetí); tady se
+-- agreguje na (škola × obor × rok × kolo × pásmo skóre), protože průvodce
+-- potřebuje jen míru přijetí, ne jednotlivé uchazeče — a agregace drží
+-- databázi malou (surové soubory zůstávají v data/raw/, viz README).
+--
+-- Proč to existuje vedle `prijimaci_rizeni`: ta má jen *minimální* skór
+-- přijatého, což je ocasová hodnota (často jeden uchazeč, který se dostal
+-- na body za prospěch). Odhad šance postavený na ní je systematicky
+-- optimistický — měřeno proti téhle tabulce až o 40 procentních bodů.
+-- Podrobně: docs/pruvodce-ux.md, oddíl „Šance na přijetí".
+--
+-- Klíč je REDIZO, ne IZO: soubory uchazečů IZO neuvádějí. Právnická osoba
+-- se dvěma školami nabízejícími tentýž KKOV se proto slije do jednoho řádku
+-- (v pražských datech vzácné). Stejně jako ostatní CERMAT tabulky bez
+-- cizího klíče na `organizace` — filtr na Prahu se dělá JOINem.
+--
+-- `pasmo_od` je dolní mez pásma % skóru ČJ+MA (0, 5, 10, …, 195) na škále
+-- 0–200; hodnota **-1** znamená „uchazeč JPZ nekonal" (obory s výučním
+-- listem H/E jednotnou zkoušku nemají — v roce 2026 to bylo 37 004 ze
+-- 156 210 uchazečů).
+CREATE TABLE IF NOT EXISTS prijimacky_pasmo (
+    redizo                  TEXT    NOT NULL,
+    kod_kkov                TEXT    NOT NULL,
+    rok                     INTEGER NOT NULL,
+    kolo                    INTEGER NOT NULL,
+    pasmo_od                INTEGER NOT NULL,   -- -1 = bez JPZ, jinak 0/5/…/195
+    prihlasek               INTEGER NOT NULL,   -- všechny přihlášky v pásmu
+    prijato                 INTEGER NOT NULL,
+    nedostatecna_kapacita   INTEGER NOT NULL,   -- nepřijat: nevešel se
+    nesplneni_podminek      INTEGER NOT NULL,   -- nepřijat: nesplnil podmínky
+    vyssi_priorita          INTEGER NOT NULL,   -- nepřijat: přijat na vyšší prioritu
+    vzdal_se                INTEGER NOT NULL,
+    PRIMARY KEY (redizo, kod_kkov, rok, kolo, pasmo_od)
+);
+CREATE INDEX IF NOT EXISTS ix_prijimacky_pasmo_redizo ON prijimacky_pasmo(redizo);
+CREATE INDEX IF NOT EXISTS ix_prijimacky_pasmo_kkov   ON prijimacky_pasmo(kod_kkov);

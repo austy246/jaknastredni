@@ -35,15 +35,46 @@ from . import db, oblasti, pruvodce
 log = logging.getLogger(__name__)
 
 # Pole nabídky, která web nepotřebuje — vynechávají se, aby soubor nenabobtnal.
-VYNECHAT = {"prumer_prijatych", "skola", "zdroje_profilu"}
+VYNECHAT = {"prumer_prijatych", "skola", "zdroje_profilu", "pasma"}
 
 
 def nabidka_do_dictu(nab: pruvodce.Nabidka) -> dict[str, Any]:
-    """Nabídka jako slovník bez prázdných a nepotřebných polí."""
+    """Nabídka jako slovník bez prázdných a nepotřebných polí.
+
+    Surová pásma (`pasma`) se neexportují — místo nich jde ven už
+    **vyhlazená monotonní křivka** (`fit`) a celkový vzorek (`fit_n`).
+    Isotonickou regresi tak nemusí umět i JavaScript: stránka jen najde
+    své pásmo a smrští hodnotu k modelovému odhadu, stejně jako Python.
+    Zároveň to znamená, že vyhlazení má jednu jedinou implementaci.
+    """
     d = asdict(nab)
     for pole in VYNECHAT:
         d.pop(pole, None)
-    return {k: v for k, v in d.items() if v not in (None, "", (), {}, [], False)}
+    vyhlazena = pruvodce._monotonni_pasma(nab.pasma) if nab.pasma else {}
+    celkem = sum(n for _p, n in vyhlazena.values())
+    if vyhlazena and celkem >= pruvodce.MIN_VZOREK:
+        d["fit"] = {str(pasmo): round(podil, 4) for pasmo, (podil, _n) in sorted(vyhlazena.items())}
+        d["fit_n"] = celkem
+    bez_jpz = nab.pasma.get(pruvodce.PASMO_BEZ_JPZ) if nab.pasma else None
+    if bez_jpz:
+        prijato = sum(p for p, _n in bez_jpz.values())
+        posouzeno = sum(n for _p, n in bez_jpz.values())
+        if posouzeno:
+            d["bez_jpz"] = [prijato, posouzeno]
+            d["bez_jpz_prevazuje"] = pruvodce._prevazuje_bez_jpz(nab)
+    return {k: v for k, v in d.items() if not _prazdne(v)}
+
+
+def _prazdne(v: Any) -> bool:
+    """Má se pole vynechat z exportu?
+
+    Past: v Pythonu je ``0 == False``, takže ``v not in (..., False)``
+    zahodí i **nulu**. U školného to znamenalo, že soukromá škola s nulovým
+    školným přišla v JSONu o údaj, web ho četl jako „neznámé" a školu
+    vyřadil z filtru na cenu — deset nabídek navíc oproti Pythonu.
+    Test na False musí být identitou, ne rovností.
+    """
+    return v is None or v is False or (isinstance(v, (str, tuple, list, dict)) and len(v) == 0)
 
 
 def export(conn) -> dict[str, Any]:
@@ -56,15 +87,25 @@ def export(conn) -> dict[str, Any]:
             "sigma_zaklad": pruvodce.SIGMA_ZAKLAD,
             "sigma_jeden_rok": pruvodce.SIGMA_JEDEN_ROK,
             "sigma_max": pruvodce.SIGMA_MAX,
+            "smrsteni": pruvodce.SMRSTENI,
+            "min_vzorek": pruvodce.MIN_VZOREK,
+            "okno_pasma": pruvodce.OKNO_PASMA,
             "slozky_skore": pruvodce.SLOZKY_SKORE,
             "priority": {k: {"popis": p, "slozka": s} for k, (p, s) in pruvodce.PRIORITY.items()},
             "pasma_portfolia": pruvodce.PASMA_PORTFOLIA,
+        },
+        "osobnostni": {
+            klic: {"otazka": otazka,
+                   "varianty": {kod: {"popis": popis, "typy": typy}
+                                for kod, (popis, typy) in varianty.items()}}
+            for klic, (otazka, varianty) in oblasti.OSOBNOSTNI_OTAZKY.items()
         },
         "ciselniky": {
             "oblasti": {k: {"popis": p, "skupiny": list(s)} for k, (p, s) in oblasti.OBLASTI.items()},
             "typy": {k: {"popis": p, "trida": t, "maturita": m} for k, (p, t, m) in oblasti.TYPY.items()},
             "skupiny": oblasti.SKUPINY,
             "sousedni_obvody": {k: list(v) for k, v in oblasti.SOUSEDNI_OBVODY.items()},
+            "mc_na_obvod": oblasti.MC_NA_OBVOD,
         },
     }
 

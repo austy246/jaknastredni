@@ -20,7 +20,8 @@ import re
 import sys
 from pathlib import Path
 
-from . import atlas, cermat_jpz, cermat_jpz_old, cermat_mz, csi, db, infoabsolvent, msmt
+from . import (atlas, cermat_jpz, cermat_jpz_old, cermat_mz, cermat_uchazeci, csi, db,
+               infoabsolvent, msmt)
 
 log = logging.getLogger(__name__)
 
@@ -80,6 +81,26 @@ def _build_jpz_novy(conn, raw_dir: Path) -> None:
         log.info("PZ%s kolo %d: %s (soubory: %s)", rok, kolo, stats, sorted(paths))
 
 
+_UCHAZECI_RE = re.compile(r"PZ(\d{4})_kolo(\d)_uchazeci_prihlasky_vysledky\.xlsx$")
+
+
+def _build_uchazeci(conn, raw_dir: Path) -> None:
+    """Soubory uchazečů → empirická míra přijetí podle bodového pásma.
+
+    Nejpomalejší krok buildu (~16 s na soubor 1. kola, 6 souborů) — jde o
+    150 tis. řádků na soubor. Agregace probíhá v paměti v `parse()`, do
+    databáze padají už jen setiny toho.
+    """
+    for path in sorted((raw_dir / "cermat").glob("PZ*_kolo*_uchazeci_prihlasky_vysledky.xlsx")):
+        m = _UCHAZECI_RE.search(path.name)
+        if not m:
+            continue
+        rok, kolo = int(m.group(1)), int(m.group(2))
+        rows = list(cermat_uchazeci.parse(path, rok, kolo))
+        stats = cermat_uchazeci.import_rows(conn, rows, soubor=path, rok=rok, kolo=kolo)
+        log.info("PZ%s kolo %d uchazeči: %s", rok, kolo, stats)
+
+
 def _build_csi(conn, raw_dir: Path) -> None:
     path = _nejnovejsi((raw_dir / "csi").glob("inspekcni_zpravy-*.csv"))
     if path is None:
@@ -104,6 +125,7 @@ def build_all(conn, raw_dir: Path) -> None:
     _build_maturita(conn, raw_dir)
     _build_jpz_stary(conn, raw_dir)
     _build_jpz_novy(conn, raw_dir)
+    _build_uchazeci(conn, raw_dir)
     _build_csi(conn, raw_dir)
     _build_infoabsolvent(conn, raw_dir)
     _build_atlas(conn, raw_dir)

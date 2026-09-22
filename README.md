@@ -441,15 +441,22 @@ povinná lékařská prohlídka (570). Názvy klíčů se mezi scrapery liší
 záměrně — aliasy řeší `_prvni()` v `pruvodce.py`, ne přejmenování ve
 scraperech.
 
-**Šance na přijetí** se počítá ze zveřejněného minimálního % skóru přijatých
-(`prijimaci_rizeni.skor_prijati_min_cjma`, 2024+) jako normální rozdělení
-kolem očekávané hranice. Nejistota není odhad od stolu: směrodatná odchylka
-meziroční změny hranice je v datech 20,4 bodu (598 dvojic škola×obor
-2024→2025 a 2025→2026), proto σ = 18 až 32. Uchazeč přesně na loňské hranici
-dostane ~50 %, ne jistotu. Kde hranice chybí, použije se poměr přihlášek ku
-kapacitě; kde chybí i ten (učňovské obory bez JPZ), se šance **neodhaduje** a
-karta to napíše. Žádné neprůhledné „skóre obtížnosti" jako u agregátorů
-(zdroj 6) — vzorec je v dokumentaci i v kódu.
+**Šance na přijetí** se u 550 z 623 nabídek **neodhaduje, ale měří**: ze
+souborů uchazečů CERMAT (tabulka `prijimacky_pasmo`, importér
+`jaknastredni.cermat_uchazeci`) se spočítá skutečný podíl přijatých v okolí
+uchazečova bodového pásma — „ze 115 lidí s podobným skórem se jich dostalo
+39". Odhad z minimálního skóru přijatého (`skor_prijati_min_cjma`) zůstává
+jako záloha a jako kotva smršťování, protože je to ocasová hodnota a vychází
+systematicky optimisticky — proti naměřeným datům až o 40 procentních bodů.
+Naměřené podíly se vyhlazují isotonickou regresí (PAVA), aby šance nikdy
+neklesla s rostoucími body; o použití naměřených dat se rozhoduje jednou za
+nabídku, ne podle skóre, jinak vznikne útes na přepnutí metody. Obojí hlídá
+test napříč všemi nabídkami. Žádné neprůhledné „skóre obtížnosti" jako
+u agregátorů (zdroj 6) — vzorec je v dokumentaci i v kódu.
+
+**Známky ze základky** ve veřejných datech nejsou: soubory uchazečů CERMAT
+(156 210 řádků za rok 2026) neobsahují ani základní školu, ani prospěch,
+a žádný jiný dataset základku na výsledky přijímaček neváže.
 
 ## Doporučený postup
 
