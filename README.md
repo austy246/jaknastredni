@@ -13,6 +13,8 @@ kvalita, maturitní výsledky, uplatnění absolventů apod.).
 - Importér rejstříku MŠMT funguje, viz níže.
 - Importér maturitních výsledků CERMAT (`jaknastredni/cermat_mz.py`) funguje
   pro roky 2015–2026, viz níže.
+- Importér výsledků JPZ CERMAT, nový formát (`jaknastredni/cermat_jpz.py`)
+  funguje pro roky 2024–2026 (obě kola), viz níže.
 
 ## Rychlý start
 
@@ -20,15 +22,17 @@ kvalita, maturitní výsledky, uplatnění absolventů apod.).
 pip install -e ".[dev]"
 python -m jaknastredni.msmt --db data/jaknastredni.db                        # stáhne pražský snapshot a naimportuje
 python -m jaknastredni.cermat_mz --db data/jaknastredni.db --roky 2015-2026 --obdobi jap  # maturitní výsledky
+python -m jaknastredni.cermat_jpz --db data/jaknastredni.db --roky 2024-2026            # výsledky přijímaček (JPZ)
 python -m pytest
 ```
 
 Výsledkem je `data/jaknastredni.db` s 1044 organizacemi, 2434 školami
 a zařízeními a 219 středními školami (`druh = 'C00'`); pohled
 `v_stredni_skola` je nejrychlejší cesta k přehledu. Tabulka `maturita`
-obsahuje maturitní výsledky po školách za roky 2015–2026. Stažené surové
-soubory zůstávají v `data/raw/msmt/` a `data/raw/cermat/` s rokem/datem
-výstupu v názvu.
+obsahuje maturitní výsledky po školách za roky 2015–2026. Tabulka
+`prijimaci_rizeni` obsahuje výsledky JPZ po škole × oboru za roky 2024–2026
+(27 289 řádků, obě kola). Stažené surové soubory zůstávají v
+`data/raw/msmt/` a `data/raw/cermat/` s rokem/datem výstupu v názvu.
 
 ## Rozhodnutí o vývoji a ukládání dat
 
@@ -55,7 +59,16 @@ výstupu v názvu.
 - **Hodnota `"-"` v CERMAT datech = žádný uchazeč, ukládá se jako `NULL`**,
   ne jako 0 (0 by znamenalo "nikdo neuspěl", ne "nikdo se nepřihlásil").
 - **Testovací fixtury se generují v testu přes `openpyxl`**, ne jako binární
-  `.xlsx` v repu — viz `tests/test_cermat_mz.py`.
+  `.xlsx` v repu — viz `tests/test_cermat_mz.py`, `tests/test_cermat_jpz.py`.
+- **Tabulka `prijimaci_rizeni` (JPZ) má rozšířený primární klíč.** Plán v
+  `docs/datovy-model.md` počítal s klíčem `(izo, kod_kkov, rocnik, rok,
+  kolo)`, ale v reálných datech není jednoznačný (školy s víc zaměřeními
+  pod jedním KKOV) — klíč je rozšířený o `zamereni_oboru`,
+  `forma_vzdelavani`, `delka_studia`, `jazyk_studia`, viz
+  `docs/research/cermat.md`, oddíl 13, a `jaknastredni/schema.sql`. Tři
+  zdrojové soubory (`vysledky`/`prihlasky`/`kapacity`) se spojují přes
+  `ID_SOF` (ověřeno jako spolehlivější než navržené `ID_SO`, které je navíc
+  v letech 2024–2025 v `prihlasky`/`kapacity` přejmenované na `IS_SO`).
 
 ## Klíčové identifikátory
 
@@ -246,8 +259,9 @@ JPZ). Rejstřík MŠMT je referenční množina.
 2. **Import CERMAT XLSX**:
    - ~~maturita 2015–2026 (jeden parser)~~ hotovo
      (`jaknastredni/cermat_mz.py`, tabulka `maturita`).
-   - JPZ 2024–2026 (nový formát, 3 soubory × 2 kola × rok) — další v pořadí,
-     tabulka `prijimaci_rizeni`, klíč IZO + KKOV (prefix `izo_` odstranit).
+   - ~~JPZ 2024–2026 (nový formát, 3 soubory × 2 kola × rok)~~ hotovo
+     (`jaknastredni/cermat_jpz.py`, tabulka `prijimaci_rizeni`, klíč IZO +
+     KKOV + zaměření/forma/délka/jazyk, prefix `izo_` odstraněn).
    - JPZ 2017–2023 (starý formát, jen pro trendy na úrovni skupiny oborů,
      klíč REDIZO).
 3. **Import ČŠI CSV** → seznam inspekcí per REDIZO; PDF stahovat jen pro

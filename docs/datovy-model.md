@@ -31,16 +31,18 @@ organizace (REDIZO) ──< zrizovatel
                │      ──< misto_vyuky
                │      ──< obor (KKOV, forma, délka)
                │
-               ├──< prijimaci_rizeni   (CERMAT JPZ 2024+, rok × kolo × KKOV × ročník)   [plán]
+               ├──< prijimaci_rizeni   (CERMAT JPZ 2024+, rok × kolo × KKOV × ročník)   [hotovo]
                ├──< jpz_skupina        (CERMAT JPZ 2017–2023, rok × skupina oborů)       [plán]
 organizace ────┼──< maturita           (CERMAT MZ 2015+, rok × období × SMO16 × předmět) [hotovo]
                ├──< inspekce           (ČŠI, datum × PDF)                                [plán]
                └──< web_profil         (infoabsolvent / Atlas, datum scrapování)         [plán]
 ```
 
-Plné čáry jsou implementované (importéry MŠMT a CERMAT maturita), hranaté
-závorky označují tabulky navržené pro další importéry. CERMAT do roku 2023 a
-maturita nemají IZO, proto se váží na organizaci (REDIZO), ne na školu.
+Plné čáry jsou implementované (importéry MŠMT, CERMAT maturita a CERMAT
+JPZ nový formát), hranaté závorky označují tabulky navržené pro další
+importéry. CERMAT do roku 2023 a maturita nemají IZO, proto se váží na
+organizaci (REDIZO), ne na školu; JPZ 2024+ IZO má, ale bez cizího klíče na
+`skola(izo)` (viz níže).
 
 ## Implementované tabulky (MŠMT)
 
@@ -67,7 +69,7 @@ Stav po importu pražského snapshotu z 22. 9. 2026:
 | střední školy (`C00`) | 219 |
 | aktivní obory na SŠ | 779 (190 různých KKOV) |
 
-## Implementované tabulky (CERMAT maturita)
+## Implementované tabulky (CERMAT)
 
 ### `maturita` — CERMAT MZ 2015+
 Klíč `(redizo, rok, obdobi, smo16, predmet)`; `obdobi` je `j` (jarní) nebo
@@ -82,14 +84,24 @@ Prahu a zaniklé školy, které v rejstříku MŠMT nejsou; filtr na Prahu se d�
 JOINem v dotazech (nebo `--jen-praha` při importu). Zdroj:
 [`research/cermat.md`](research/cermat.md), oddíly 4, 7, 9, 10.
 
-## Plánované tabulky (návrh)
-
 ### `prijimaci_rizeni` — CERMAT JPZ, nový formát 2024+
-Klíč `(izo, kod_kkov, rocnik, rok, kolo)`. Sloupce z `_vysledky.xlsx`
-spojené s `_kapacity` a `_prihlasky` přes `ID_SO`: kapacita, index poptávky,
-přihlášky celkem a podle priority 1–5, přijatí, konali ČJ/MA, % skór a
-percentil (průměr/min/max) zvlášť za všechny a za přijaté, důvody nepřijetí.
-Zdroj: [`research/cermat.md`](research/cermat.md), oddíl 6.
+Klíč `(izo, kod_kkov, rocnik, rok, kolo, zamereni_oboru, forma_vzdelavani,
+delka_studia, jazyk_studia)` — plánovaný kratší klíč `(izo, kod_kkov,
+rocnik, rok, kolo)` se v reálných datech ukázal jako nejednoznačný (školy
+nabízející víc zaměření/forem pod jedním KKOV), proto rozšířeno stejně jako
+u tabulky `obor`. Sloupce z `_vysledky.xlsx` spojené s `_kapacity` a
+`_prihlasky` přes `ID_SOF` (spolehlivější než navržené `ID_SO`, které je
+navíc v letech 2024–2025 u `_kapacity`/`_prihlasky` přejmenované na
+`IS_SO`): kapacita, index poptávky, přihlášky celkem a podle priority 1–5, přijatí a
+podle priority 1–5, konali ČJ/MA, % skór a percentil (průměr/min/max)
+zvlášť za všechny přihlášené a za přijaté, důvody nepřijetí (přijat na
+vyšší prioritu / nedostatečná kapacita / nesplnění podmínek / vzdal se
+přijetí). Stejně jako `maturita` bez cizího klíče na `skola(izo)` —
+CERMAT zahrnuje i školy mimo Prahu a zaniklé; filtr na Prahu přes JOIN
+nebo `--jen-praha`. Zdroj: [`research/cermat.md`](research/cermat.md),
+oddíly 6, 13.
+
+## Plánované tabulky (návrh)
 
 ### `jpz_skupina` — CERMAT JPZ, starý formát 2017–2023
 Klíč `(redizo, skupina_oboru, rocnik, rok)`. Přihlášeni, konali, průměrné
@@ -110,7 +122,7 @@ přihlášení/přijatí. Zdroj infoabsolvent.cz, případně Atlas školství.
 
 | Zdroj | Klíč | Poznámka |
 |---|---|---|
-| CERMAT JPZ 2024+ | `izo` + `kkov` | IZO má prefix `izo_`, před spojením odstranit |
+| CERMAT JPZ 2024+ | `izo` + `kkov` | IZO má prefix `izo_`, před spojením odstranit; víc zaměření/forem pod jedním KKOV, viz `prijimaci_rizeni` výše |
 | CERMAT JPZ ≤2023 | `redizo` | obor jen jako skupina |
 | CERMAT maturita | `redizo` | obor jen jako SMO16 |
 | ČŠI | `redizo` | filtr na Prahu přes JOIN s `organizace` |
