@@ -1,12 +1,14 @@
 """Testy scraperu atlasskolstvi.cz.
 
-Fixtury jsou minimální HTML konzistentní se selektory popsanými v
-docs/research/atlas-infoabsolvent.md (oddíl 1) — na rozdíl od
-tests/test_infoabsolvent.py nejde o výřezy skutečně stažených stránek (živé
-HTML atlasskolstvi.cz nebylo v tomto prostředí k dispozici), ale o realistické
-fixtury odpovídající zdokumentované struktuře (`ul.schoollist`,
-`div.pagination[data-maxpages]`, `<strong>Redizo:</strong>`, `table.oborTable`
-s `data-name` atributy).
+Fixtury jsou zkrácené výřezy inspirované skutečně staženými stránkami
+(REDIZO 600004686 „Střední průmyslová škola strojnická" a REDIZO 600005216
+„Střední škola gastronomická a hotelová", ověřeno živým stažením 2026-09-22,
+viz `_parse_maxpages`/`_extract_redizo`/`_parse_obory` komentáře v
+`jaknastredni/atlas.py`) — na rozdíl od dřívější verze těchto testů, psané jen
+podle `docs/research/atlas-infoabsolvent.md` bez živého ověření, byla ta
+verze v několika ohledech nesprávná (vnořený `data-maxpages`, `div.description`
+místo `div.doplnujiciInfo`, `table.sslist` místo `table.oborTable`, obor
+rozložený do DVOU `<tr>`) — teď fixtury odpovídají reálné struktuře.
 """
 from __future__ import annotations
 
@@ -18,7 +20,7 @@ from jaknastredni import atlas, db
 
 LIST_HTML = """
 <html><body>
-<div class="pagination" data-maxpages="11" data-nextpage="2"></div>
+<div class="pagination"><div data-maxpages="11" data-nextpage="2"></div></div>
 <ul class="schoollist cols1">
 <li><a href="/ss16-stredni-prumyslova-skola-strojnicka-praha-1">
   <h2>Střední průmyslová škola strojnická</h2>
@@ -34,7 +36,7 @@ LIST_HTML = """
 
 LIST_PAGE2_HTML = """
 <html><body>
-<div class="pagination" data-maxpages="11" data-nextpage="3"></div>
+<div class="pagination"><div data-maxpages="11" data-nextpage="3"></div></div>
 <ul class="schoollist cols1">
 <li><a href="/ss42-gymnazium-nad-alejí">
   <h2>Gymnázium Nad Alejí</h2>
@@ -44,87 +46,163 @@ LIST_PAGE2_HTML = """
 </body></html>
 """
 
-# Detail školy (REDIZO 600004686), zdarma dostupná pole + jeden obor s
-# odkazem na placenou "Statistiku" (ten se nesmí parsovat/následovat).
+# Detail školy (REDIZO 600004686) — kontaktní <li> sdílené se Zřizovatelem/IČ
+# (REDIZO se musí číst jen z textu hned za vlastním <strong>, ne z celého
+# textu <li>, jinak by IČ hrozilo kolizi), `div.description` s volnými poli a
+# `ul.advinfo`, a `table.sslist` s jedním oborem rozloženým do dvou <tr>
+# (hlavní řádek + `tr.nobg` se školným/prospěchem) + odkaz na placenou
+# "Statistiku", který se nesmí propsat do dat.
 DETAIL_SIMPLE_HTML = """
 <html><body>
-<div class="schoolDetail">
-  <h1>Střední průmyslová škola strojnická</h1>
-  <div class="contactInfo">
-    <p><strong>Adresa:</strong> Betlémská 287/4, Praha 1</p>
-    <p><strong>IČ:</strong> 63109357</p>
-    <p><strong>Redizo:</strong> 600004686</p>
-    <p><strong>Zřizovatel:</strong> Hlavní město Praha</p>
+<ul class="contactBox">
+  <li class="director"><strong>Mgr. Michal Prutyszyn, MBA</strong> <em>ředitel/ka</em></li>
+  <li>
+    <strong>Zřizovatel:</strong> Kraj<br>
+    <strong>IČ:</strong> 70872589<br>
+    <strong>Redizo:</strong> 600004686<br>
+  </li>
+</ul>
+<div class="description">
+  <h2>Dny otevřených dveří</h2>
+  <article class="small">
+    <div>st 8. 10. 2025 (od 16:00 do 18:00 hod.), so 6. 12. 2025 (od 10:00 do 13:00 hod.)</div>
+    <button aria-expanded="false" class="more">Zobrazit více</button>
+  </article>
+  <h2>Doplňující informace</h2>
+  <article class="small">
+    <div>Žáci budou přijímáni na základě studijních výsledků na základní škole a přijímacích zkoušek.</div>
+    <button aria-expanded="false" class="more">Zobrazit více</button>
+  </article>
+  <ul class="advinfo">
+    <li class="languages" data-help="...">
+      <div><strong>Cizí jazyky</strong><span>AJ, NJ, ŠJ</span></div>
+    </li>
+    <li class="lodging" data-help="...">
+      <div><strong>Ubytování</strong><span>Neuvedeno</span></div>
+    </li>
+    <li class="food" data-help="...">
+      <div><strong>Stravování</strong><span>840&nbsp;Kč/měsíc</span></div>
+    </li>
+  </ul>
+  <h2>Obory a zaměření</h2>
+  <div class="branchlist">
+    <table cellspacing="0" cellpadding="0" class="sslist">
+      <caption>Seznam oborů studia</caption>
+      <tbody>
+        <tr>
+          <th data-name="Obor, zaměření, kód oboru KKOV" rowspan="2" scope="row">
+            <a href="?obor=3716&amp;forma=2&amp;typ=10&amp;delka_studia=4"><strong>Informační technologie</strong></a>
+            <span>18-20-M/01 </span>
+          </th>
+          <td data-name="Ukončení studia" rowspan="2"><strong>Maturitní zkouška</strong><span>4&nbsp;roky</span></td>
+          <td data-name="Přijmou 2026/27"><strong>30</strong></td>
+          <td data-name="Přihl./přij. 2025/26">183/30
+            <a href="?obor=3716&amp;forma=2&amp;typ=10&amp;delka_studia=4" class="small">Statistika</a></td>
+          <td data-name="Přijímací zkoušky">ČJ, M</td>
+          <td data-name="PLP" class="yes"><strong><span>ANO</span></strong></td>
+          <td data-name="OZP" class="yes"><strong><span>ANO</span></strong></td>
+        </tr>
+        <tr class="nobg">
+          <td colspan="2" data-name="Školné" data-help="..."></td>
+          <td colspan="3" data-name="Doporučený prospěch" data-help="...">
+            <text><span>Doporučený prospěch:&nbsp;</span>2.3</text>
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </div>
-  <div class="doplnujiciInfo">
-    <h3>Dny otevřených dveří</h3>
-    <p>12. 12. 2026, 16. 1. 2027</p>
-    <h3>Doplňující informace</h3>
-    <p>Škola se zaměřuje na strojírenství a informační technologie.</p>
-    <h3>Cizí jazyky</h3>
-    <p>anglický, německý</p>
-    <h3>Ubytování</h3>
-    <p>škola nezajišťuje</p>
-    <h3>Stravování</h3>
-    <p>250 Kč/měsíc</p>
-  </div>
-  <table class="oborTable">
-    <thead>
-      <tr>
-        <td data-name="Obor, zaměření, kód oboru KKOV">Obor</td>
-        <td data-name="Typ ukončení">Typ ukončení</td>
-        <td data-name="Délka studia">Délka studia</td>
-        <td data-name="Přijmou 2026/27">Přijmou 2026/27</td>
-        <td data-name="Přihl./přij. 2025/26">Přihl./přij. 2025/26</td>
-        <td data-name="Přijímací zkoušky">Přijímací zkoušky</td>
-        <td data-name="PLP">PLP</td>
-        <td data-name="OZP">OZP</td>
-        <td data-name="Doporučený prospěch">Doporučený prospěch</td>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td data-name="Obor, zaměření, kód oboru KKOV">Informační technologie (18-20-M/01)</td>
-        <td data-name="Typ ukončení">maturitní zkouška</td>
-        <td data-name="Délka studia">4</td>
-        <td data-name="Přijmou 2026/27">30</td>
-        <td data-name="Přihl./přij. 2025/26">89/30</td>
-        <td data-name="Přijímací zkoušky">ČJ, M</td>
-        <td data-name="PLP">ne</td>
-        <td data-name="OZP">ano</td>
-        <td data-name="Doporučený prospěch">1,5</td>
-        <td><a href="?obor=3716&amp;forma=1&amp;typ=1&amp;delka_studia=4">Statistika</a></td>
-      </tr>
-    </tbody>
-  </table>
 </div>
 </body></html>
 """
 
-# Výřez s učňovským oborem (bez maturity, bez placené "Statistiky" u odkazu).
+# Výřez s výučním oborem (REDIZO 600006573) — má taky zdarma loňský
+# přihlášení/přijatí (bez placené Statistiky), navíc školné bez doporučeného
+# prospěchu (prázdná buňka).
 DETAIL_UCNOVSKY_HTML = """
 <html><body>
-<div class="contactInfo">
-  <p><strong>Redizo:</strong> 600006573</p>
+<ul class="contactBox">
+  <li><strong>Redizo:</strong> 600006573<br></li>
+</ul>
+<div class="description">
+  <div class="branchlist">
+    <table class="sslist">
+      <tbody>
+        <tr>
+          <th data-name="Obor, zaměření, kód oboru KKOV" rowspan="2" scope="row">
+            <a href="?obor=3772&amp;forma=2&amp;delka_studia=3"><strong>Cukrář</strong></a>
+            <span>29-54-H/01</span>
+          </th>
+          <td data-name="Ukončení studia" rowspan="2"><strong>Výuční list</strong><span>3&nbsp;roky</span></td>
+          <td data-name="Přijmou 2026/27"><strong>60</strong></td>
+          <td data-name="Přihl./přij. 2025/26">168/60
+            <a href="?obor=3772&amp;forma=2&amp;delka_studia=3" class="small">Statistika</a></td>
+          <td data-name="Přijímací zkoušky">ČJ</td>
+          <td data-name="PLP" class="yes"><strong><span>ANO</span></strong></td>
+          <td data-name="OZP" class="no"><strong><span>NE</span></strong></td>
+        </tr>
+        <tr class="nobg">
+          <td colspan="2" data-name="Školné" data-help="..."><span>Školné:</span> 21&nbsp;000 Kč</td>
+          <td colspan="3" data-name="Doporučený prospěch" data-help="..."></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </div>
-<table class="oborTable">
-  <tbody>
-    <tr>
-      <td data-name="Obor, zaměření, kód oboru KKOV">Truhlář (33-56-H/01)</td>
-      <td data-name="Typ ukončení">výuční list</td>
-      <td data-name="Délka studia">3</td>
-      <td data-name="Přijmou 2026/27">15</td>
-      <td data-name="Přihl./přij. 2025/26">12/12</td>
-      <td data-name="PLP">ano</td>
-      <td data-name="OZP">ne</td>
-    </tr>
-  </tbody>
-</table>
+</body></html>
+"""
+
+# Dva obory oddělené řádkem-oddělovačem sekce ("Nástavby:", bez buňky oboru
+# ani školného/prospěchu) — nesmí přerušit párování dvojic <tr> u druhého
+# oboru ani vytvořit fiktivní obor navíc.
+DETAIL_MULTI_OBOR_WITH_SECTION_HTML = """
+<html><body>
+<ul class="contactBox"><li><strong>Redizo:</strong> 600005216<br></li></ul>
+<div class="description">
+  <div class="branchlist">
+    <table class="sslist">
+      <tbody>
+        <tr>
+          <th data-name="Obor, zaměření, kód oboru KKOV" rowspan="2" scope="row">
+            <a href="?obor=3924"><strong>Gymnázium</strong></a>
+            <span>79-41-K/41</span>
+          </th>
+          <td data-name="Ukončení studia" rowspan="2"><strong>Maturitní zkouška</strong><span>4&nbsp;roky</span></td>
+          <td data-name="Přijmou 2026/27"><strong>30</strong></td>
+          <td data-name="Přihl./přij. 2025/26">123/28</td>
+          <td data-name="Přijímací zkoušky">ČJ, M</td>
+          <td data-name="PLP" class="no"><strong><span>NE</span></strong></td>
+          <td data-name="OZP" class="no"><strong><span>NE</span></strong></td>
+        </tr>
+        <tr class="nobg">
+          <td colspan="2" data-name="Školné" data-help="..."></td>
+          <td colspan="3" data-name="Doporučený prospěch" data-help="..."></td>
+        </tr>
+        <tr class="nastavby"><td class="first" colspan="7"><strong>Nástavby:</strong></td></tr>
+        <tr>
+          <th data-name="Obor, zaměření, kód oboru KKOV" rowspan="2" scope="row">
+            <a href="?obor=3883"><strong>Podnikání; Kombinovaná; VYU</strong></a>
+            <span>64-41-L/51</span>
+          </th>
+          <td data-name="Ukončení studia" rowspan="2"><strong>Maturitní zkouška</strong><span>2&nbsp;roky</span></td>
+          <td data-name="Přijmou 2026/27"><strong>30</strong></td>
+          <td data-name="Přihl./přij. 2025/26">346/198</td>
+          <td data-name="Přijímací zkoušky">AJ, ČJ, M</td>
+          <td data-name="PLP" class="no"><strong><span>NE</span></strong></td>
+          <td data-name="OZP" class="no"><strong><span>NE</span></strong></td>
+        </tr>
+        <tr class="nobg">
+          <td colspan="2" data-name="Školné" data-help="..."><span>Školné:</span> 34&nbsp;000 Kč</td>
+          <td colspan="3" data-name="Doporučený prospěch" data-help="..."></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 </body></html>
 """
 
 DETAIL_NO_REDIZO_HTML = """
-<html><body><div class="contactInfo"><p>Stránka bez detailu.</p></div></body></html>
+<html><body><div class="description">Stránka bez detailu.</div></body></html>
 """
 
 
@@ -150,6 +228,8 @@ def test_parse_list_deduplicates_atlas_id():
 
 
 def test_parse_maxpages():
+    """`data-maxpages` je na vnořeném `<div>` uvnitř `div.pagination`, ne na tomtéž
+    elementu, který nese třídu `pagination` (ověřeno živě, liší se od průzkumu)."""
     assert atlas._parse_maxpages(LIST_HTML) == 11
 
 
@@ -164,6 +244,14 @@ def test_parse_detail_extracts_redizo_from_page_text():
     assert redizo == "600004686"
 
 
+def test_parse_detail_redizo_not_confused_with_ic_in_same_li():
+    """Zřizovatel/IČ/Redizo jsou tři <strong> ve stejném <li> — REDIZO se musí
+    číst z textu hned za svým vlastním <strong>, ne z IČ o pár znaků dřív."""
+    redizo, _data = atlas.parse_detail(DETAIL_SIMPLE_HTML)
+    assert redizo != "70872589"
+    assert redizo == "600004686"
+
+
 def test_parse_detail_returns_none_redizo_when_missing():
     redizo, data = atlas.parse_detail(DETAIL_NO_REDIZO_HTML)
     assert redizo is None
@@ -172,11 +260,11 @@ def test_parse_detail_returns_none_redizo_when_missing():
 
 def test_parse_detail_doplnujici_fields():
     _redizo, data = atlas.parse_detail(DETAIL_SIMPLE_HTML)
-    assert data["dny_otevrenych_dveri"] == "12. 12. 2026, 16. 1. 2027"
-    assert "strojírenství" in data["doplnujici_informace"]
-    assert data["cizi_jazyky"] == "anglický, německý"
-    assert data["ubytovani"] == "škola nezajišťuje"
-    assert data["stravovani"] == "250 Kč/měsíc"
+    assert "8. 10. 2025" in data["dny_otevrenych_dveri"]
+    assert "přijímacích zkoušek" in data["doplnujici_informace"]
+    assert data["cizi_jazyky"] == "AJ, NJ, ŠJ"
+    assert data["ubytovani"] == "Neuvedeno"
+    assert "840" in data["stravovani"]
 
 
 def test_parse_detail_no_personal_or_redundant_data():
@@ -188,7 +276,8 @@ def test_parse_detail_no_personal_or_redundant_data():
     assert "ic" not in data and "ič" not in data
     assert "zrizovatel" not in data and "zřizovatel" not in data
     assert "reditel" not in blob
-    assert "betlémská" not in blob  # adresa se nikam nepropsala
+    assert "prutyszyn" not in blob  # jméno ředitele se nikam nepropsalo
+    assert "70872589" not in blob  # IČ taky ne
 
 
 # --------------------------------------------------------------------------- detail: obory
@@ -199,8 +288,8 @@ def test_parse_detail_obor_basic_fields():
     obor = data["obory"][0]
     assert obor["nazev_oboru"] == "Informační technologie"
     assert obor["kod_kkov"] == "18-20-M/01"
-    assert obor["typ_ukonceni"] == "maturitní zkouška"
-    assert obor["delka_studia"] == "4"
+    assert obor["typ_ukonceni"] == "Maturitní zkouška"
+    assert obor["delka_studia"] == "4\xa0roky"
     assert obor["prijimaci_zkousky"] == "ČJ, M"
 
 
@@ -209,7 +298,7 @@ def test_parse_detail_obor_prihlaseni_prijati_split():
     ne jen plán — proto dva oddělené sloupce loni_prihlaseni/loni_prijati."""
     _redizo, data = atlas.parse_detail(DETAIL_SIMPLE_HTML)
     obor = data["obory"][0]
-    assert obor["loni_prihlaseni"] == 89
+    assert obor["loni_prihlaseni"] == 183
     assert obor["loni_prijati"] == 30
     assert obor["planovany_pocet_prijmout"] == 30
 
@@ -217,9 +306,9 @@ def test_parse_detail_obor_prihlaseni_prijati_split():
 def test_parse_detail_obor_plp_ozp_prospech():
     _redizo, data = atlas.parse_detail(DETAIL_SIMPLE_HTML)
     obor = data["obory"][0]
-    assert obor["plp"] is False
+    assert obor["plp"] is True
     assert obor["ozp"] is True
-    assert obor["doporuceny_prospech"] == 1.5
+    assert obor["doporuceny_prospech"] == 2.3
 
 
 def test_parse_detail_paid_statistika_link_not_followed_or_stored():
@@ -232,14 +321,38 @@ def test_parse_detail_paid_statistika_link_not_followed_or_stored():
 
 
 def test_parse_detail_ucnovsky_obor_free_pocty_prihlasenych_prijatych():
-    """U učňovských oborů jsou počty přihlášených/přijatých taky zdarma (bez placené
-    Statistiky), viz research doc oddíl 1.4."""
+    """U výučních oborů jsou loňské počty přihlášených/přijatých taky zdarma
+    (bez placené Statistiky), viz research doc oddíl 1.4."""
     redizo, data = atlas.parse_detail(DETAIL_UCNOVSKY_HTML)
     assert redizo == "600006573"
     obor = data["obory"][0]
-    assert obor["typ_ukonceni"] == "výuční list"
-    assert obor["loni_prihlaseni"] == 12
-    assert obor["loni_prijati"] == 12
+    assert obor["typ_ukonceni"] == "Výuční list"
+    assert obor["loni_prihlaseni"] == 168
+    assert obor["loni_prijati"] == 60
+
+
+def test_parse_detail_obor_skolne_with_nbsp_thousands_separator():
+    """Školné používá pevnou mezeru (\\xa0) jako oddělovač tisíců — muselo by se
+    jinak useknout na první skupinu číslic (viz `atlas._int`)."""
+    _redizo, data = atlas.parse_detail(DETAIL_UCNOVSKY_HTML)
+    obor = data["obory"][0]
+    assert obor["skolne_rocne"] == 21000
+    assert "doporuceny_prospech" not in obor  # prázdná buňka u tohoto oboru
+
+
+def test_parse_detail_section_separator_row_does_not_break_pairing():
+    """Řádek-oddělovač sekce ("Nástavby:") nemá buňku oboru ani školné/prospěch
+    — nesmí se stát fiktivním obor, ani přerušit spárování dalšího oboru se
+    svým pokračovacím řádkem (`tr.nobg`)."""
+    redizo, data = atlas.parse_detail(DETAIL_MULTI_OBOR_WITH_SECTION_HTML)
+    assert redizo == "600005216"
+    obory = data["obory"]
+    assert len(obory) == 2
+    assert obory[0]["nazev_oboru"] == "Gymnázium"
+    assert obory[1]["nazev_oboru"] == "Podnikání; Kombinovaná; VYU"
+    assert obory[1]["skolne_rocne"] == 34000
+    assert obory[1]["loni_prihlaseni"] == 346
+    assert obory[1]["loni_prijati"] == 198
 
 
 # --------------------------------------------------------------------------- import do DB
