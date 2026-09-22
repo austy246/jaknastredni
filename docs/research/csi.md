@@ -199,6 +199,33 @@ XML** (stejná data, různý formát), odkazy typu
    dodatečná hodnota za cenu výrazně vyšší implementační složitosti
    (session/postback handling).
 
+## Dodatek: ověření při implementaci importéru (22. 9. 2026)
+
+Před napsáním `jaknastredni/csi.py` bylo CSV znovu staženo a prozkoumáno
+přímo (`file`, `head`, ruční dekódování), pro jistotu (české open-data CSV
+bývají windows-1250):
+
+- **Encoding je čisté UTF-8**, ne windows-1250 — potvrzeno `file(1)`
+  (`CSV Unicode text, UTF-8 text`) i bezproblémovým dekódováním v Pythonu.
+- Hlavička přesně `REDIZO,Jmeno,DatumOd,DatumDo,LinkIZ,PortalLink` (žádné
+  odchylky ve velikosti písmen/mezerách oproti tomu, co uvádí bod 1.1 výše).
+- **14 912 datových řádků**, souhlasí s dřívějším zjištěním. Žádné prázdné
+  REDIZO/Jmeno/DatumOd/DatumDo/LinkIZ/PortalLink v žádném řádku. Všechna
+  REDIZO jsou přesně 9místná číselná řetězce (žádné kratší/delší). Klíč
+  `(REDIZO, DatumOd)` je v celém souboru jedinečný (0 kolizí) — použitelný
+  jako primární klíč tabulky `inspekce` beze změny.
+- Datumy jsou ISO 8601 s časem (`2017-10-03T00:00:00.0000000`), stačí
+  prvních 10 znaků pro `YYYY-MM-DD`.
+- Potvrzeny 2 řádky se sentinelovým `DatumDo` daleko v budoucnosti
+  (`2203-05-22`, `3000-01-01`) zmíněné v oddíle 1.1 — importér je ukládá
+  jako `NULL` (rok ≥ 2100 se považuje za technický artefakt, ne skutečné
+  datum konce inspekce).
+- Import celého souboru bez `--jen-praha`: **14 912 řádků**, 0 přeskočeno.
+  S JOINem na `organizace`/`v_stredni_skola` (pražské SŠ): **350 inspekcí**
+  u **217 různých REDIZO** — druhé číslo se přesně shoduje s kontrolním
+  součtem portálu ČŠI v README (217 SŠ v Praze), což potvrzuje, že JOIN
+  přes REDIZO funguje správně.
+
 ## Problémy a otevřené otázky
 
 - Licence použití opendata dat ČŠI nebyla explicitně nalezena/ověřena.

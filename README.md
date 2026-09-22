@@ -13,6 +13,8 @@ kvalita, maturitní výsledky, uplatnění absolventů apod.).
 - Importér rejstříku MŠMT funguje, viz níže.
 - Importér maturitních výsledků CERMAT (`jaknastredni/cermat_mz.py`) funguje
   pro roky 2015–2026, viz níže.
+- Importér seznamu inspekčních zpráv ČŠI (`jaknastredni/csi.py`) funguje,
+  viz níže.
 
 ## Rychlý start
 
@@ -20,15 +22,19 @@ kvalita, maturitní výsledky, uplatnění absolventů apod.).
 pip install -e ".[dev]"
 python -m jaknastredni.msmt --db data/jaknastredni.db                        # stáhne pražský snapshot a naimportuje
 python -m jaknastredni.cermat_mz --db data/jaknastredni.db --roky 2015-2026 --obdobi jap  # maturitní výsledky
+python -m jaknastredni.csi --db data/jaknastredni.db                        # seznam inspekcí ČŠI
 python -m pytest
 ```
 
 Výsledkem je `data/jaknastredni.db` s 1044 organizacemi, 2434 školami
 a zařízeními a 219 středními školami (`druh = 'C00'`); pohled
 `v_stredni_skola` je nejrychlejší cesta k přehledu. Tabulka `maturita`
-obsahuje maturitní výsledky po školách za roky 2015–2026. Stažené surové
-soubory zůstávají v `data/raw/msmt/` a `data/raw/cermat/` s rokem/datem
-výstupu v názvu.
+obsahuje maturitní výsledky po školách za roky 2015–2026. Tabulka `inspekce`
+obsahuje 14 912 záznamů o inspekcích ČŠI za roky 2003–2026 (350 z nich se
+týká pražských středních škol, 217 různých REDIZO — souhlasí s kontrolním
+součtem portálu ČŠI, viz níže). Stažené surové soubory zůstávají v
+`data/raw/msmt/`, `data/raw/cermat/` a `data/raw/csi/` s rokem/datem výstupu
+v názvu.
 
 ## Rozhodnutí o vývoji a ukládání dat
 
@@ -250,8 +256,10 @@ JPZ). Rejstřík MŠMT je referenční množina.
      tabulka `prijimaci_rizeni`, klíč IZO + KKOV (prefix `izo_` odstranit).
    - JPZ 2017–2023 (starý formát, jen pro trendy na úrovni skupiny oborů,
      klíč REDIZO).
-3. **Import ČŠI CSV** → seznam inspekcí per REDIZO; PDF stahovat jen pro
-   školy na užším seznamu a extrahovat sekci „Závěry".
+3. ~~**Import ČŠI CSV**~~ hotovo (`jaknastredni/csi.py`, tabulka `inspekce`,
+   14 912 řádků, 2003–2026) → seznam inspekcí per REDIZO; PDF stahovat jen
+   pro školy na užším seznamu a extrahovat sekci „Závěry" zůstává budoucí
+   krok (mimo rozsah tohoto importéru).
 4. **Scraper infoabsolvent.cz** (211 detailů, 1 req/s) pro přijímací
    kritéria, školné, jazyky, vybavení; volitelně Atlas pro dny otevřených
    dveří a doporučený prospěch. Vždy REDIZO z detailu, ne z URL Atlasu.
