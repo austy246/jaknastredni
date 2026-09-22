@@ -19,6 +19,8 @@ kvalita, maturitní výsledky, uplatnění absolventů apod.).
   funguje pro roky 2017–2023, viz níže.
 - Scraper infoabsolvent.cz (`jaknastredni/infoabsolvent.py`) funguje a byl
   spuštěn na všech 211 pražských SŠ, viz níže.
+- Importér výsledků JPZ CERMAT, nový formát (`jaknastredni/cermat_jpz.py`)
+  funguje pro roky 2024–2026 (obě kola), viz níže.
 
 ## Rychlý start
 
@@ -29,6 +31,7 @@ python -m jaknastredni.cermat_mz --db data/jaknastredni.db --roky 2015-2026 --ob
 python -m jaknastredni.csi --db data/jaknastredni.db                        # seznam inspekcí ČŠI
 python -m jaknastredni.cermat_jpz_old --db data/jaknastredni.db --roky 2017-2023          # JPZ starý formát
 python -m jaknastredni.infoabsolvent --db data/jaknastredni.db              # scraper infoabsolvent.cz (1 req/s, pár minut)
+python -m jaknastredni.cermat_jpz --db data/jaknastredni.db --roky 2024-2026            # výsledky přijímaček (JPZ)
 python -m pytest
 ```
 
@@ -37,16 +40,18 @@ a zařízeními a 219 středními školami (`druh = 'C00'`); pohled
 `v_stredni_skola` je nejrychlejší cesta k přehledu. Tabulka `maturita`
 obsahuje maturitní výsledky po školách za roky 2015–2026, tabulka
 `jpz_skupina` výsledky JPZ po školách a oborových skupinách za roky
-2017–2023 (21 569 řádků). Tabulka `inspekce` obsahuje 14 912 záznamů o
-inspekcích ČŠI za roky 2003–2026 (350 z nich se týká pražských středních
-škol, 217 různých REDIZO — souhlasí s kontrolním součtem portálu ČŠI, viz
-níže). Tabulka `web_profil` obsahuje scrapovaný profil ze zdroje
-`infoabsolvent` pro všech 211 pražských SŠ (naposledy staženo 22. 9. 2026)
-— 743 řádků oborů napříč 208 školami (3 školy nemají na infoabsolventu
-žádnou vzdělávací nabídku uvedenou). Stažené surové soubory zůstávají v
-`data/raw/msmt/`, `data/raw/cermat/` a `data/raw/csi/` s rokem/datem
-výstupu v názvu; `web_profil` je čistě odvozená data přímo v databázi,
-žádné syrové HTML se needukládá (viz níže u infoabsolventu).
+2017–2023 (21 569 řádků) a tabulka `prijimaci_rizeni` výsledky JPZ po
+škole × oboru za roky 2024–2026 (27 289 řádků, obě kola). Tabulka
+`inspekce` obsahuje 14 912 záznamů o inspekcích ČŠI za roky 2003–2026 (350
+z nich se týká pražských středních škol, 217 různých REDIZO — souhlasí
+s kontrolním součtem portálu ČŠI, viz níže). Tabulka `web_profil` obsahuje
+scrapovaný profil ze zdroje `infoabsolvent` pro všech 211 pražských SŠ
+(naposledy staženo 22. 9. 2026) — 743 řádků oborů napříč 208 školami
+(3 školy nemají na infoabsolventu žádnou vzdělávací nabídku uvedenou).
+Stažené surové soubory zůstávají v `data/raw/msmt/`, `data/raw/cermat/`
+a `data/raw/csi/` s rokem/datem výstupu v názvu; `web_profil` je čistě
+odvozená data přímo v databázi, žádné syrové HTML se needukládá (viz níže
+u infoabsolventu).
 
 ## Rozhodnutí o vývoji a ukládání dat
 
@@ -73,7 +78,7 @@ výstupu v názvu; `web_profil` je čistě odvozená data přímo v databázi,
 - **Hodnota `"-"` v CERMAT datech = žádný uchazeč, ukládá se jako `NULL`**,
   ne jako 0 (0 by znamenalo "nikdo neuspěl", ne "nikdo se nepřihlásil").
 - **Testovací fixtury se generují v testu přes `openpyxl`**, ne jako binární
-  `.xlsx` v repu — viz `tests/test_cermat_mz.py`.
+  `.xlsx` v repu — viz `tests/test_cermat_mz.py`, `tests/test_cermat_jpz.py`.
 - **Importér JPZ 2017–2023** (`jaknastredni/cermat_jpz_old.py`) byl na
   explicitní žádost vlastníka repa vyvíjen na samostatné větvi (ne přímo v
   `main`). Tabulka `jpz_skupina` stejně jako `maturita` nemá cizí klíč na
@@ -85,6 +90,15 @@ výstupu v názvu; `web_profil` je čistě odvozená data přímo v databázi,
   (`NEKONALI`) — parser tyto sloupce nemapuje (schéma je nepotřebuje), takže
   rozdíl je neškodný; podrobně
   [`docs/research/cermat.md`](docs/research/cermat.md), oddíl 13.
+- **Tabulka `prijimaci_rizeni` (JPZ) má rozšířený primární klíč.** Plán v
+  `docs/datovy-model.md` počítal s klíčem `(izo, kod_kkov, rocnik, rok,
+  kolo)`, ale v reálných datech není jednoznačný (školy s víc zaměřeními
+  pod jedním KKOV) — klíč je rozšířený o `zamereni_oboru`,
+  `forma_vzdelavani`, `delka_studia`, `jazyk_studia`, viz
+  `docs/research/cermat.md`, oddíl 14, a `jaknastredni/schema.sql`. Tři
+  zdrojové soubory (`vysledky`/`prihlasky`/`kapacity`) se spojují přes
+  `ID_SOF` (ověřeno jako spolehlivější než navržené `ID_SO`, které je navíc
+  v letech 2024–2025 v `prihlasky`/`kapacity` přejmenované na `IS_SO`).
 
 ## Klíčové identifikátory
 
@@ -289,8 +303,9 @@ JPZ). Rejstřík MŠMT je referenční množina.
 2. **Import CERMAT XLSX**:
    - ~~maturita 2015–2026 (jeden parser)~~ hotovo
      (`jaknastredni/cermat_mz.py`, tabulka `maturita`).
-   - JPZ 2024–2026 (nový formát, 3 soubory × 2 kola × rok) — další v pořadí,
-     tabulka `prijimaci_rizeni`, klíč IZO + KKOV (prefix `izo_` odstranit).
+   - ~~JPZ 2024–2026 (nový formát, 3 soubory × 2 kola × rok)~~ hotovo
+     (`jaknastredni/cermat_jpz.py`, tabulka `prijimaci_rizeni`, klíč IZO +
+     KKOV + zaměření/forma/délka/jazyk, prefix `izo_` odstraněn).
    - ~~JPZ 2017–2023 (starý formát, jen pro trendy na úrovni skupiny oborů,
      klíč REDIZO)~~ hotovo (`jaknastredni/cermat_jpz_old.py`, tabulka
      `jpz_skupina`).
