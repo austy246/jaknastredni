@@ -108,7 +108,18 @@ class RateLimitedSession:
         resp = self._session.get(url, timeout=self.timeout)
         self._last_request = time.monotonic()
         resp.raise_for_status()
-        return resp.text
+        if "charset" not in (resp.headers.get("Content-Type") or "").lower():
+            # Bez deklarovaného charsetu `requests` defaultuje na ISO-8859-1 (staré
+            # HTTP chování pro text/*) — na `robots.txt` s UTF-8 BOM (ověřeno živě u
+            # infoabsolvent.cz) to zmrzačí první řádek ("User-agent: *" se stane
+            # nerozpoznatelným), takže `check_robots_allows` níže nikdy nenajde
+            # sekci `User-agent: *` a Disallow pravidla potichu ignoruje.
+            resp.encoding = resp.apparent_encoding
+        text = resp.text
+        # `apparent_encoding` může uhodnout "utf-8" místo "utf-8-sig" (záleží na
+        # verzi detekční knihovny) a nechat v textu doslovný znak BOM (U+FEFF) —
+        # ten se pak stejně nerozpozná jako "user-agent:" na začátku řádku.
+        return text.lstrip("﻿")
 
 
 # --------------------------------------------------------------------------- seznam

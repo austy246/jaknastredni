@@ -320,3 +320,46 @@ def test_check_robots_disallowed_path_raises():
         pass
     else:
         raise AssertionError("očekávána výjimka RobotsDisallowed")
+
+
+def test_ratelimited_session_strips_bom_when_charset_undeclared(monkeypatch):
+    """infoabsolvent.cz/robots.txt (ověřeno živě 2026-09-22) má UTF-8 BOM a
+    `Content-Type: text/plain` bez deklarovaného charsetu — `requests` bez
+    opravy defaultuje na ISO-8859-1 (staré HTTP chování pro text/*), takže BOM
+    zmrzačí první řádek na nerozpoznatelné "ï»¿User-agent: *" a
+    `check_robots_allows` pak nikdy nenajde sekci `User-agent: *`, takže
+    potichu ignoruje všechna Disallow pravidla. `RateLimitedSession.get()`
+    musí v tomhle případě použít `apparent_encoding`."""
+    import requests
+
+    raw = "﻿User-agent: *\r\nDisallow: /tajne\r\n".encode("utf-8-sig")
+    resp = requests.Response()
+    resp.status_code = 200
+    resp._content = raw
+    resp.headers["Content-Type"] = "text/plain"  # bez charsetu, jako živý server
+
+    monkeypatch.setattr(requests.Session, "get", lambda self, url, timeout=None: resp)
+
+    session = ia.RateLimitedSession()
+    text = session.get("https://www.infoabsolvent.cz/robots.txt")
+    assert text.splitlines()[0] == "User-agent: *"
+
+
+def test_ratelimited_session_keeps_declared_charset(monkeypatch):
+    """Stránky s deklarovaným charsetem (list/detail školy, vždy `charset=utf-8`)
+    se nesmí přeurčovat podle `apparent_encoding` — jen chybějící charset
+    (jako u robots.txt) je důvod k opravě, jinak riziko zbytečné regrese."""
+    import requests
+
+    raw = "Informační technologie".encode("utf-8")
+    resp = requests.Response()
+    resp.status_code = 200
+    resp._content = raw
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.encoding = "utf-8"
+
+    monkeypatch.setattr(requests.Session, "get", lambda self, url, timeout=None: resp)
+
+    session = ia.RateLimitedSession()
+    text = session.get("https://www.infoabsolvent.cz/Skoly/Skola/x")
+    assert text == "Informační technologie"

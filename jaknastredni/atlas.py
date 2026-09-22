@@ -143,7 +143,18 @@ class RateLimitedSession:
         resp = self._session.get(url, timeout=self.timeout)
         self._last_request = time.monotonic()
         resp.raise_for_status()
-        return resp.text
+        if "charset" not in (resp.headers.get("Content-Type") or "").lower():
+            # Bez deklarovaného charsetu `requests` defaultuje na ISO-8859-1 — na
+            # `robots.txt` s BOM by to zmrzačilo první řádek a `check_robots_allows`
+            # by potichu přestal fungovat, viz stejná oprava v `infoabsolvent.py`
+            # (tam ověřeno živě, u atlasskolstvi.cz aktuálně BOM není, ale stejné
+            # riziko).
+            resp.encoding = resp.apparent_encoding
+        text = resp.text
+        # `apparent_encoding` může uhodnout "utf-8" místo "utf-8-sig" a nechat
+        # v textu doslovný znak BOM (U+FEFF) — ten by se stejně nerozpoznal jako
+        # "user-agent:" na začátku řádku, viz `infoabsolvent.py`.
+        return text.lstrip("﻿")
 
 
 # --------------------------------------------------------------------------- seznam
