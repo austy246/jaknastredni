@@ -520,3 +520,22 @@ def test_check_robots_disallowed_path_raises():
         pass
     else:
         raise AssertionError("očekávána výjimka RobotsDisallowed")
+
+
+def test_ratelimited_session_strips_bom_when_charset_undeclared(monkeypatch):
+    """Stejná oprava jako u infoabsolvent.py (`RateLimitedSession.get()`) — u
+    atlasskolstvi.cz robots.txt aktuálně BOM nemá (ověřeno živě), ale kód je
+    sdílený se stejným rizikem, viz `tests/test_infoabsolvent.py`."""
+    import requests
+
+    raw = "﻿User-agent: *\r\nDisallow: /tajne\r\n".encode("utf-8-sig")
+    resp = requests.Response()
+    resp.status_code = 200
+    resp._content = raw
+    resp.headers["Content-Type"] = "text/plain"  # bez charsetu
+
+    monkeypatch.setattr(requests.Session, "get", lambda self, url, timeout=None: resp)
+
+    session = atlas.RateLimitedSession()
+    text = session.get("https://www.atlasskolstvi.cz/robots.txt")
+    assert text.splitlines()[0] == "User-agent: *"
