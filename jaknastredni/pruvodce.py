@@ -93,12 +93,69 @@ SLOZKY_SKORE: dict[str, float] = {
     "zajem": 3.0,           # shoda oboru s tím, co uchazeče zajímá
     "typ": 3.0,             # typ vzdělání odvozený z osobnostních otázek
     "dosazitelnost": 2.5,   # reálnost přijetí podle očekávaného skóre
-    "kvalita": 1.5,         # maturitní výsledky školy, posun žáků, inspekce
+    "kvalita": 1.5,         # maturitní percentil a úspěšnost, posun žáků (inspekce ne)
     "blizkost": 1.5,        # městská část
     "cena": 1.0,            # školné
     "prostredi": 1.0,       # velikost školy, vybavení dle priorit
     "jazyk": 1.0,           # vyučuje škola jazyk, který uchazeč chce?
 }
+
+# Ladicí parametry vzorců jednotlivých složek. Dřív to byla „magická čísla"
+# rozesetá po `_skore_*` a opsaná v `web/index.html`; teď mají jedno místo,
+# exportují se do webu (`export_web`, klíč `parametry`) a stránka z nich
+# skládá i veřejný popis hodnocení („Jak hodnotíme"). Změna tady se tedy
+# projeví ve výpočtu Pythonu, ve výpočtu webu i v textu, který to vysvětluje.
+PARAMETRY: dict[str, Any] = {
+    # Hodnota složky, o které nic nevíme nebo na kterou se uchazeč neptal.
+    "neutral": 0.5,
+    # zajem = zaklad + rozsah × (zvolené oblasti oboru / všechny oblasti oboru)
+    "zajem_zaklad": 0.6,
+    "zajem_rozsah": 0.4,
+    # dosazitelnost: od této šance výš plný bod, pod ní lineárně dolů
+    "dosazitelnost_plna_od": 0.4,
+    "dosazitelnost_bez_sance": 0.4,      # šance neznámá
+    # horší průměr než doporučený: −1/penalizace_na_stupen za stupeň, min. strop
+    "prospech_penalizace_na_stupen": 2.0,
+    "prospech_min_nasobek": 0.4,
+    # kvalita: úspěšnost maturit (%) mapovaná z [od, od+rozsah] na 0–1
+    "uspesnost_od": 70.0,
+    "uspesnost_rozsah": 30.0,
+    # kvalita: posun žáků (percentilové body) z [−posun_rozsah, +posun_rozsah]
+    "posun_rozsah": 10.0,
+    # blizkost
+    "blizkost_obvod": 1.0,
+    "blizkost_soused": 0.6,
+    "blizkost_jinde": 0.2,
+    # cena: bez stropu se školné poměřuje s tímhle; placená škola max. strop_placene
+    "cena_vychozi_strop": 60000,
+    "cena_strop_placene": 0.8,
+    # jazyk
+    "jazyk_uci": 1.0,
+    "jazyk_neznamo": 0.4,
+    "jazyk_neuci": 0.15,
+    # prostredi
+    "maly_kolektiv_plny_do": 100,        # žáků a méně = plný bod
+    "maly_kolektiv_nula_od": 600,        # žáků a víc = nula
+    "prostredi_splneno": 1.0,
+    "prostredi_nesplneno": 0.2,
+    "praxe_maturitni": 0.6,
+    # Násobek váhy za zvolenou prioritu. Počítá se **jednou na složku** —
+    # tři priority mířící na `prostredi` nesmí dát váhu 8.
+    "priorita_nasobek": 2.0,
+    # šance z poptávky: posun o (skór − stred) / delitel
+    "poptavka_skor_stred": 110.0,
+    "poptavka_skor_delitel": 400.0,
+}
+
+# Odhad šance nikdy nejde pod/nad tyhle meze — škola si přidává vlastní
+# kritéria, která v datech nejsou (viz `sance_prijeti`).
+OMEZ: tuple[float, float] = (0.03, 0.97)
+
+# Hrubá šance z poměru přihlášek ku místům (úroveň 3 v `sance_prijeti`):
+# (poměr do, šance); poslední pásmo `None` = cokoli vyššího.
+SANCE_Z_POPTAVKY: list[tuple[float | None, float]] = [
+    (0.9, 0.92), (1.2, 0.80), (2.0, 0.60), (4.0, 0.35), (None, 0.18),
+]
 
 # Priority, ze kterých uchazeč vybírá max. 3 (klíč -> (popisek, složka skóre)).
 PRIORITY: dict[str, tuple[str, str]] = {
@@ -1165,7 +1222,8 @@ def sance_prijeti(nab: Nabidka, skor: float | None) -> tuple[float | None, str]:
     if poptavka is not None:
         zaklad = _sance_z_poptavky(poptavka)
         if skor is not None:
-            zaklad += (skor - 110) / 400      # silnější uchazeč má navrch
+            # silnější uchazeč má navrch
+            zaklad += (skor - PARAMETRY["poptavka_skor_stred"]) / PARAMETRY["poptavka_skor_delitel"]
         return _omez(zaklad), f"z poměru přihlášek ku kapacitě ({poptavka:.1f}×)"
 
     # Obory bez JPZ (typicky učňovské, písmeno H/E) — tam je jediné číslo,
@@ -1184,17 +1242,17 @@ def sance_prijeti(nab: Nabidka, skor: float | None) -> tuple[float | None, str]:
 
 
 def _sance_z_poptavky(poptavka: float) -> float:
-    for mez, p in ((0.9, 0.92), (1.2, 0.80), (2.0, 0.60), (4.0, 0.35)):
-        if poptavka <= mez:
+    for mez, p in SANCE_Z_POPTAVKY:
+        if mez is None or poptavka <= mez:
             return p
-    return 0.18
+    raise AssertionError("SANCE_Z_POPTAVKY musí končit pásmem (None, p)")
 
 
 def _normalni_cdf(z: float) -> float:
     return 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
 
 
-def _omez(p: float, dolni: float = 0.03, horni: float = 0.97) -> float:
+def _omez(p: float, dolni: float = OMEZ[0], horni: float = OMEZ[1]) -> float:
     return max(dolni, min(horni, p))
 
 
@@ -1212,9 +1270,10 @@ def _roky(hodnoty: dict[int, float]) -> str:
 
 def _vahy_profilu(profil: Profil) -> dict[str, float]:
     vahy = dict(SLOZKY_SKORE)
-    for p in profil.priority[:3]:
-        if p in PRIORITY:
-            vahy[PRIORITY[p][1]] *= 2.0
+    # Jednou na složku: sport + umění + praxe míří všechny na `prostredi`
+    # a násobením po jedné by mu daly váhu 8 — víc než zájem nebo typ.
+    for slozka in {PRIORITY[p][1] for p in profil.priority[:3] if p in PRIORITY}:
+        vahy[slozka] *= PARAMETRY["priorita_nasobek"]
     return vahy
 
 
@@ -1324,20 +1383,20 @@ def ohodnot(profil: Profil, nabidky: Iterable[Nabidka]) -> list[Vysledek]:
 def _normalizuj(hodnota: float, dolni: float, horni: float) -> float:
     """Roztáhne hodnotu na 0–1 podle rozsahu, který je mezi kandidáty k mání."""
     if horni <= dolni:
-        return 0.5
+        return PARAMETRY["neutral"]
     return (hodnota - dolni) / (horni - dolni)
 
 
 def _skore_zajem(nab: Nabidka, profil: Profil) -> float:
     """Jak dobře obor sedí na zájem — hrubě oblastí, jemně zaměřením."""
     if not profil.oblasti_zajmu:
-        return 0.5
+        return PARAMETRY["neutral"]
     shoda = set(oblasti.oblasti_oboru(nab.kod_kkov)) & set(profil.ucinne_oblasti)
     if not shoda:
         return 0.0
     # Obor, který patří do jedné oblasti a ta je zvolená, sedí přesněji než
     # obor rozkročený mezi pět oblastí, z nichž jednu uchazeč zaškrtl.
-    zaklad = min(1.0, 0.6 + 0.4 * len(shoda) / max(len(oblasti.oblasti_oboru(nab.kod_kkov)), 1))
+    zaklad = min(1.0, PARAMETRY["zajem_zaklad"] + PARAMETRY["zajem_rozsah"] * len(shoda) / max(len(oblasti.oblasti_oboru(nab.kod_kkov)), 1))
     if not shoda & set(profil.oblasti_zajmu):
         zaklad *= ZAJEM_PRIDANA_OBLAST
     return zaklad * _shoda_zamereni(nab, profil)
@@ -1395,11 +1454,12 @@ def _skore_dosazitelnost(p: float | None, nab: Nabidka, profil: Profil) -> float
     je to doporučení školy, ne podmínka — ale horší průměr skóre srazí:
     školy si prospěch obvykle promítají do vlastních bodů (`dalsi_kriteria`).
     """
-    zaklad = 0.4 if p is None else min(1.0, p / 0.4)
+    P = PARAMETRY
+    zaklad = P["dosazitelnost_bez_sance"] if p is None else min(1.0, p / P["dosazitelnost_plna_od"])
     if profil.prospech is not None and nab.doporuceny_prospech is not None:
         o_kolik = profil.prospech - nab.doporuceny_prospech
         if o_kolik > 0:
-            zaklad *= max(0.4, 1.0 - o_kolik / 2.0)
+            zaklad *= max(P["prospech_min_nasobek"], 1.0 - o_kolik / P["prospech_penalizace_na_stupen"])
     return zaklad
 
 
@@ -1408,55 +1468,68 @@ def _skore_kvalita(nab: Nabidka, mez_dolni: float, mez_horni: float) -> float:
     if nab.maturita_percentil is not None and mez_horni > mez_dolni:
         slozky.append((nab.maturita_percentil - mez_dolni) / (mez_horni - mez_dolni))
     if nab.maturita_uspesnost is not None:
-        slozky.append(min(1.0, max(0.0, (nab.maturita_uspesnost - 70) / 30)))
+        slozky.append(min(1.0, max(0.0, (nab.maturita_uspesnost - PARAMETRY["uspesnost_od"])
+                                    / PARAMETRY["uspesnost_rozsah"])))
     if nab.posun is not None:
-        slozky.append(min(1.0, max(0.0, (nab.posun + 10) / 20)))
-    return statistics.mean(slozky) if slozky else 0.5
+        r = PARAMETRY["posun_rozsah"]
+        slozky.append(min(1.0, max(0.0, (nab.posun + r) / (2 * r))))
+    return statistics.mean(slozky) if slozky else PARAMETRY["neutral"]
 
 
 def _skore_blizkost(nab: Nabidka, profil: Profil) -> float:
+    P = PARAMETRY
     if not profil.obvody:
-        return 0.5
+        return P["neutral"]
     if set(nab.obvody) & set(profil.obvody):
-        return 1.0
+        return P["blizkost_obvod"]
     sousedi = {s for o in profil.obvody for s in oblasti.SOUSEDNI_OBVODY.get(o, ())}
-    return 0.6 if set(nab.obvody) & sousedi else 0.2
+    return P["blizkost_soused"] if set(nab.obvody) & sousedi else P["blizkost_jinde"]
 
 
 def _skore_cena(nab: Nabidka, profil: Profil) -> float:
     skolne = nab.skolne
+    if skolne is None and nab.zrizovatel_verejny:
+        # Stejná úvaha jako ve filtru (`_vejde_se_do_skolneho`): kraj ani obec
+        # školné nevybírají, neuvedené je u nich nula. Dřív tu byl neutrál —
+        # veřejná škola bez údaje prošla filtrem „do 0 Kč", ale v ceně
+        # prohrávala se soukromou, která nulu vyplnila.
+        skolne = 0
     if skolne is None:
-        return 0.5
+        return PARAMETRY["neutral"]
     if skolne == 0:
         return 1.0
-    strop = profil.skolne_max or 60000
-    return max(0.0, 1.0 - skolne / max(strop, 1)) * 0.8
+    strop = profil.skolne_max or PARAMETRY["cena_vychozi_strop"]
+    return max(0.0, 1.0 - skolne / max(strop, 1)) * PARAMETRY["cena_strop_placene"]
 
 
 def _skore_prostredi(nab: Nabidka, profil: Profil) -> float:
     """Složka řízená prioritami — bez zvolené priority je neutrální."""
+    P = PARAMETRY
+    ano, ne = P["prostredi_splneno"], P["prostredi_nesplneno"]
     slozky: list[float] = []
     vybaveni = (nab.vybaveni or "").lower()
     for p in profil.priority[:3]:
         if p == "maly_kolektiv":
             if nab.velikost_skoly:
-                slozky.append(min(1.0, max(0.0, (600 - nab.velikost_skoly) / 500)))
+                nula, plny = P["maly_kolektiv_nula_od"], P["maly_kolektiv_plny_do"]
+                slozky.append(min(1.0, max(0.0, (nula - nab.velikost_skoly) / (nula - plny))))
         elif p == "sport":
-            slozky.append(1.0 if re.search(r"hřišt|tělocvičn|sportovn|bazén", vybaveni) else 0.2)
+            slozky.append(ano if re.search(r"hřišt|tělocvičn|sportovn|bazén", vybaveni) else ne)
         elif p == "umeni":
-            slozky.append(1.0 if re.search(r"uměleck|ateliér|hudebn|divadeln", vybaveni) else 0.2)
+            slozky.append(ano if re.search(r"uměleck|ateliér|hudebn|divadeln", vybaveni) else ne)
         elif p == "praxe":
-            slozky.append(1.0 if nab.typ in ("H", "E", "L0") else (0.6 if nab.typ == "M" else 0.2))
-    return statistics.mean(slozky) if slozky else 0.5
+            slozky.append(ano if nab.typ in ("H", "E", "L0") else (P["praxe_maturitni"] if nab.typ == "M" else ne))
+    return statistics.mean(slozky) if slozky else P["neutral"]
 
 
 def _skore_jazyk(nab: Nabidka, profil: Profil) -> float:
     """Učí škola jazyk, který uchazeč chce? Bez požadavku je složka neutrální."""
+    P = PARAMETRY
     if not profil.jazyk:
-        return 0.5
+        return P["neutral"]
     if not nab.jazyky:
-        return 0.4        # údaj chybí — netrestat plnou vahou, ale ani odměnit
-    return 1.0 if _uci_jazyk(nab, profil.jazyk) else 0.15
+        return P["jazyk_neznamo"]   # údaj chybí — netrestat plnou vahou, ale ani odměnit
+    return P["jazyk_uci"] if _uci_jazyk(nab, profil.jazyk) else P["jazyk_neuci"]
 
 
 def _poznamka_sirky(profil: Profil) -> list[str]:

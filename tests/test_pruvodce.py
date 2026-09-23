@@ -316,6 +316,24 @@ def test_priorita_zvysi_vahu_sve_slozky(conn):
     assert prehnane["dosazitelnost"] == bez["dosazitelnost"]
 
 
+def test_priority_na_stejnou_slozku_se_nenasobi():
+    """Sport + umění + praxe míří na `prostredi` — dřív mu daly váhu 8×."""
+    bez = pruvodce._vahy_profilu(pruvodce.Profil(trida=9))
+    tri = pruvodce._vahy_profilu(pruvodce.Profil(trida=9, priority=["sport", "umeni", "praxe"]))
+    assert tri["prostredi"] == 2 * bez["prostredi"]
+
+
+def test_verejna_skola_bez_udaje_o_skolnem_ma_plnou_cenu():
+    """Stejně jako ve filtru: neuvedené školné u veřejné školy je nula."""
+    def nab(verejna):
+        return pruvodce.Nabidka(
+            izo="i", redizo="r", skola="S", organizace="Š", kod_kkov="79-41-K/41", obor="O",
+            typ="K4", trida_prihlasky=9, obvody=(), adresa="", zrizovatel_verejny=verejna)
+    profil = pruvodce.Profil(trida=9)
+    assert pruvodce._skore_cena(nab(True), profil) == 1.0
+    assert pruvodce._skore_cena(nab(False), profil) == 0.5
+
+
 def test_blizkost_preferuje_zvoleny_obvod(conn):
     nabidky = pruvodce.nacti_nabidky(conn)
     profil = pruvodce.Profil(trida=9, obvody=["Praha 9"], priority=["blizkost"], skolne_max=0)

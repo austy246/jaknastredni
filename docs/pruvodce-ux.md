@@ -189,18 +189,46 @@ ale při rozšíření mimo Prahu je potřeba ji ověřit znovu.
 
 ## Skóre shody
 
-Vážený průměr šesti složek, každá normalizovaná na 0–1, výsledek na 0–100.
-Váhy jsou v `SLOZKY_SKORE`, zvolená priorita svou složku zdvojnásobí:
+Vážený průměr osmi složek, každá normalizovaná na 0–1, výsledek na 0–100.
+Váhy jsou v `SLOZKY_SKORE`, zvolená priorita svou složku zdvojnásobí
+(`PARAMETRY["priorita_nasobek"]`, **u každé složky nejvýš jednou**):
 
 | Složka | Váha | Co měří |
 |---|---|---|
-| `zajem` | 3,0 | jak přesně obor sedí do zvolených oblastí |
-| `typ` | 2,0 | typ vzdělání odvozený z osobnostních otázek |
+| `zajem` | 3,0 | jak přesně obor sedí do zvolených oblastí a zaměření |
+| `typ` | 3,0 | typ vzdělání odvozený z osobnostních otázek |
 | `dosazitelnost` | 2,5 | reálnost přijetí (šance + doporučený prospěch) |
-| `kvalita` | 1,5 | maturitní výsledky školy, úspěšnost, posun žáků |
-| `blizkost` | 1,5 | zvolený obvod (1,0) / sousední (0,6) / jinde (0,2) |
+| `kvalita` | 1,5 | percentil a úspěšnost maturit, posun žáků (inspekce zatím ne) |
+| `blizkost` | 1,5 | zvolený obvod / sousední / jinde |
 | `cena` | 1,0 | školné proti zadanému stropu |
-| `prostredi` | 1,0 | velikost školy, jazyky, vybavení — jen podle priorit |
+| `prostredi` | 1,0 | velikost školy, vybavení, praxe — jen podle priorit |
+| `jazyk` | 1,0 | učí škola jazyk, který uchazeč chce |
+
+Všechna ostatní čísla ze vzorců složek (prahy, násobky, neutrální 0,5,
+pásma šance z poptávky, meze šance 3–97 %) jsou v `PARAMETRY`,
+`SANCE_Z_POPTAVKY` a `OMEZ` v `pruvodce.py`. Exportují se do `data.js`
+a web z nich počítá **i skládá veřejný popis** v kroku „Jak hodnotíme"
+(`#jak-hodnotime`) — ladí se tedy na jednom místě a popis nemůže zastarat.
+
+### Revize hodnocení (září 2026)
+
+- **Priority se na jedné složce násobily.** Sport + umění + praxe míří všechny
+  na `prostredi` a daly mu váhu 1 × 2 × 2 × 2 = 8 — víc než zájem nebo typ.
+  Teď se každá složka zdvojnásobí nejvýš jednou.
+- **Cena veřejné školy bez údaje o školném** byla neutrální 0,5, přestože filtr
+  školného ji (správně) bere jako nulu. Veřejná škola tak prošla filtrem „jen
+  bez školného", ale v ceně prohrávala se soukromou, která nulu vyplnila.
+  Teď dostane 1,0 stejně jako filtr.
+- Magická čísla ze `_skore_*` (a jejich opisy v `web/index.html`) přesunuta do
+  `PARAMETRY`; web je čte z dat, takže opis v JavaScriptu už nese jen tvar vzorce.
+- Tabulka výše uváděla šest složek a `typ` s vahou 2,0 — neplatilo od přidání
+  složky `jazyk` a zvýšení váhy typu. Patička webu tvrdila, že šance je normální
+  rozdělení kolem hranice; přednost má ale naměřený podíl přijatých.
+
+Co zůstává k ladění (vědomá rozhodnutí, ne chyby): skok ceny z 1,0 na
+nejvýš 0,8 u i malého školného (`cena_strop_placene`), neznámá šance =
+0,4 dosažitelnosti (odpovídá 16 % šance) a lineární, ne logaritmická škála
+velikosti školy.
 
 Dvě rozhodnutí, která nejsou samozřejmá:
 

@@ -236,6 +236,34 @@
   .ladeni .hint { margin-bottom: 8px; }
   .rada b { font-weight: 600; }
 
+  /* --- kroky: dotazník → výsledky → jak hodnotíme --- */
+  .kroky { display: flex; gap: 2px; margin-top: 16px; background: var(--line); border: 1px solid var(--line); }
+  .kroky a {
+    flex: 1; padding: 10px 12px; background: var(--surface); color: var(--ink-muted);
+    text-decoration: none; font-family: Archivo, sans-serif; font-weight: 600; font-size: .9rem;
+  }
+  .kroky a .num { display: inline-grid; place-items: center; width: 1.6em; height: 1.6em; margin-right: 6px;
+    background: var(--ink-faint); color: var(--surface); font-size: .78rem; }
+  .kroky a[aria-current="step"] { color: var(--ink); box-shadow: inset 0 -3px 0 var(--accent); }
+  .kroky a[aria-current="step"] .num { background: var(--accent); }
+  .krok[hidden] { display: none; }
+  .krok-lista { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-block: 20px 0; }
+  .tlacitko {
+    display: inline-block; padding: 10px 18px; background: var(--accent); color: #fff; text-decoration: none;
+    font-family: Archivo, sans-serif; font-weight: 600; border-radius: var(--radius); border: 1px solid var(--accent);
+  }
+  .tlacitko.vedlejsi { background: var(--surface); color: var(--accent); }
+  .odkaz { color: var(--accent); font-size: .9rem; }
+  .metodika h3 { margin: 28px 0 8px; font-size: 1.02rem; }
+  .metodika p, .metodika li { max-width: 72ch; color: var(--ink); font-size: .92rem; }
+  .metodika ol, .metodika ul { padding-left: 1.3em; }
+  .metodika .tabulka-obal { overflow-x: auto; }
+  .metodika table { border-collapse: collapse; font-size: .84rem; width: 100%; }
+  .metodika th, .metodika td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  .metodika th { background: var(--surface-2); font-weight: 600; }
+  .metodika td.num { text-align: right; white-space: nowrap; }
+  .metodika .zmeneno { color: var(--accent); font-weight: 600; }
+
   footer.paticka { margin-top: 48px; border-top: 1px solid var(--line); padding-top: 16px; font-size: .82rem; color: var(--ink-faint); display: grid; gap: 6px; }
   footer.paticka a { color: var(--accent); }
   code { font-family: "IBM Plex Mono", monospace; font-size: .92em; }
@@ -250,17 +278,24 @@
 <header class="top">
   <div class="top-in">
     <h1>Kam na střední</h1>
-    <p class="pocet">vyhovuje <b id="pocet">–</b> z 623 nabídek</p>
+    <p class="pocet">vyhovuje <b id="pocet">–</b> z <span id="celkem">–</span> nabídek</p>
   </div>
 </header>
 
 <div class="wrap">
   <p class="terminy" id="terminy"></p>
 
+  <nav class="kroky" aria-label="Kroky průvodce">
+    <a href="#dotaznik" data-krok="dotaznik"><span class="num">1</span> Dotazník</a>
+    <a href="#vysledky" data-krok="vysledky"><span class="num">2</span> Výsledky</a>
+    <a href="#jak-hodnotime" data-krok="jak-hodnotime"><span class="num">3</span> Jak hodnotíme</a>
+  </nav>
+
+  <div class="krok" id="krok-dotaznik">
   <div class="intro">
     <p class="eyebrow">Prototyp průvodce · pražské střední školy</p>
-    <p>Devět otázek, z nichž povinná je jen první. Každá odpověď hned mění
-      seznam nahoře. Počítá se z otevřených dat MŠMT, CERMAT, ČŠI a
+    <p>Devět otázek, z nichž povinná je jen první. Počet vyhovujících nabídek
+      nahoře se mění s každou odpovědí; pořadí škol uvidíš v dalším kroku. Počítá se z otevřených dat MŠMT, CERMAT, ČŠI a
       infoabsolvent.cz — u každého čísla je napsané, odkud je.</p>
   </div>
 
@@ -384,7 +419,16 @@
       <p class="hint" id="navrh-zlepseni"></p>
     </div>
   </form>
+  <div class="krok-lista">
+    <a class="tlacitko" href="#vysledky">Zobrazit výsledky →</a>
+  </div>
+  </div>
 
+  <div class="krok" id="krok-vysledky" hidden>
+  <div class="krok-lista">
+    <a class="tlacitko vedlejsi" href="#dotaznik">← Upravit odpovědi</a>
+    <a class="odkaz" href="#jak-hodnotime">Jak se pořadí počítá?</a>
+  </div>
   <section class="vysledky">
     <div class="sekce-hlava">
       <h2>Pět nejlepších nabídek</h2>
@@ -451,6 +495,14 @@
       </div>
     </div>
   </details>
+  </div>
+
+  <div class="krok" id="krok-jak-hodnotime" hidden>
+  <div class="krok-lista">
+    <a class="tlacitko vedlejsi" href="#vysledky">← Zpět na výsledky</a>
+  </div>
+  <section class="vysledky metodika" id="metodika"></section>
+  </div>
 
   <footer class="paticka">
     <p><b>Data:</b> rejstřík škol MŠMT (stav 22. 9. 2026) · CERMAT — výsledky
@@ -459,9 +511,10 @@
       doporučený prospěch, skutečný počet loni přijatých a povinná lékařská
       prohlídka.</p>
     <p><b>Hranice přijetí</b> je minimální % skór posledního přijatého uchazeče,
-      který zveřejňuje CERMAT. Šance je normální rozdělení kolem očekávané
-      hranice; nejistota (σ = 18 až 32 bodů) vychází z naměřeného meziročního
-      rozptylu hranic. Stoprocentní jistota neexistuje — škola si k jednotné
+      který zveřejňuje CERMAT. Když chybí naměřená data, je šance normální
+      rozdělení kolem očekávané hranice; nejistota (σ = 18 až 32 bodů) vychází z naměřeného meziročního
+      rozptylu hranic. Přednost má ale naměřený podíl přijatých uchazečů
+      s podobným skórem — celý postup je v kroku „Jak hodnotíme". Stoprocentní jistota neexistuje — škola si k jednotné
       zkoušce přidává vlastní kritéria, která ve veřejných datech nejsou.</p>
     <p><b>Není to oficiální nástroj.</b> Je to osobní open-source projekt, ne
       služba MŠMT, CERMATu ani žádné školy. Čísla jsou odvozená z veřejných dat
@@ -485,7 +538,7 @@
 (function () {
   "use strict";
   var D = window.JNS_DATA;
-  var K = D.konstanty, C = D.ciselniky;
+  var K = D.konstanty, C = D.ciselniky, P = K.parametry;
   C.osobnostni = D.osobnostni;
   var NAB = D.nabidky;
 
@@ -525,7 +578,7 @@
     return s * y;
   }
   function normCdf(z) { return 0.5 * (1 + erf(z / Math.SQRT2)); }
-  function omez(p, d, h) { return Math.max(d === undefined ? 0.03 : d, Math.min(h === undefined ? 0.97 : h, p)); }
+  function omez(p) { return Math.max(K.omez[0], Math.min(K.omez[1], p)); }
   function mezera(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
 
   // ---- šance na přijetí (port sance_prijeti z pruvodce.py) ----
@@ -541,9 +594,8 @@
     return { stred: stred, sigma: Math.min(Math.max(K.sigma_zaklad, rozpeti), K.sigma_max) };
   }
   function sanceZPoptavky(p) {
-    var pasma = [[0.9, 0.92], [1.2, 0.80], [2.0, 0.60], [4.0, 0.35]];
-    for (var i = 0; i < pasma.length; i++) if (p <= pasma[i][0]) return pasma[i][1];
-    return 0.18;
+    var pasma = K.sance_z_poptavky;   // [[poměr do | null, šance], …]
+    for (var i = 0; i < pasma.length; i++) if (pasma[i][0] == null || p <= pasma[i][0]) return pasma[i][1];
   }
   // Naměřená míra přijetí. Vyhlazenou monotonní křivku (`fit`) počítá
   // Python a posílá ji v datech — JavaScript ji jen čte, takže isotonická
@@ -597,7 +649,7 @@
     var poptavka = posledni(cisla(n.poptavka || {}));
     if (poptavka != null) {
       var z = sanceZPoptavky(poptavka);
-      if (skor != null) z += (skor - 110) / 400;
+      if (skor != null) z += (skor - P.poptavka_skor_stred) / P.poptavka_skor_delitel;
       return { p: omez(z), zdroj: "z poměru přihlášek ku kapacitě (" + poptavka.toFixed(1) + "×)" };
     }
     if (n.loni_prihlaseni && (n.loni_prijati || n.plan_prijmout)) {
@@ -740,7 +792,11 @@
   function vahy() {
     var v = {};
     for (var k in K.slozky_skore) v[k] = K.slozky_skore[k];
-    stav.priority.slice(0, 3).forEach(function (p) { v[K.priority[p].slozka] *= 2; });
+    // Jednou na složku (Python: _vahy_profilu) — tři priority na `prostredi`
+    // nesmí dát váhu 8.
+    var zvol = {};
+    stav.priority.slice(0, 3).forEach(function (p) { if (K.priority[p]) zvol[K.priority[p].slozka] = 1; });
+    for (var s in zvol) v[s] *= P.priorita_nasobek;
     return v;
   }
   function prumer(pole) {
@@ -750,7 +806,7 @@
   // Python: pruvodce._normalizuj — roztáhne hodnotu na 0–1 podle rozsahu,
   // který je mezi kandidáty k mání.
   function normalizuj(hodnota, dolni, horni) {
-    return horni <= dolni ? 0.5 : (hodnota - dolni) / (horni - dolni);
+    return horni <= dolni ? P.neutral : (hodnota - dolni) / (horni - dolni);
   }
   function preferenceTypu_(preference, n) {
     return preference[n.typ] !== undefined ? preference[n.typ] : 0.5;
@@ -758,9 +814,9 @@
   // Python: pruvodce._skore_jazyk. Bez požadavku je složka neutrální,
   // chybějící údaj se netrestá plnou vahou, ale ani neodměňuje.
   function skoreJazyk(n) {
-    if (!stav.jazyk) return 0.5;
-    if (!n.jazyky) return 0.4;
-    return uciJazyk(n, stav.jazyk) ? 1 : 0.15;
+    if (!stav.jazyk) return P.neutral;
+    if (!n.jazyky) return P.jazyk_neznamo;
+    return uciJazyk(n, stav.jazyk) ? P.jazyk_uci : P.jazyk_neuci;
   }
   function skoreProstredi(n) {
     var vyb = (n.vybaveni || "").toLowerCase(), s = [];
@@ -770,17 +826,19 @@
     // dával jiné pořadí než Python.
     stav.priority.slice(0, 3).forEach(function (p) {
       if (p === "maly_kolektiv") {
-        if (n.velikost_skoly) s.push(Math.min(1, Math.max(0, (600 - n.velikost_skoly) / 500)));
+        if (n.velikost_skoly) s.push(Math.min(1, Math.max(0, (P.maly_kolektiv_nula_od - n.velikost_skoly)
+                                                       / (P.maly_kolektiv_nula_od - P.maly_kolektiv_plny_do))));
       } else if (p === "sport") {
-        s.push(/hřišt|tělocvičn|sportovn|bazén/.test(vyb) ? 1 : 0.2);
+        s.push(/hřišt|tělocvičn|sportovn|bazén/.test(vyb) ? P.prostredi_splneno : P.prostredi_nesplneno);
       } else if (p === "umeni") {
-        s.push(/uměleck|ateliér|hudebn|divadeln/.test(vyb) ? 1 : 0.2);
+        s.push(/uměleck|ateliér|hudebn|divadeln/.test(vyb) ? P.prostredi_splneno : P.prostredi_nesplneno);
       } else if (p === "praxe") {
-        s.push(["H", "E", "L0"].indexOf(n.typ) >= 0 ? 1 : (n.typ === "M" ? 0.6 : 0.2));
+        s.push(["H", "E", "L0"].indexOf(n.typ) >= 0 ? P.prostredi_splneno
+               : (n.typ === "M" ? P.praxe_maturitni : P.prostredi_nesplneno));
       }
     });
     var p = prumer(s);
-    return p == null ? 0.5 : p;
+    return p == null ? P.neutral : p;
   }
   function ohodnot() {
     var vybrane = NAB.filter(projdeFiltrem);
@@ -806,11 +864,11 @@
       var slozky = {};
       slozky.typ = normalizuj(preferenceTypu_(preference, n), typDolni, typHorni);
 
-      if (!stav.oblasti.length) slozky.zajem = 0.5;
+      if (!stav.oblasti.length) slozky.zajem = P.neutral;
       else {
         var vse = oblastiOboru(n.kod_kkov), ucinne2 = ucinneOblasti();
         var shoda = vse.filter(function (x) { return ucinne2.indexOf(x) >= 0; });
-        slozky.zajem = shoda.length ? Math.min(1, 0.6 + 0.4 * shoda.length / Math.max(vse.length, 1)) : 0;
+        slozky.zajem = shoda.length ? Math.min(1, P.zajem_zaklad + P.zajem_rozsah * shoda.length / Math.max(vse.length, 1)) : 0;
         // Nabídka, která se trefila jen do oblasti přidané průvodcem, váží
         // míň — uchazeč ji nezaškrtl (Python: ZAJEM_PRIDANA_OBLAST).
         if (shoda.length && !shoda.some(function (x) { return stav.oblasti.indexOf(x) >= 0; }))
@@ -818,33 +876,35 @@
         slozky.zajem *= K.shoda_zamereni[urovenZamereni(n)];
       }
 
-      var dos = s.p == null ? 0.4 : Math.min(1, s.p / 0.4);
+      var dos = s.p == null ? P.dosazitelnost_bez_sance : Math.min(1, s.p / P.dosazitelnost_plna_od);
       if (stav.prospech != null && n.doporuceny_prospech != null) {
         var rozdil = stav.prospech - n.doporuceny_prospech;
-        if (rozdil > 0) dos *= Math.max(0.4, 1 - rozdil / 2);
+        if (rozdil > 0) dos *= Math.max(P.prospech_min_nasobek, 1 - rozdil / P.prospech_penalizace_na_stupen);
       }
       slozky.dosazitelnost = dos;
 
       var kval = [];
       if (n.maturita_percentil != null && horni > dolni) kval.push((n.maturita_percentil - dolni) / (horni - dolni));
-      if (n.maturita_uspesnost != null) kval.push(Math.min(1, Math.max(0, (n.maturita_uspesnost - 70) / 30)));
-      if (n.posun != null) kval.push(Math.min(1, Math.max(0, (n.posun + 10) / 20)));
-      slozky.kvalita = kval.length ? prumer(kval) : 0.5;
+      if (n.maturita_uspesnost != null) kval.push(Math.min(1, Math.max(0, (n.maturita_uspesnost - P.uspesnost_od) / P.uspesnost_rozsah)));
+      if (n.posun != null) kval.push(Math.min(1, Math.max(0, (n.posun + P.posun_rozsah) / (2 * P.posun_rozsah))));
+      slozky.kvalita = kval.length ? prumer(kval) : P.neutral;
 
-      if (!stav.obvody.length) slozky.blizkost = 0.5;
+      if (!stav.obvody.length) slozky.blizkost = P.neutral;
       else {
         var obv = n.obvody || [];
-        if (obv.some(function (o) { return stav.obvody.indexOf(o) >= 0; })) slozky.blizkost = 1;
+        if (obv.some(function (o) { return stav.obvody.indexOf(o) >= 0; })) slozky.blizkost = P.blizkost_obvod;
         else {
           var sousedi = [];
           stav.obvody.forEach(function (o) { sousedi = sousedi.concat(C.sousedni_obvody[o] || []); });
-          slozky.blizkost = obv.some(function (o) { return sousedi.indexOf(o) >= 0; }) ? 0.6 : 0.2;
+          slozky.blizkost = obv.some(function (o) { return sousedi.indexOf(o) >= 0; }) ? P.blizkost_soused : P.blizkost_jinde;
         }
       }
 
-      if (n.skolne == null) slozky.cena = 0.5;
-      else if (n.skolne === 0) slozky.cena = 1;
-      else slozky.cena = Math.max(0, 1 - n.skolne / Math.max(stav.skolneMax || 60000, 1)) * 0.8;
+      // Veřejná škola bez údaje = nula, stejně jako ve filtru (Python: _skore_cena).
+      var skolne = (n.skolne == null && n.zrizovatel_verejny) ? 0 : n.skolne;
+      if (skolne == null) slozky.cena = P.neutral;
+      else if (skolne === 0) slozky.cena = 1;
+      else slozky.cena = Math.max(0, 1 - skolne / Math.max(stav.skolneMax || P.cena_vychozi_strop, 1)) * P.cena_strop_placene;
 
       slozky.prostredi = skoreProstredi(n);
       slozky.jazyk = skoreJazyk(n);
@@ -1497,6 +1557,175 @@
   };
   var ROLE_POPIS = { sen: "Sen", realisticka: "Realistická volba", jistota: "Jistota" };
 
+  // ---- krok 3: Jak hodnotíme ----
+  // Celý text se skládá z konstant v `data.js` (tedy z `pruvodce.py`:
+  // SLOZKY_SKORE, PARAMETRY, PASMA_PORTFOLIA, …). Když se v Pythonu změní
+  // váha nebo práh, změní se výpočet i tenhle popis — nemůže tu zůstat
+  // opsané staré číslo. Váhy „pro tvůj profil" se přepočítávají živě.
+  var POPIS_SLOZEK = {
+    zajem: ["Zájem", function () {
+      return "Bez zvolené oblasti " + c(P.neutral) + ". Obor mimo zvolené oblasti je vyřazen filtrem. Jinak "
+        + c(P.zajem_zaklad) + " + " + c(P.zajem_rozsah) + " × (zvolené oblasti oboru / všechny oblasti oboru), "
+        + "vynásobeno shodou zaměření (u oboru " + c(K.shoda_zamereni.obor) + ", jen u školy "
+        + c(K.shoda_zamereni.skola) + ", nevíme " + c(K.shoda_zamereni.nevime) + ", doložené jiné "
+        + c(K.shoda_zamereni.jine) + "). Oblast, kterou přidal průvodce (gymnázia při širokém výběru), × "
+        + c(K.zajem_pridana_oblast) + ".";
+    }],
+    typ: ["Typ vzdělání", function () {
+      return "Preference typu (gymnázium, maturitní odborný, výuční list…) odvozená z osobnostních otázek, "
+        + "roztažená na 0–1 mezi nabídkami, které prošly filtrem. Rozhoduje tedy pořadí typů, ne absolutní hodnota.";
+    }],
+    dosazitelnost: ["Dosažitelnost", function () {
+      return "Šance na přijetí / " + c(P.dosazitelnost_plna_od) + ", nejvýš 1 — od "
+        + pct(P.dosazitelnost_plna_od) + " šance plný bod, výš už neroste (riziko rozkládá návrh tří přihlášek). "
+        + "Šance neznámá = " + c(P.dosazitelnost_bez_sance) + ". Horší průměr než doporučený: × (1 − rozdíl / "
+        + c(P.prospech_penalizace_na_stupen) + "), nejméně × " + c(P.prospech_min_nasobek) + ".";
+    }],
+    kvalita: ["Kvalita", function () {
+      return "Průměr dostupných z: percentil maturit (roztažený mezi nabídkami ve výběru), úspěšnost maturit "
+        + c(P.uspesnost_od) + " % → 0 až " + c(P.uspesnost_od + P.uspesnost_rozsah) + " % → 1, posun žáků −"
+        + c(P.posun_rozsah) + " → 0 až +" + c(P.posun_rozsah) + " → 1. Nic z toho = " + c(P.neutral)
+        + ". Inspekční zprávy se zatím nezapočítávají.";
+    }],
+    blizkost: ["Blízkost", function () {
+      return "Zvolený obvod " + c(P.blizkost_obvod) + ", sousední " + c(P.blizkost_soused) + ", jinde "
+        + c(P.blizkost_jinde) + ". Bez zvoleného obvodu " + c(P.neutral) + ".";
+    }],
+    cena: ["Cena", function () {
+      return "Bez školného 1 (u veřejné školy i neuvedené školné). Placená škola nejvýš "
+        + c(P.cena_strop_placene) + " × (1 − školné / strop); strop je tvoje odpověď, jinak "
+        + mezera(P.cena_vychozi_strop) + " Kč. Soukromá škola bez údaje " + c(P.neutral) + ".";
+    }],
+    prostredi: ["Prostředí", function () {
+      return "Počítá se jen podle zvolených priorit, jinak " + c(P.neutral) + ". Menší škola: "
+        + P.maly_kolektiv_plny_do + " žáků a méně → 1, " + P.maly_kolektiv_nula_od + " a víc → 0. Sport / umění: "
+        + "vybavení to zmiňuje " + c(P.prostredi_splneno) + ", jinak " + c(P.prostredi_nesplneno)
+        + ". Praxe: výuční list " + c(P.prostredi_splneno) + ", maturitní odborný " + c(P.praxe_maturitni)
+        + ", jinak " + c(P.prostredi_nesplneno) + ".";
+    }],
+    jazyk: ["Jazyk", function () {
+      return "Škola učí zvolený jazyk " + c(P.jazyk_uci) + ", neučí " + c(P.jazyk_neuci) + ", údaj chybí "
+        + c(P.jazyk_neznamo) + ". Bez zvoleného jazyka " + c(P.neutral) + ".";
+    }]
+  };
+  function c(x) { return String(Math.round(x * 1000) / 1000).replace(".", ","); }
+  function pct(x) { return Math.round(x * 100) + " %"; }
+
+  function vykresliMetodiku() {
+    var m = document.getElementById("metodika");
+    m.textContent = "";
+    var hlava = el("div", "sekce-hlava");
+    hlava.appendChild(el("h2", null, "Jak hodnotíme"));
+    hlava.appendChild(el("span", "eyebrow", "Pravidla přímo z výpočtu, ne z opisu"));
+    m.appendChild(hlava);
+    m.appendChild(el("p", null, "Všechna čísla na téhle stránce se čtou z konstant, se kterými průvodce "
+      + "doopravdy počítá (jaknastredni/pruvodce.py → data.js). Když se pravidlo změní, změní se výpočet "
+      + "i tenhle popis zároveň."));
+
+    m.appendChild(el("h3", null, "1. Postup ve čtyřech krocích"));
+    var ol = el("ol");
+    ["Filtr: vyřadí se nabídky, na které se objektivně hlásit nemůžeš nebo nechceš (viz níže).",
+     "Skóre shody: každá nabídka dostane osm složek na škále 0–1.",
+     "Vážený průměr složek × 100 = skóre 0–100. Priorita, kterou si zvolíš, zdvojnásobí váhu své složky "
+       + "(× " + c(P.priorita_nasobek) + ", u každé složky nejvýš jednou).",
+     "Pět nejlepších: seřazeno podle skóre, nejvýš jedna nabídka od školy. Když průvodce sám přidal gymnázia, drží "
+       + K.rezerva_zvolenych + " místa pro oblasti, které jsi zaškrtl."
+    ].forEach(function (t) { ol.appendChild(el("li", null, t)); });
+    m.appendChild(ol);
+
+    m.appendChild(el("h3", null, "2. Tvrdé filtry"));
+    var ul = el("ul");
+    ["třída, ze které se hlásíš (5., 7. nebo 9.)",
+     "typ vzdělání, který jsi vyloučil",
+     "obory s talentovou zkouškou — jen když na talentovky chceš",
+     "praktické školy a školy pro žáky se zdravotním postižením — jen se speciálními potřebami",
+     "zvolené oblasti zájmu (obor musí patřit aspoň do jedné)",
+     "strop školného — neuvedené školné u soukromé či církevní školy se do stropu nevejde",
+     "jazyk, pokud na něm trváš"
+    ].forEach(function (t) { ul.appendChild(el("li", null, t)); });
+    m.appendChild(ul);
+
+    m.appendChild(el("h3", null, "3. Složky skóre a jejich váhy"));
+    var v = vahy(), soucet = 0, k;
+    for (k in v) soucet += v[k];
+    var obal = el("div", "tabulka-obal"), t = el("table"), tr = el("tr");
+    ["Složka", "Váha", "Pro tvůj profil", "Podíl na skóre", "Jak se počítá"].forEach(function (h) { tr.appendChild(el("th", null, h)); });
+    t.appendChild(tr);
+    for (k in K.slozky_skore) {
+      tr = el("tr");
+      tr.appendChild(el("td", null, POPIS_SLOZEK[k] ? POPIS_SLOZEK[k][0] : k));
+      tr.appendChild(el("td", "num", c(K.slozky_skore[k])));
+      tr.appendChild(el("td", "num" + (v[k] !== K.slozky_skore[k] ? " zmeneno" : ""), c(v[k])));
+      tr.appendChild(el("td", "num", pct(v[k] / soucet)));
+      tr.appendChild(el("td", null, POPIS_SLOZEK[k] ? POPIS_SLOZEK[k][1]() : ""));
+      t.appendChild(tr);
+    }
+    obal.appendChild(t);
+    m.appendChild(obal);
+    m.appendChild(el("p", "hint", "Chybějící údaj dává zpravidla neutrální " + c(P.neutral)
+      + ", ne nulu — škola nemá prohrát jen proto, že ji některý zdroj nevykázal."));
+
+    m.appendChild(el("h3", null, "4. Šance na přijetí"));
+    var poptavka = K.sance_z_poptavky.map(function (p) {
+      return (p[0] == null ? "víc" : "do " + c(p[0]) + "×") + " → " + pct(p[1]);
+    }).join(", ");
+    ol = el("ol");
+    ["Naměřeno (přednost): kolik uchazečů se skórem ±" + K.okno_pasma + " bodů kolem tvého se v 1. kolech "
+       + "2024–2026 dostalo (novější roky váží víc: " + Object.keys(K.roky_jpz).map(function (r) {
+         return r + " × " + c(K.roky_jpz[r]); }).join(", ") + "). Potřeba aspoň " + K.min_vzorek
+       + " uchazečů. Výsledek se smršťuje k odhadu z hranice silou " + c(K.smrsteni)
+       + " (vzorek n má váhu n / (n + " + c(K.smrsteni) + ")).",
+     "Z hranice přijetí: normální rozdělení kolem váženého průměru hranic, nejistota σ = "
+       + c(K.sigma_zaklad) + " až " + c(K.sigma_max) + " bodů (jen jeden rok dat: " + c(K.sigma_jeden_rok) + ").",
+     "Z poměru přihlášek ku místům: " + poptavka + "; posun o (tvůj skór − " + c(P.poptavka_skor_stred)
+       + ") / " + c(P.poptavka_skor_delitel) + ".",
+     "Nic z toho: šance se neukáže (žádné vymyšlené číslo)."
+    ].forEach(function (x) { ol.appendChild(el("li", null, x)); });
+    m.appendChild(ol);
+    m.appendChild(el("p", null, "Šance nikdy neklesne pod " + pct(K.omez[0]) + " ani nepřesáhne "
+      + pct(K.omez[1]) + " — škola si k jednotné zkoušce přidává vlastní kritéria, která v datech nejsou."));
+
+    m.appendChild(el("h3", null, "5. Návrh tří přihlášek"));
+    ul = el("ul");
+    Object.keys(K.pasma_portfolia).forEach(function (role) {
+      var pa = K.pasma_portfolia[role];
+      ul.appendChild(el("li", null, ROLE_POPIS[role] + ": šance " + pct(pa[0]) + " až "
+        + pct(Math.min(pa[1], 1)) + ", z toho nejvyšší skóre shody."));
+    });
+    m.appendChild(ul);
+
+    m.appendChild(el("h3", null, "6. Všechny ladicí parametry"));
+    m.appendChild(el("p", "hint", "Pro ladění: hodnoty z PARAMETRY v jaknastredni/pruvodce.py. Po změně stačí "
+      + "přegenerovat data.js (python -m jaknastredni.export_web) — web i Python počítají se stejnou hodnotou."));
+    obal = el("div", "tabulka-obal"); t = el("table");
+    tr = el("tr"); tr.appendChild(el("th", null, "Parametr")); tr.appendChild(el("th", null, "Hodnota"));
+    t.appendChild(tr);
+    Object.keys(P).forEach(function (klic) {
+      tr = el("tr");
+      var td = el("td"); td.appendChild(el("code", null, klic)); tr.appendChild(td);
+      tr.appendChild(el("td", "num", c(P[klic])));
+      t.appendChild(tr);
+    });
+    obal.appendChild(t);
+    m.appendChild(obal);
+  }
+
+  // ---- přepínání kroků (#dotaznik / #vysledky / #jak-hodnotime) ----
+  // Přes kotvu v adrese, ať funguje tlačítko Zpět a dá se poslat odkaz.
+  var KROKY = ["dotaznik", "vysledky", "jak-hodnotime"];
+  function ukazKrok() {
+    var krok = (location.hash || "").slice(1);
+    if (KROKY.indexOf(krok) < 0) krok = "dotaznik";
+    KROKY.forEach(function (k) {
+      document.getElementById("krok-" + k).hidden = (k !== krok);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".kroky a"), function (a) {
+      if (a.getAttribute("data-krok") === krok) a.setAttribute("aria-current", "step");
+      else a.removeAttribute("aria-current");
+    });
+  }
+  window.addEventListener("hashchange", function () { ukazKrok(); window.scrollTo(0, 0); });
+
   function vykresli() {
     var vysledky = ohodnot();
     document.getElementById("pocet").textContent = vysledky.length;
@@ -1523,6 +1752,7 @@
     });
 
     vykresliLadeni(vysledky);
+    vykresliMetodiku();
   }
 
   // ---- inicializace ----
@@ -1613,6 +1843,8 @@
                  urovenZamereni: urovenZamereni, vahy: vahy, prekresli: zmena,
                  sirka: sirkaVyberu, sirokyVyber: sirokyVyber, vyberTop: vyberTop };
 
+  ukazKrok();
+  document.getElementById("celkem").textContent = NAB.length;
   vykresliTerminy();
   vykresliStavDat();
   zmena();
