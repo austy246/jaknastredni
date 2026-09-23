@@ -1168,6 +1168,40 @@
     }
     return [od, po];
   }
+  // Popisek roku, který by ležel přes červenou čáru skóre, se přehodí na
+  // druhou stranu své čáry; když překáží i tam (nebo by vylezl z osy),
+  // zůstane tam, kde překáží míň.
+  var POPISEK_MEZERA = 4;
+  function odsunPopisky(plocha) {
+    var ja = plocha.querySelector(".ja");
+    if (!ja) return;
+    var r = ja.getBoundingClientRect(), p = plocha.getBoundingClientRect();
+    if (!p.width) return;
+    function prekryv(b) {
+      var x = b.getBoundingClientRect();
+      var cara = Math.max(0, Math.min(x.right, r.right + POPISEK_MEZERA) - Math.max(x.left, r.left - POPISEK_MEZERA));
+      var ven = Math.max(0, p.left - x.left) + Math.max(0, x.right - p.right);
+      return cara + ven * 2;
+    }
+    function strana(b, vpravo) {
+      b.style.left = vpravo ? "4px" : "auto";
+      b.style.right = vpravo ? "auto" : "4px";
+    }
+    plocha.querySelectorAll(".rok b").forEach(function (b) {
+      strana(b, b.dataset.vpravo !== "0");
+      var puvodne = b.dataset.vpravo !== "0";
+      var tady = prekryv(b);
+      if (!tady) return;
+      strana(b, !puvodne);
+      if (prekryv(b) >= tady) strana(b, puvodne);
+      // Leží-li čára roku přímo pod čarou skóre, popisek se odsune o zbytek.
+      var x = b.getBoundingClientRect();
+      if (x.right > r.left - POPISEK_MEZERA && x.left < r.right + POPISEK_MEZERA) {
+        if (b.style.left === "auto") b.style.right = (4 + x.right - r.left + POPISEK_MEZERA) + "px";
+        else b.style.left = (4 + r.right + POPISEK_MEZERA - x.left) + "px";
+      }
+    });
+  }
   function osa(h) {
     var box = el("div", "osa");
     var plocha = el("div", "osa-plocha");
@@ -1181,6 +1215,7 @@
       var t = el("span", "rok");
       t.style.left = pozice(h[rok]) + "%";
       var popisek = el("b", null, rok + ": " + Math.round(h[rok]));
+      popisek.dataset.vpravo = pozice(h[rok]) > 62 ? "0" : "1";
       if (pozice(h[rok]) > 62) { popisek.style.left = "auto"; popisek.style.right = "4px"; }
       t.appendChild(popisek);
       plocha.appendChild(t);
@@ -1192,6 +1227,11 @@
       plocha.appendChild(ja);
     }
     box.appendChild(plocha);
+    // Rozměry jsou známé až po zobrazení — výsledky se vykreslují i ve
+    // skrytém kroku, kde má osa šířku 0. ResizeObserver se ozve, až se
+    // ukáže, a znovu při změně šířky (otočení telefonu).
+    if (window.ResizeObserver) new ResizeObserver(function () { odsunPopisky(plocha); }).observe(plocha);
+    else requestAnimationFrame(function () { odsunPopisky(plocha); });
     var popis = el("div", "osa-popis");
     popis.appendChild(el("span", null, od + " b."));
     popis.appendChild(el("span", null, "hranice přijetí po letech (ČJ + MA, výřez " + od + "–" + po + " z 0–200 b.)"));
