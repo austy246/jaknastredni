@@ -117,11 +117,19 @@ PARAMETRY: dict[str, Any] = {
     # horší průměr než doporučený: −1/penalizace_na_stupen za stupeň, min. strop
     "prospech_penalizace_na_stupen": 2.0,
     "prospech_min_nasobek": 0.4,
-    # kvalita: úspěšnost maturit (%) mapovaná z [od, od+rozsah] na 0–1
-    "uspesnost_od": 70.0,
-    "uspesnost_rozsah": 30.0,
-    # kvalita: posun žáků (percentilové body) z [−posun_rozsah, +posun_rozsah]
-    "posun_rozsah": 10.0,
+    # kvalita: úspěšnost maturit (%) mapovaná z [od, od+rozsah] na 0–1.
+    # V Praze je medián 96 %, 10. percentil 86 % — od 70 % se to mačkalo
+    # do horní třetiny škály.
+    "uspesnost_od": 80.0,
+    "uspesnost_rozsah": 20.0,
+    # kvalita: průměrný percentil maturity z ČJ, pevná škála (10.–90.
+    # percentil pražských nabídek je 34–81). Dřív se roztahoval mezi
+    # nabídkami ve výběru, takže táž škola měla jinou kvalitu podle filtru.
+    "percentil_od": 25.0,
+    "percentil_rozsah": 60.0,
+    # kvalita: posun žáků (percentilové body) z [−posun_rozsah, +posun_rozsah].
+    # Při ±10 se ořízla čtvrtina škol (10.–90. percentil je −11 až +14).
+    "posun_rozsah": 15.0,
     # blizkost
     "blizkost_obvod": 1.0,
     "blizkost_soused": 0.6,
@@ -434,8 +442,15 @@ class Nabidka:
     maturita_uspesnost: float | None = None   # podíl úspěšných (%), průměr 3 let
     maturita_percentil: float | None = None   # průměrný percentil ČJ, poslední rok
     maturita_rok: int | None = None
+    # Skupina oborů CERMATu (SMO16, např. GY4, ST1), za kterou jsou maturita
+    # a posun; None = za celou školu (skupina chybí nebo má málo maturantů).
+    kvalita_skupina: str | None = None
     posun: float | None = None                # percentil maturity − percentil JPZ o 4 roky dřív
     posun_roky: tuple[int, int] | None = None
+    # Posun minus průměrný posun pražských škol téže skupiny (`kvalita_skupina`).
+    # Syrový posun osmiletých gymnázií je +20, lyceí −7 — rozdíl srovnávacích
+    # populací přijímaček a maturity, ne výuky. Do skóre jde tenhle.
+    posun_proti_podobnym: float | None = None
     inspekce_datum: str | None = None
     inspekce_url: str | None = None
     www: str | None = None
@@ -958,6 +973,47 @@ def _velikost_skoly(text: str | None) -> int | None:
     return (od + do) // 2
 
 
+# Váhy ukazatelů uvnitř složky kvalita. Percentil maturit koreluje se
+# vstupní hranicí přijetí 0,75 — měří hlavně, jaké žáky škola přijala, a to
+# už uchazeč vidí v šanci. Posun (maturita proti přijímačkám téhož ročníku)
+# koreluje jen 0,26, je to nejbližší „co škola přidá".
+KVALITA_VAHY = {"posun": 0.5, "uspesnost": 0.25, "percentil": 0.25}
+
+# Skupina oborů CERMATu (SMO16), za kterou se berou maturita a posun.
+# Maturita je v datech i po skupinách: u SPŠ s gymnáziem má gymnázium
+# percentil 55 a průmyslovka 37 — průměr celé školy (40) křivdil oběma.
+SMO16_TYPU = {"G4": "GY4", "G6": "GY6", "G8": "GY8", "LYC": "LYC"}
+SMO16_SKUPINY = {
+    **dict.fromkeys(("18", "21", "23", "24", "25", "26", "36", "39"), "ST1"),
+    **dict.fromkeys(("28", "29", "31", "32", "33", "34", "37"), "ST2"),
+    **dict.fromkeys(("63", "64"), "SEK"),
+    **dict.fromkeys(("65", "66"), "SHP"),
+    **dict.fromkeys(("61", "68", "72", "74", "75"), "SHU"),
+    "53": "SZD",
+    **dict.fromkeys(("16", "41", "43"), "SZE"),
+    "82": "SUM",
+}
+# Od kolika maturantů (součet za roky úspěšnosti) je skupina dost velká;
+# menší se nahradí celou školou.
+MIN_MATURANTU_SKUPINY = 20
+# Od kolika škol má skupina vlastní průměr posunu (viz posun_proti_podobnym).
+MIN_SKOL_SKUPINY = 5
+# O kolik let je maturita po přijímačkách podle délky studia.
+LET_DO_MATURITY = {"GY6": 6, "GY8": 8}
+
+
+def skupina_maturity(nab: Nabidka) -> str | None:
+    """Skupina SMO16 pro nabídku, nebo None (bez maturity / neznámá)."""
+    if nab.typ in SMO16_TYPU:
+        return SMO16_TYPU[nab.typ]
+    sk = SMO16_SKUPINY.get(nab.kod_kkov[:2])
+    if nab.typ == "M":
+        return sk
+    if nab.typ == "L0":
+        return "UTE" if sk in ("ST1", "ST2") else "UOS"
+    return None
+
+
 def _doplnit_kvalitu(conn: sqlite3.Connection, nabidky: dict[Klic, Nabidka]) -> None:
     """Maturitní výsledky (CERMAT MZ), posun žáků a poslední inspekce ČŠI.
 
@@ -969,36 +1025,56 @@ def _doplnit_kvalitu(conn: sqlite3.Connection, nabidky: dict[Klic, Nabidka]) -> 
     for nab in nabidky.values():
         podle_redizo.setdefault(nab.redizo, []).append(nab)
 
-    # Úspěšnost = průměr posledních 3 ročníků (jeden slabý ročník ještě nic
-    # neznamená, zvlášť u malých škol).
-    uspesnost: dict[str, list[float]] = {}
+    # Vše po (redizo, smo16); smo16 = 'CELKEM' je celá škola.
+    # Úspěšnost i percentil = průměr posledních 3 ročníků (jeden slabý
+    # ročník ještě nic neznamená, zvlášť u malých škol a skupin).
+    uspesnost: dict[tuple[str, str], list[float]] = {}
+    maturantu: dict[tuple[str, str], int] = {}
     for r in conn.execute(
         """
-        SELECT redizo, rok, podil_uspesnych
+        SELECT redizo, smo16, podil_uspesnych, konali
           FROM maturita
-         WHERE obdobi = 'jap' AND smo16 = 'CELKEM' AND predmet = 'CELKEM'
+         WHERE obdobi = 'jap' AND predmet = 'CELKEM'
            AND podil_uspesnych IS NOT NULL
            AND rok >= (SELECT MAX(rok) - 2 FROM maturita)
         """
     ):
-        uspesnost.setdefault(r["redizo"], []).append(r["podil_uspesnych"])
+        k = (r["redizo"], r["smo16"])
+        uspesnost.setdefault(k, []).append(r["podil_uspesnych"])
+        maturantu[k] = maturantu.get(k, 0) + (r["konali"] or 0)
 
-    percentil: dict[str, tuple[int, float]] = {}
+    percentil: dict[tuple[str, str], tuple[int, float]] = {}
     for r in conn.execute(
         """
-        SELECT redizo, rok, prumerny_percentil
+        SELECT redizo, smo16, MAX(rok) AS rok, AVG(prumerny_percentil) AS p
           FROM maturita
-         WHERE obdobi = 'jap' AND smo16 = 'CELKEM' AND predmet = 'CJ'
-           AND prumerny_percentil IS NOT NULL
-         ORDER BY rok
+         WHERE obdobi = 'jap' AND predmet = 'CJ' AND prumerny_percentil IS NOT NULL
+           AND rok >= (SELECT MAX(rok) - 2 FROM maturita)
+         GROUP BY redizo, smo16
         """
     ):
-        percentil[r["redizo"]] = (r["rok"], r["prumerny_percentil"])
+        percentil[(r["redizo"], r["smo16"])] = (r["rok"], r["p"])
 
-    # Posun: percentil maturity v roce Y proti percentilu JPZ téže školy v roce
-    # Y−4 (tedy zhruba tentýž ročník na vstupu a na výstupu). Hrubý ukazatel
-    # „přidané hodnoty" — školní úroveň, míchá obory, viz docs/pruvodce-ux.md.
-    posun: dict[str, tuple[float, int, int]] = {}
+    # Posun: percentil maturity v roce Y proti percentilu JPZ téže skupiny
+    # oborů v roce Y − délka studia (tedy zhruba tentýž ročník na vstupu a
+    # na výstupu; u osmiletého gymnázia přijímačky páťáků). Hrubý ukazatel
+    # „přidané hodnoty", viz docs/pruvodce-ux.md. Bere se nejnovější pár.
+    posun: dict[tuple[str, str], tuple[float, int, int]] = {}
+    let_do_maturity = " ".join(f"WHEN '{sk}' THEN {int(let)}" for sk, let in LET_DO_MATURITY.items())
+    for r in conn.execute(
+        f"""
+        SELECT j.redizo, j.skupina_oboru AS smo16, j.rok AS rok_jpz, m.rok AS rok_mz,
+               m.prumerny_percentil - j.prumerny_percentil_cj AS posun
+          FROM jpz_skupina j
+          JOIN maturita m ON m.redizo = j.redizo AND m.smo16 = j.skupina_oboru
+           AND m.rok = j.rok + (CASE j.skupina_oboru {let_do_maturity} ELSE 4 END)
+           AND m.obdobi = 'jap' AND m.predmet = 'CJ' AND m.prumerny_percentil IS NOT NULL
+         WHERE j.prumerny_percentil_cj IS NOT NULL AND j.konali_cj >= 15
+         ORDER BY j.rok
+        """
+    ):
+        posun[(r["redizo"], r["smo16"])] = (r["posun"], r["rok_jpz"], r["rok_mz"])
+    # Za celou školu: jako dřív průměr skupin čtyřletých oborů (+4 roky).
     for r in conn.execute(
         """
         SELECT j.redizo, j.rok AS rok_jpz, m.rok AS rok_mz,
@@ -1008,11 +1084,12 @@ def _doplnit_kvalitu(conn: sqlite3.Connection, nabidky: dict[Klic, Nabidka]) -> 
            AND m.obdobi = 'jap' AND m.smo16 = 'CELKEM' AND m.predmet = 'CJ'
            AND m.prumerny_percentil IS NOT NULL
          WHERE j.prumerny_percentil_cj IS NOT NULL AND j.konali_cj >= 15
+           AND j.skupina_oboru NOT IN ('GY6', 'GY8', '4LETÉ OBORY')
          GROUP BY j.redizo, j.rok
          ORDER BY j.rok
         """
     ):
-        posun[r["redizo"]] = (r["posun"], r["rok_jpz"], r["rok_mz"])
+        posun[(r["redizo"], "CELKEM")] = (r["posun"], r["rok_jpz"], r["rok_mz"])
 
     inspekce: dict[str, tuple[str, str | None]] = {}
     for r in conn.execute(
@@ -1022,15 +1099,40 @@ def _doplnit_kvalitu(conn: sqlite3.Connection, nabidky: dict[Klic, Nabidka]) -> 
 
     for redizo, cilove in podle_redizo.items():
         for nab in cilove:
-            if redizo in uspesnost:
-                nab.maturita_uspesnost = statistics.mean(uspesnost[redizo])
-            if redizo in percentil:
-                nab.maturita_rok, nab.maturita_percentil = percentil[redizo]
-            if redizo in posun:
-                p, rok_jpz, rok_mz = posun[redizo]
+            sk = skupina_maturity(nab)
+            if sk is None or maturantu.get((redizo, sk), 0) < MIN_MATURANTU_SKUPINY:
+                sk = None
+            nab.kvalita_skupina = sk
+            k = (redizo, sk or "CELKEM")
+            if k in uspesnost:
+                nab.maturita_uspesnost = statistics.mean(uspesnost[k])
+            if k in percentil:
+                nab.maturita_rok, nab.maturita_percentil = percentil[k]
+            if k in posun:
+                p, rok_jpz, rok_mz = posun[k]
                 nab.posun, nab.posun_roky = p, (rok_jpz, rok_mz)
             if redizo in inspekce:
                 nab.inspekce_datum, nab.inspekce_url = inspekce[redizo]
+
+    # Posun proti podobným školám: průměr skupiny přes školy (ne nabídky —
+    # škola s pěti obory nesmí vážit pětkrát). Skupina s málo školami se
+    # srovná s průměrem všech skupin kromě víceletých gymnázií.
+    posuny: dict[str, dict[str, float]] = {}
+    for nab in nabidky.values():
+        if nab.posun is not None:
+            posuny.setdefault(nab.kvalita_skupina or "CELKEM", {})[nab.redizo] = nab.posun
+    spolecny = [p for sk, v in posuny.items() if sk not in ("GY6", "GY8") for p in v.values()]
+    zaklad = statistics.mean(spolecny) if spolecny else 0.0
+    # Víceleté gymnázium bez dost podobných škol se srovnat nedá — jeho
+    # měřítko je jiné (přijímačky páťáků), s ostatními by vyšlo o +20 lepší.
+    prumery: dict[str, float | None] = {
+        sk: statistics.mean(v.values()) if len(v) >= MIN_SKOL_SKUPINY
+        else (None if sk in ("GY6", "GY8") else zaklad)
+        for sk, v in posuny.items()}
+    for nab in nabidky.values():
+        prumer = prumery.get(nab.kvalita_skupina or "CELKEM")
+        if nab.posun is not None and prumer is not None:
+            nab.posun_proti_podobnym = nab.posun - prumer
 
 
 # --------------------------------------------------------------------------
@@ -1353,12 +1455,6 @@ def ohodnot(profil: Profil, nabidky: Iterable[Nabidka]) -> list[Vysledek]:
     # rozsah rozhoduje pořadí typů, ne jejich absolutní hodnota.
     hodnoty_typu = [preference.get(n.typ, 0.5) for n in vybrane]
     typ_dolni, typ_horni = min(hodnoty_typu), max(hodnoty_typu)
-    # Kvalita se normalizuje proti tomu, co je v nabídce skutečně k mání —
-    # percentil maturit se mezi gymnázii a učňáky liší o desítky bodů, takže
-    # absolutní práh by u odborných oborů „vypnul" celou složku.
-    percentily = [n.maturita_percentil for n in vybrane if n.maturita_percentil is not None]
-    mez_dolni = min(percentily) if percentily else 0.0
-    mez_horni = max(percentily) if percentily else 100.0
 
     vysledky: list[Vysledek] = []
     for nab in vybrane:
@@ -1367,7 +1463,7 @@ def ohodnot(profil: Profil, nabidky: Iterable[Nabidka]) -> list[Vysledek]:
             "zajem": _skore_zajem(nab, profil),
             "typ": _normalizuj(preference.get(nab.typ, 0.5), typ_dolni, typ_horni),
             "dosazitelnost": _skore_dosazitelnost(p, nab, profil),
-            "kvalita": _skore_kvalita(nab, mez_dolni, mez_horni),
+            "kvalita": _skore_kvalita(nab),
             "blizkost": _skore_blizkost(nab, profil),
             "cena": _skore_cena(nab, profil),
             "prostredi": _skore_prostredi(nab, profil),
@@ -1509,17 +1605,43 @@ def _skore_dosazitelnost(p: float | None, nab: Nabidka, profil: Profil) -> float
     return zaklad
 
 
-def _skore_kvalita(nab: Nabidka, mez_dolni: float, mez_horni: float) -> float:
-    slozky: list[float] = []
-    if nab.maturita_percentil is not None and mez_horni > mez_dolni:
-        slozky.append((nab.maturita_percentil - mez_dolni) / (mez_horni - mez_dolni))
+POPIS_SMO16 = {
+    "GY4": "čtyřletého gymnázia", "GY6": "šestiletého gymnázia",
+    "GY8": "osmiletého gymnázia", "LYC": "lycea", "ST1": "technických oborů",
+    "ST2": "technologických oborů", "SEK": "ekonomických oborů",
+    "SHP": "hotelových a podnikatelských oborů", "SHU": "pedagogických a humanitních oborů",
+    "SZD": "zdravotnických oborů", "SZE": "zemědělských oborů", "SUM": "uměleckých oborů",
+    "UTE": "technických oborů s výučním listem", "UOS": "oborů s výučním listem",
+}
+
+
+def _ceho_kvalita(nab: Nabidka, kratce: bool = False) -> str:
+    """Za co maturitní čísla na kartě platí — skupina oborů, nebo celá škola."""
+    if nab.kvalita_skupina is None:
+        return "celá škola" if kratce else "školy"
+    popis = POPIS_SMO16.get(nab.kvalita_skupina, nab.kvalita_skupina)
+    return f"údaje {popis}" if kratce else f"{popis} této školy"
+
+
+def _skore_kvalita(nab: Nabidka) -> float:
+    """Vážený průměr tří ukazatelů (`KVALITA_VAHY`), chybějící = neutrální.
+
+    Chybějící ukazatel se nevynechává, ale počítá jako `neutral`: škola, o
+    které víme jen „maturitu udělá 100 %", jinak dostala plný bod — víc
+    než škola se všemi třemi čísly dobrými.
+    """
+    P = PARAMETRY
+    hodnoty = {"percentil": None, "uspesnost": None, "posun": None}
+    if nab.maturita_percentil is not None:
+        hodnoty["percentil"] = (nab.maturita_percentil - P["percentil_od"]) / P["percentil_rozsah"]
     if nab.maturita_uspesnost is not None:
-        slozky.append(min(1.0, max(0.0, (nab.maturita_uspesnost - PARAMETRY["uspesnost_od"])
-                                    / PARAMETRY["uspesnost_rozsah"])))
-    if nab.posun is not None:
-        r = PARAMETRY["posun_rozsah"]
-        slozky.append(min(1.0, max(0.0, (nab.posun + r) / (2 * r))))
-    return statistics.mean(slozky) if slozky else PARAMETRY["neutral"]
+        hodnoty["uspesnost"] = (nab.maturita_uspesnost - P["uspesnost_od"]) / P["uspesnost_rozsah"]
+    if nab.posun_proti_podobnym is not None:
+        hodnoty["posun"] = (nab.posun_proti_podobnym + P["posun_rozsah"]) / (2 * P["posun_rozsah"])
+    if all(h is None for h in hodnoty.values()):
+        return P["neutral"]
+    return sum(KVALITA_VAHY[k] * (P["neutral"] if h is None else min(1.0, max(0.0, h)))
+               for k, h in hodnoty.items()) / sum(KVALITA_VAHY.values())
 
 
 def _skore_blizkost(nab: Nabidka, profil: Profil) -> float:
@@ -1627,13 +1749,15 @@ def _duvody(nab: Nabidka, profil: Profil, slozky: dict[str, float], p: float | N
         out.append(f"Školné {nab.skolne:,} Kč/rok".replace(",", " "))
     if nab.maturita_uspesnost is not None:
         out.append(
-            f"Maturitu složí {nab.maturita_uspesnost:.0f} % žáků školy (průměr posledních 3 let)"
+            f"Maturitu složí {nab.maturita_uspesnost:.0f} % žáků {_ceho_kvalita(nab)} "
+            f"(průměr posledních 3 let)"
         )
-    if nab.posun is not None and nab.posun > 2:
+    if nab.posun_proti_podobnym is not None and nab.posun_proti_podobnym > 2:
         rok_jpz, rok_mz = nab.posun_roky or (0, 0)
         out.append(
-            f"Žáci se za studium posunuli o {nab.posun:+.0f} percentilu "
-            f"(přijímačky {rok_jpz} → maturita {rok_mz}, celá škola)"
+            f"Žáci se za studium posunuli o {nab.posun_proti_podobnym:.0f} percentilu víc "
+            f"než na podobných školách (přijímačky {rok_jpz} → maturita {rok_mz}, "
+            f"{_ceho_kvalita(nab, kratce=True)})"
         )
     if nab.velikost_skoly:
         out.append(f"Velikost školy zhruba {nab.velikost_skoly} žáků")

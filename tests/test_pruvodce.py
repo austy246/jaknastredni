@@ -1306,3 +1306,114 @@ def test_uzky_vyber_vseobecneho_netlaci_od_gymnazia():
     pref = oblasti.preference_typu(profil.osobnostni, profil.sirka)
     assert pref["G4"] == 1.0
     assert pruvodce.Profil(oblasti_zajmu=["it"], zamereni=["programovani"]).sirka is not None
+
+
+def _maturita(conn, redizo, smo16, rok, *, konali, uspesnost, percentil):
+    for predmet, p in (("CELKEM", None), ("CJ", percentil)):
+        conn.execute(
+            "INSERT INTO maturita (redizo, rok, obdobi, smo16, predmet, konali,"
+            " podil_uspesnych, prumerny_percentil) VALUES (?,?,'jap',?,?,?,?,?)",
+            (redizo, rok, smo16, predmet, konali, uspesnost, p))
+
+
+def test_kvalita_gymnazia_ze_skupiny_ne_z_cele_skoly(conn):
+    # SPŠ s gymnáziem: gymnázium se hodnotí maturitami gymnázia (GY4),
+    # průmyslovka průmyslovky (ST1), ne průměrem celé školy.
+    _skola(conn, "600000009", "100000009", "SPŠ a gymnázium", "Praha 10")
+    _obor(conn, "100000009", "79-41-K/41", "Gymnázium")
+    _obor(conn, "100000009", "18-20-M/01", "Informační technologie")
+    for rok in (2024, 2025, 2026):
+        _maturita(conn, "600000009", "CELKEM", rok, konali=100, uspesnost=96, percentil=40)
+        _maturita(conn, "600000009", "GY4", rok, konali=20, uspesnost=99, percentil=55)
+        _maturita(conn, "600000009", "ST1", rok, konali=80, uspesnost=95, percentil=37)
+    conn.commit()
+    podle_kodu = {n.kod_kkov: n for n in pruvodce.nacti_nabidky(conn)}
+    gym, it = podle_kodu["79-41-K/41"], podle_kodu["18-20-M/01"]
+    assert (gym.kvalita_skupina, gym.maturita_percentil) == ("GY4", 55)
+    assert (it.kvalita_skupina, it.maturita_percentil) == ("ST1", 37)
+    assert any("čtyřletého gymnázia této školy" in d
+               for d in pruvodce._duvody(gym, pruvodce.Profil(), {}, None))
+
+
+def test_mala_skupina_se_nahradi_celou_skolou(conn):
+    _skola(conn, "600000010", "100000010", "SOŠ a gymnázium", "Praha 10")
+    _obor(conn, "100000010", "79-41-K/41", "Gymnázium")
+    for rok in (2024, 2025, 2026):
+        _maturita(conn, "600000010", "CELKEM", rok, konali=100, uspesnost=96, percentil=40)
+        _maturita(conn, "600000010", "GY4", rok, konali=5, uspesnost=100, percentil=70)
+    conn.commit()
+    gym = {n.izo: n for n in pruvodce.nacti_nabidky(conn)}["100000010"]
+    assert gym.kvalita_skupina is None       # 15 maturantů < 20
+    assert gym.maturita_percentil == 40
+
+
+def test_skore_kvalita_vahy_a_chybejici_ukazatel():
+    def nab(**k):
+        n = pruvodce.Nabidka(izo="1", redizo="1", skola="S", organizace="S",
+                             kod_kkov="79-41-K/41", obor="G", typ="G4", trida_prihlasky=9,
+                             obvody=(), adresa="", zrizovatel_verejny=True)
+        for a, b in k.items():
+            setattr(n, a, b)
+        return n
+    # Natvrdo čísla, ne proti KVALITA_VAHY: posun 0,5, ostatní 0,25.
+    # percentil 85 -> 1, úspěšnost 100 -> 1, posun −15 -> 0.
+    assert pruvodce._skore_kvalita(
+        nab(maturita_percentil=85, maturita_uspesnost=100, posun_proti_podobnym=-15)) == pytest.approx(0.5)
+    # Jen posun +15 proti podobným -> 1: 0,5·1 + 0,5·neutrál 0,5 = 0,75.
+    # Syrový posun se nepočítá (osmiletá gymnázia mají +20 jen z měřítka).
+    assert pruvodce._skore_kvalita(nab(posun=30)) == 0.5
+    assert pruvodce._skore_kvalita(nab(posun_proti_podobnym=15)) == pytest.approx(0.75)
+    # Jen úspěšnost 100 % už nedá plný bod: 0,25·1 + 0,75·0,5.
+    assert pruvodce._skore_kvalita(nab(maturita_uspesnost=100)) == pytest.approx(0.625)
+    assert pruvodce._skore_kvalita(nab()) == 0.5
+
+
+def test_skupina_maturity():
+    def nab(kkov):
+        return pruvodce.Nabidka(izo="1", redizo="1", skola="S", organizace="S", kod_kkov=kkov,
+                                obor="O", typ=oblasti.typ_oboru(kkov), trida_prihlasky=9,
+                                obvody=(), adresa="", zrizovatel_verejny=True)
+    assert pruvodce.skupina_maturity(nab("79-41-K/81")) == "GY8"
+    assert pruvodce.skupina_maturity(nab("78-42-M/01")) == "LYC"
+    assert pruvodce.skupina_maturity(nab("18-20-M/01")) == "ST1"
+    assert pruvodce.skupina_maturity(nab("63-41-M/02")) == "SEK"
+    assert pruvodce.skupina_maturity(nab("26-41-L/01")) == "UTE"
+    assert pruvodce.skupina_maturity(nab("65-51-H/01")) is None
+
+
+def test_posun_osmileteho_gymnazia_po_osmi_letech(conn):
+    # Osmileté gymnázium maturuje 8 let po přijímačkách páťáků, ne 4.
+    _skola(conn, "600000011", "100000011", "Gymnázium osmileté", "Praha 6")
+    _obor(conn, "100000011", "79-41-K/81", "Gymnázium")
+    for rok in (2024, 2025, 2026):
+        _maturita(conn, "600000011", "CELKEM", rok, konali=60, uspesnost=100, percentil=80)
+        _maturita(conn, "600000011", "GY8", rok, konali=60, uspesnost=100, percentil=80)
+    for rok, perc in ((2018, 70.0), (2022, 50.0)):
+        conn.execute(
+            "INSERT INTO jpz_skupina (redizo, skupina_oboru, rocnik, rok, konali_cj,"
+            " prumerny_percentil_cj) VALUES ('600000011', 'GY8', 5, ?, 30, ?)", (rok, perc))
+    conn.commit()
+    gym = {n.izo: n for n in pruvodce.nacti_nabidky(conn)}["100000011"]
+    assert gym.posun_roky == (2018, 2026)
+    assert gym.posun == pytest.approx(10.0)
+    # Jediné osmileté gymnázium nemá s kým srovnat (jiné měřítko než
+    # čtyřleté obory) -> posun proti podobným neznámý, ne +10.
+    assert gym.posun_proti_podobnym is None
+
+
+def test_posun_proti_podobnym_odecte_prumer_skupiny(conn):
+    for i, perc_jpz in enumerate((60.0, 70.0, 70.0, 70.0, 70.0)):
+        red, izo = f"60000002{i}", f"10000002{i}"
+        _skola(conn, red, izo, f"Gymnázium {i}", "Praha 6")
+        _obor(conn, izo, "79-41-K/41", "Gymnázium")
+        for rok in (2024, 2025, 2026):
+            _maturita(conn, red, "CELKEM", rok, konali=60, uspesnost=100, percentil=80)
+            _maturita(conn, red, "GY4", rok, konali=60, uspesnost=100, percentil=80)
+        conn.execute(
+            "INSERT INTO jpz_skupina (redizo, skupina_oboru, rocnik, rok, konali_cj,"
+            " prumerny_percentil_cj) VALUES (?, 'GY4', 9, 2022, 30, ?)", (red, perc_jpz))
+    conn.commit()
+    podle = {n.izo: n for n in pruvodce.nacti_nabidky(conn)}
+    # posuny 20, 10, 10, 10, 10 -> průměr 12 -> první +8, ostatní −2
+    assert podle["100000020"].posun_proti_podobnym == pytest.approx(8.0)
+    assert podle["100000021"].posun_proti_podobnym == pytest.approx(-2.0)

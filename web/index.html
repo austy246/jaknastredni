@@ -854,13 +854,32 @@
     var p = prumer(s);
     return p == null ? P.neutral : p;
   }
+  // Vážený průměr percentilu, úspěšnosti a posunu; chybějící ukazatel se
+  // počítá jako neutrální (Python: _skore_kvalita, KVALITA_VAHY).
+  function skoreKvalita(n) {
+    var h = {
+      percentil: n.maturita_percentil == null ? null : (n.maturita_percentil - P.percentil_od) / P.percentil_rozsah,
+      uspesnost: n.maturita_uspesnost == null ? null : (n.maturita_uspesnost - P.uspesnost_od) / P.uspesnost_rozsah,
+      posun: n.posun_proti_podobnym == null ? null : (n.posun_proti_podobnym + P.posun_rozsah) / (2 * P.posun_rozsah)
+    };
+    if (h.percentil == null && h.uspesnost == null && h.posun == null) return P.neutral;
+    var soucet = 0, vahy = 0;
+    for (var k in K.kvalita_vahy) {
+      var x = h[k] == null ? P.neutral : Math.min(1, Math.max(0, h[k]));
+      soucet += K.kvalita_vahy[k] * x; vahy += K.kvalita_vahy[k];
+    }
+    return soucet / vahy;
+  }
+  // Za co maturitní čísla platí (Python: _ceho_kvalita).
+  function cehoKvalita(n, kratce) {
+    if (!n.kvalita_skupina) return kratce ? "celá škola" : "školy";
+    var popis = K.popis_smo16[n.kvalita_skupina] || n.kvalita_skupina;
+    return kratce ? "údaje " + popis : popis + " této školy";
+  }
   function ohodnot() {
     var vybrane = NAB.filter(projdeFiltrem);
     if (!vybrane.length) return [];
     var skor = (stav.skorCj != null && stav.skorMa != null) ? stav.skorCj + stav.skorMa : null;
-    var perc = vybrane.map(function (n) { return n.maturita_percentil; }).filter(function (x) { return x != null; });
-    var dolni = perc.length ? Math.min.apply(null, perc) : 0;
-    var horni = perc.length ? Math.max.apply(null, perc) : 100;
     var preference = preferenceTypu();
     // Preference typu se — stejně jako kvalita — normalizuje proti tomu, co
     // prošlo filtrem. Surové hodnoty se mačkají do pásma kolem 0,75 (průměr
@@ -897,11 +916,7 @@
       }
       slozky.dosazitelnost = dos;
 
-      var kval = [];
-      if (n.maturita_percentil != null && horni > dolni) kval.push((n.maturita_percentil - dolni) / (horni - dolni));
-      if (n.maturita_uspesnost != null) kval.push(Math.min(1, Math.max(0, (n.maturita_uspesnost - P.uspesnost_od) / P.uspesnost_rozsah)));
-      if (n.posun != null) kval.push(Math.min(1, Math.max(0, (n.posun + P.posun_rozsah) / (2 * P.posun_rozsah))));
-      slozky.kvalita = kval.length ? prumer(kval) : P.neutral;
+      slozky.kvalita = skoreKvalita(n);
 
       if (!stav.obvody.length) slozky.blizkost = P.neutral;
       else {
@@ -1016,10 +1031,10 @@
     if (n.skolne === 0) out.push("Bez školného");
     else if (n.skolne) out.push("Školné " + mezera(n.skolne) + " Kč/rok");
     if (n.maturita_uspesnost != null)
-      out.push("Maturitu složí " + Math.round(n.maturita_uspesnost) + " % žáků školy (průměr 3 let)");
-    if (n.posun != null && n.posun > 2)
-      out.push("Žáci se za studium posunuli o " + (n.posun > 0 ? "+" : "") + Math.round(n.posun)
-               + " percentilu (přijímačky " + n.posun_roky[0] + " → maturita " + n.posun_roky[1] + ", celá škola)");
+      out.push("Maturitu složí " + Math.round(n.maturita_uspesnost) + " % žáků " + cehoKvalita(n, false) + " (průměr posledních 3 let)");
+    if (n.posun_proti_podobnym != null && n.posun_proti_podobnym > 2)
+      out.push("Žáci se za studium posunuli o " + Math.round(n.posun_proti_podobnym)
+               + " percentilu víc než na podobných školách (přijímačky " + n.posun_roky[0] + " → maturita " + n.posun_roky[1] + ", " + cehoKvalita(n, true) + ")");
     if (n.velikost_skoly) out.push("Velikost školy zhruba " + n.velikost_skoly + " žáků");
     return out;
   }
@@ -1498,7 +1513,7 @@
                      "zamereni_kody", "zamereni_skoly", "talentova_zkouska", "skolne",
                      "hranice", "poptavka", "kapacita", "prihlasky", "prijati", "rok_prijimacek",
                      "fit", "fit_n", "bez_jpz", "bez_jpz_prevazuje", "pasma_sdileno",
-                     "maturita_percentil", "maturita_uspesnost", "maturita_rok", "posun",
+                     "maturita_percentil", "maturita_uspesnost", "maturita_rok", "kvalita_skupina", "posun", "posun_proti_podobnym",
                      "doporuceny_prospech", "plan_prijmout", "loni_prihlaseni", "loni_prijati",
                      "jazyky", "pocet_jazyku", "velikost_skoly", "vybaveni", "www"];
 
@@ -1598,10 +1613,14 @@
         + c(P.prospech_penalizace_na_stupen) + "), nejméně × " + c(P.prospech_min_nasobek) + ".";
     }],
     kvalita: ["Kvalita", function () {
-      return "Průměr dostupných z: percentil maturit (roztažený mezi nabídkami ve výběru), úspěšnost maturit "
-        + c(P.uspesnost_od) + " % → 0 až " + c(P.uspesnost_od + P.uspesnost_rozsah) + " % → 1, posun žáků −"
-        + c(P.posun_rozsah) + " → 0 až +" + c(P.posun_rozsah) + " → 1. Nic z toho = " + c(P.neutral)
-        + ". Inspekční zprávy se zatím nezapočítávají.";
+      var V = K.kvalita_vahy;
+      return "Vážený průměr: posun žáků (maturita proti přijímačkám téhož ročníku, proti průměru podobných škol) −" + c(P.posun_rozsah)
+        + " → 0 až +" + c(P.posun_rozsah) + " → 1, váha " + pct(V.posun) + "; úspěšnost maturit "
+        + c(P.uspesnost_od) + " % → 0 až " + c(P.uspesnost_od + P.uspesnost_rozsah) + " % → 1, váha "
+        + pct(V.uspesnost) + "; percentil maturit z ČJ " + c(P.percentil_od) + " → 0 až "
+        + c(P.percentil_od + P.percentil_rozsah) + " → 1, váha " + pct(V.percentil)
+        + ". Čísla jsou za skupinu oborů (gymnázium, lyceum, technické obory…), u malé skupiny za celou školu. "
+        + "Chybějící ukazatel = " + c(P.neutral) + ". Inspekční zprávy se zatím nezapočítávají.";
     }],
     blizkost: ["Blízkost", function () {
       return "Zvolený obvod " + c(P.blizkost_obvod) + ", sousední " + c(P.blizkost_soused) + ", jinde "

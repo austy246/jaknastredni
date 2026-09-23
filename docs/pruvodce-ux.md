@@ -388,6 +388,23 @@ Je to **hrubý ukazatel**, ne oficiální „přidaná hodnota":
 Proto se posun nikdy neukazuje jako hlavní číslo, jen jako jeden ze tří
 vstupů do složky `kvalita` a jako řádek `+` na kartě s uvedenými roky.
 
+### Revize kvality (září 2026)
+
+Co bylo špatně a jak je to teď (`_doplnit_kvalitu`, `_skore_kvalita`):
+
+| problém | dřív | teď |
+| --- | --- | --- |
+| smíšené školy | čísla za celou školu: gymnázium SPŠ Na Třebešíně percentil 40 | za skupinu oborů CERMATu (SMO16: GY4, LYC, ST1…) — gymnázium 55, průmyslovka 37; skupina pod 20 maturantů za 3 roky → celá škola |
+| percentil maturit | koreluje s hranicí přijetí 0,75 (měří výběr žáků), váha 1/3; roztažený mezi nabídkami ve výběru, takže táž škola měla jinou kvalitu podle filtru | váha 1/4, pevná škála 25 → 0 až 85 → 1, průměr 3 let |
+| posun | ±10 ořízlo čtvrtinu škol; u osmiletých gymnázií přijímačky páťáků proti maturitě **o 4 roky** (jiný ročník) | ±15; odstup podle délky studia (`LET_DO_MATURITY`); váha 1/2 |
+| posun mezi typy | syrový posun GY6 +26, GY8 +20, GY4 −4, lycea −7 — rozdíl srovnávacích populací, ne výuky | `posun_proti_podobnym` = posun minus průměr pražských škol téže skupiny |
+| úspěšnost | škála 70–100 %, medián 96 % → vše nahoře | 80–100 %, váha 1/4 |
+| chybějící údaj | vynechal se — škola jen s „100 % maturit" měla kvalitu 1,0 | počítá se jako neutrální 0,5 se svou vahou |
+
+Výsledek: kvalita koreluje s hranicí přijetí 0,61 (dřív percentil 0,75),
+medián 0,51, 10.–90. percentil 0,33–0,77. Karta říká, za co čísla platí
+(„Maturitu složí 99 % žáků čtyřletého gymnázia této školy").
+
 ## Oblasti zájmu
 
 Mapování 27 skupin KKOV → 11 oblastí je v `oblasti.OBLASTI` a bylo
