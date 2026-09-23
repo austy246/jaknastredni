@@ -469,6 +469,27 @@ zaměření to dělaly ještě dvě věci:
 - **„Něco od obojího" dávalo gymnáziu 0,5** proti lyceu 0,9. Protože se
   typ normalizuje proti kandidátům, byla z toho plná nula. Nově 0,75.
 
+**Co v datech o gymnáziích opravdu je.** Názvy ŠVP gymnázií jsou většinou
+motta („Per aspera ad astra", „Klíč ke vzdělání"); profilaci nese jen asi
+čtvrtina. Podle toho, co tam je, přibyla/rozšířila se zaměření:
+`informatika` (1. IT Gymnázium, Arabská, Doppler, Třebešín, esporty),
+`ekonomie` (ART ECON, „s ekonomickým zaměřením"), `medicina` (FOSTRA Meda),
+výtvarno (`umeni_design` nově i u všeobecného: Pražačka, „esteticko-výchovné"),
+mezinárodní programy (International, AP, IB) pod `jazyky`, geografie pod
+`prirodni_vedy`, „právo a bezpečnost" pod `pravo_verejna_sprava`.
+
+**Povinný základ gymnázia** (`ZAKLAD_GYMNAZIA`): přírodní vědy, jazyky,
+společenské vědy a informatiku učí podle RVP G každé gymnázium. Bez
+doložené rozšířené výuky je proto úroveň `zaklad` (×0,9), ne `nevime`
+(×0,8), a karta to řekne.
+
+**Šum v „zaměření z popisu školy".** Pole `vybaveni_a_nabidka` z
+infoabsolventu je zaškrtávací seznam: „multimediální jazyková učebna"
+dávala `media` 89 školám a `jazyky` 80, „zájmový kroužek sportovní, …,
+přírodovědný" `sport` 78 a `prirodni_vedy` 36. `oblasti.zamereni_vybaveni`
+tyhle standardní položky zahodí. A „na našich webových stránkách" (108
+škol) už nedělá zaměření `web`.
+
 Aby se nepřehouplo na opačnou stranu (deset gymnázií, žádná průmyslovka
 u uchazeče, který si IT zaškrtl), má při víc zaškrtnutých oblastech každá
 z nich v doporučených `REZERVA_OBLASTI` = 2 místa (`vyber_top`). Doporučuje

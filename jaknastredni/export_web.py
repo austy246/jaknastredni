@@ -108,6 +108,7 @@ def export(conn) -> dict[str, Any]:
             "sigma_max": pruvodce.SIGMA_MAX,
             "smrsteni": pruvodce.SMRSTENI,
             "shoda_zamereni": pruvodce.SHODA_ZAMERENI,
+            "zaklad_gymnazia": list(pruvodce.ZAKLAD_GYMNAZIA),
             "min_vzorek": pruvodce.MIN_VZOREK,
             "okno_pasma": pruvodce.OKNO_PASMA,
             "max_navrh_bodu": pruvodce.MAX_NAVRH_BODU,

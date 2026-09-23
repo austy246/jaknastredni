@@ -746,6 +746,10 @@
       return C.zamereni[k].oblasti.some(function (o) { return shoda.indexOf(o) >= 0; });
     })) return "mimo";
     if (protina(n.zamereni_skoly, hledane).length) return "skola";
+    // Gymnázium učí přírodní vědy, jazyky, ZSV i informatiku vždycky —
+    // bez doložené rozšířené výuky je to „základ", ne „nevíme".
+    if (["G4", "G6", "G8"].indexOf(n.typ) >= 0 && protina(K.zaklad_gymnazia, hledane).length)
+      return "zaklad";
     return (n.zamereni_kody && n.zamereni_kody.length) ? "jine" : "nevime";
   }
   // Název oboru i se zaměřením — dvě nabídky téže školy pod jedním kódem
@@ -996,6 +1000,9 @@
       else if (uroven === "skola")
         out.push("Škola " + popisZamereni(protina(n.zamereni_skoly, hledane)) +
                  " uvádí ve svém popisu, ale u tohohle oboru to doložené nemáme");
+      else if (uroven === "zaklad")
+        out.push(popisZamereni(protina(K.zaklad_gymnazia, hledane)) + " se na gymnáziu učí " +
+                 "v povinném základu; rozšířenou výuku škola neuvádí");
       // Co zaměření nesedí, patří mezi varování (viz varovani()).
     } else if (n.svp) {
       out.push("Škola u oboru uvádí ŠVP \u201e" + n.svp + "\u201c");

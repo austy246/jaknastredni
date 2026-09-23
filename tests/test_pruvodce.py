@@ -1253,12 +1253,44 @@ def test_it_zamereni_nesrazi_gymnazium():
 
 
 def test_gymnazialni_zamereni_srazi_gymnazium_bez_nej():
-    profil = pruvodce.Profil(oblasti_zajmu=["vseobecne"], zamereni=["informatika"])
+    # Ekonomie není v povinném základu gymnázia -> bez doložení „nevíme".
+    profil = pruvodce.Profil(oblasti_zajmu=["vseobecne"], zamereni=["ekonomie"])
     gym = pruvodce.Nabidka(izo="1", redizo="1", skola="G", organizace="G",
                            kod_kkov="79-41-K/41", obor="Gymnázium", typ="G4", trida_prihlasky=9, obvody=(), adresa="", zrizovatel_verejny=True)
     assert pruvodce._shoda_zamereni(gym, profil) == 0.8
-    gym.zamereni_kody = ("informatika",)
+    gym.zamereni_kody = ("ekonomie",)
     assert pruvodce._shoda_zamereni(gym, profil) == 1.0
+
+
+def test_gymnazium_uci_prirodni_vedy_vzdycky():
+    # Fyzika, chemie, biologie jsou v RVP G povinné: gymnázium bez rozšířené
+    # výuky je „základ" (0,9), ne „nevíme" (0,8); s doloženou výukou 1,0.
+    profil = pruvodce.Profil(oblasti_zajmu=["vseobecne"], zamereni=["prirodni_vedy"])
+    gym = pruvodce.Nabidka(izo="1", redizo="1", skola="G", organizace="G",
+                           kod_kkov="79-41-K/41", obor="Gymnázium", typ="G4",
+                           trida_prihlasky=9, obvody=(), adresa="", zrizovatel_verejny=True)
+    assert pruvodce._uroven_zamereni(gym, profil) == "zaklad"
+    assert pruvodce._shoda_zamereni(gym, profil) == 0.9
+    assert any("povinném základu" in d for d in pruvodce._duvody_zamereni(gym, profil))
+    lyceum = pruvodce.Nabidka(izo="2", redizo="2", skola="L", organizace="L",
+                              kod_kkov="78-42-M/01", obor="Technické lyceum", typ="LYC",
+                              trida_prihlasky=9, obvody=(), adresa="", zrizovatel_verejny=True)
+    assert pruvodce._shoda_zamereni(lyceum, profil) == 0.8
+
+
+def test_vybaveni_bez_standardnich_polozek():
+    # Zaškrtávací seznam infoabsolventu dělal zaměření skoro každé škole.
+    sum_ = ("školní bufet, multimediální jazyková učebna, zájmový kroužek sportovní, "
+            "umělecký, technický, přírodovědný, tělocvična")
+    assert oblasti.zamereni_vybaveni(sum_) == ()
+    assert "site" in oblasti.zamereni_vybaveni(
+        sum_ + ", síťové učebny s vlastními servery, kroužek programování")
+    assert "programovani" in oblasti.zamereni_vybaveni("zájmový kroužek programování")
+
+
+def test_odkaz_na_web_skoly_neni_zamereni_web():
+    assert "web" not in oblasti.zamereni_textu("Více informací na našich webových stránkách.")
+    assert "web" in oblasti.zamereni_textu("Tvorba webových aplikací")
 
 
 def test_doporucuje_deset():

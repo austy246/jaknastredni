@@ -180,7 +180,7 @@ ZAMERENI: dict[str, tuple[str, tuple[str, ...], str]] = {
     "kyber": ("Kybernetická bezpečnost", ("it", "pravo"),
               r"kybernetick|kyberbezpeč|informační bezpečnost|bezpečnost (?:dat|it|informac)"),
     "web": ("Web a digitální marketing", ("it", "umeni", "ekonomika"),
-            r"webov|tvorb\w* web|internetov\w* aplikac|digitální marketing"),
+            r"webov\w* (?!stránk)|tvorb\w* web|internetov\w* aplikac|digitální marketing"),
     "grafika": ("Grafika, hry, multimédia", ("it", "umeni"),
                 r"herní|počítačov\w* grafik|grafick|\bgame\b|3d|multimédi|animac|"
                 r"vizuální efekt"),
@@ -208,7 +208,7 @@ ZAMERENI: dict[str, tuple[str, tuple[str, ...], str]] = {
     "gastronomie": ("Vaření, cukrařina, obsluha", ("gastro",),
                     r"kuchař|číšník|cukrář|pekař|gastronom|barman|řezník|potravinář"),
     "pravo_verejna_sprava": ("Právo a veřejná správa", ("pravo",),
-                             r"právn|veřejnosprávn|veřejn\w* správ|justič|notář"),
+                             r"právn|\bprávo\b|veřejnosprávn|veřejn\w* správ|justič|notář"),
     "bezpecnost": ("Bezpečnost, policie, záchranáři", ("pravo", "zdravi"),
                    r"bezpečnostní (?:prac|slož|služb)|policejn|požárn|záchranář|"
                    r"kriminalistik|ochrana osob"),
@@ -228,18 +228,19 @@ ZAMERENI: dict[str, tuple[str, tuple[str, ...], str]] = {
     # Humanitní, jazyky, umění
     "jazyky": ("Jazyky a dvojjazyčné studium", ("humanitni", "vseobecne"),
                r"jazyk|dvojjazyč|bilingv|anglick\w* (?:program|sekc|výuk)|"
-               r"německ\w* (?:program|sekc|výuk)|španěl|francouz|italsk"),
+               r"německ\w* (?:program|sekc|výuk)|španěl|francouz|italsk|"
+               r"international|worldwide|\bap diploma|baccalaur|mezinárodn\w* maturit"),
     "spolecenske_vedy": ("Společenské vědy, humanitní zaměření", ("humanitni", "vseobecne"),
                          r"humanitn|společensk\w* věd|filozof|psycholog|historie|"
                          r"mezinárodní vztah"),
     "prirodni_vedy": ("Přírodní vědy a matematika", ("vseobecne", "priroda", "it"),
                       r"přírodovědn|přírodní věd|matematik|fyzik|chemi|biolog|"
-                      r"technick\w* lyceum"),
+                      r"technick\w* lyceum|geograf"),
     "media": ("Média, žurnalistika, film, foto", ("umeni", "humanitni"),
               r"žurnalist|mediáln|\bmédi|filmov|fotograf|televizn|reklam|"
               r"polygraf|tisk"),
-    "umeni_design": ("Výtvarno, design, užité umění", ("umeni",),
-                     r"výtvarn|design|užit\w* umění|uměleckořemesln|restaurov|"
+    "umeni_design": ("Výtvarno, design, užité umění", ("umeni", "vseobecne"),
+                     r"výtvarn|esteticko|\bart econ\b|design|užit\w* umění|uměleckořemesln|restaurov|"
                      r"malb|sochař|kerami|sklář|šperk|odě[vy]|módn|scénograf"),
     "hudba_divadlo": ("Hudba, tanec, divadlo", ("umeni",),
                       r"hudebn|tanečn|divadeln|zpěv|konzervatoř|herect"),
@@ -248,9 +249,14 @@ ZAMERENI: dict[str, tuple[str, tuple[str, ...], str]] = {
     # gymnázium s rozšířenou informatikou, nechce tím říct „programátorskou
     # průmyslovku" — a naopak.
     "informatika": ("Informatika a programování (gymnázium, lyceum)", ("vseobecne",),
-                    r"informatik|programov|robotik|výpočetní techni"),
+                    r"informatik|programov|robotik|výpočetní techni|"
+                    r"technologie a jejich aplikac|\bit gymnázium|moderních technologi|esport"),
     "ekonomie": ("Ekonomie a podnikání (gymnázium, lyceum)", ("vseobecne",),
-                 r"ekonomi|podnikav|finanční gramotn"),
+                 r"ekonomi|\becon\b|podnikav|finanční gramotn"),
+    # V datech jen Meda (budoucí lékaři, psychologové) — ale je to přesně
+    # profilace, kvůli které se na gymnázium hlásí, a jinde ji nenajde.
+    "medicina": ("Příprava na medicínu a psychologii (gymnázium)", ("vseobecne",),
+                 r"lékař|medicín|psycholog"),
     # Příroda
     "priroda_zvirata": ("Příroda, zvířata, zemědělství", ("priroda",),
                         r"veterin|zeměděl|zahradni|chov|lesnict|ekolog|"
@@ -275,10 +281,30 @@ def zamereni_textu(*texty: str | None) -> tuple[str, ...]:
     return tuple(kod for kod, vzor in _ZAMERENI_RE.items() if vzor.search(spojeno))
 
 
+# Pole „vybavení a nabídka" z infoabsolventu je zaškrtávací seznam, který mají
+# skoro všechny školy stejný: „multimediální jazyková učebna" dělala zaměření
+# `media` a `jazyky` 89 a 80 školám, „zájmový kroužek sportovní, umělecký,
+# přírodovědný" `sport` 78 a `prirodni_vedy` 36 — u gymnázií tím zaměření
+# „z popisu školy" byla skoro jen šum. Tyhle položky se zahodí, zbytek
+# (např. „síťové učebny s vlastními servery", „kroužek programování") zůstane.
+_SUM_VYBAVENI = re.compile(
+    r"^(?:zájmov\w* kroužek\s*)?(?:sportovní|umělecký|technický|přírodovědný|jazykov\w*)?$"
+    r"|jazykov\w* učebn|multimediáln|tělocvičn|hřiště|sportovní (?:hal|areál|klub)",
+    re.IGNORECASE)
+
+
+def zamereni_vybaveni(text: str | None) -> tuple[str, ...]:
+    """`zamereni_textu` pro seznam vybavení — bez standardních položek."""
+    if not text:
+        return ()
+    polozky = [p.strip() for p in re.split(r"[,;\n]", text)]
+    return zamereni_textu(", ".join(p for p in polozky if p and not _SUM_VYBAVENI.search(p)))
+
+
 def zamereni_oblasti(oblasti_zajmu: "Iterable[str]") -> tuple[str, ...]:
     """Zaměření, na která má smysl se ptát u zvolených oblastí zájmu.
 
-    Formulář nemá uchazeči nabídnout všech 30 zaměření — jen ta, která
+    Formulář nemá uchazeči nabídnout všech 31 zaměření — jen ta, která
     patří k oblastem, co zaškrtl. Pořadí drží pořadí v `ZAMERENI`.
     """
     zvolene = set(oblasti_zajmu)

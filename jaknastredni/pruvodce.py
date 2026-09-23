@@ -845,8 +845,8 @@ def _doplnit_web_profil(conn: sqlite3.Connection, nabidky: dict[Klic, Nabidka]) 
             # kódem `18-20-M/01` učí zrovna správa sítí — v žádném číselníku
             # to není. Platí ale pro celou školu, ne pro konkrétní obor.
             nab.zamereni_skoly = tuple(sorted(set(nab.zamereni_skoly) | set(
-                oblasti.zamereni_textu(data.get("vybaveni_a_nabidka"),
-                                       data.get("doplnujici_informace")))))
+                oblasti.zamereni_vybaveni(data.get("vybaveni_a_nabidka"))
+                + oblasti.zamereni_textu(data.get("doplnujici_informace")))))
             nab.dod = nab.dod or _prvni(data, "den_otevrenych_dveri", "dny_otevrenych_dveri")
             nab.www = nab.www or data.get("www")
             nab.jazyky = nab.jazyky or data.get("cizi_jazyky")
@@ -1421,7 +1421,16 @@ def _skore_zajem(nab: Nabidka, profil: Profil) -> float:
 # neříká nic o tom, jaké gymnázium chce — srážet gymnázium za to, že nemá
 # ŠVP „programování", ho trestalo za oblast, ve které nesoutěží (a gymnázia
 # informatiku učí taky, jen jako předmět, ne jako obor).
-SHODA_ZAMERENI = {"obor": 1.0, "mimo": 1.0, "skola": 0.9, "nevime": 0.8, "jine": 0.6}
+#
+# `zaklad` = gymnázium bez doložené profilace, když uchazeč chce něco, co
+# gymnázium učí vždycky (RVP G: fyzika, chemie, biologie, matematika, dva
+# cizí jazyky, ZSV, dějepis, informatika). Není to „nevíme" — víme, že to
+# tam je, jen ne v rozšířené podobě.
+SHODA_ZAMERENI = {"obor": 1.0, "mimo": 1.0, "skola": 0.9, "zaklad": 0.9,
+                  "nevime": 0.8, "jine": 0.6}
+
+# Zaměření, která pokrývá povinný základ každého gymnázia (viz `zaklad`).
+ZAKLAD_GYMNAZIA = ("prirodni_vedy", "jazyky", "spolecenske_vedy", "informatika")
 
 # Násobek skóre zájmu pro nabídku, která se trefila **jen** do oblasti, co si
 # průvodce přidal sám (`Profil.vseobecne_taky`). Uchazeč ji nezaškrtl — je to
@@ -1473,6 +1482,8 @@ def _uroven_zamereni(nab: Nabidka, profil: Profil) -> str:
         return "mimo"
     if set(nab.zamereni_skoly) & hledane:
         return "skola"
+    if nab.typ in ("G4", "G6", "G8") and hledane & set(ZAKLAD_GYMNAZIA):
+        return "zaklad"
     if nab.zamereni_kody:
         return "jine"
     return "nevime"
@@ -1651,6 +1662,9 @@ def _duvody_zamereni(nab: Nabidka, profil: Profil) -> list[str]:
     if uroven == "skola":
         return [f"Škola {_popis_zamereni(set(nab.zamereni_skoly) & hledane)} uvádí ve svém popisu, "
                 f"ale u tohohle oboru to doložené nemáme"]
+    if uroven == "zaklad":
+        return [f"{', '.join(oblasti.popis_zamereni(k) for k in ZAKLAD_GYMNAZIA if k in hledane)} se na gymnáziu učí "
+                f"v povinném základu; rozšířenou výuku škola neuvádí"]
     return []       # co zaměření nesedí, patří mezi varování, ne mezi důvody
 
 
