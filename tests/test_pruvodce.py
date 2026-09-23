@@ -820,7 +820,8 @@ def test_zamereni_doložené_u_oboru_je_silnejsi_nez_z_popisu_skoly(conn):
 
     podle_izo = {n.izo: n for n in pruvodce.nacti_nabidky(conn)}
     s_svp, s_popisem = podle_izo["100000005"], podle_izo["100000006"]
-    assert s_svp.zamereni_kody == ("programovani",)
+    # `informatika` je gymnaziální obdoba téhož slova — sedí taky
+    assert s_svp.zamereni_kody == ("informatika", "programovani")
     assert "programovani" in s_popisem.zamereni_skoly
     assert s_popisem.zamereni_kody == ()
 
@@ -885,7 +886,7 @@ def test_export_nese_zamereni_i_ciselnik(conn):
     _s_popisem(conn, "600000005", "18-20-M/01", svp="Programování a digitální technologie")
     data = export_web.export(conn)
     podle_izo = {n["izo"]: n for n in data["nabidky"]}
-    assert podle_izo["100000005"]["zamereni_kody"] == ("programovani",)
+    assert podle_izo["100000005"]["zamereni_kody"] == ("informatika", "programovani")
     assert podle_izo["100000005"]["svp"] == "Programování a digitální technologie"
     # Regulární výrazy na web nepatří, popisky a oblasti ano.
     ciselnik = data["ciselniky"]["zamereni"]
@@ -1182,9 +1183,29 @@ def test_rezerva_drzi_v_petici_misto_pro_zvolene_oblasti():
     # Pořadí zůstává podle skóre, rezerva jen rozhoduje, kdo se vejde.
     assert [v.skore for v in top] == sorted((v.skore for v in top), reverse=True)
 
-    # Bez přidání se nerezervuje nic.
-    bez = pruvodce.Profil(trida=9, oblasti_zajmu=["it", "vseobecne"])
-    assert all(v.nabidka.typ == "G4" for v in pruvodce.vyber_top(vysledky, 5, profil=bez))
+    # Jedna zaškrtnutá oblast bez přidání -> nerezervuje se nic.
+    jen_gym = pruvodce.Profil(trida=9, oblasti_zajmu=["vseobecne"])
+    assert all(v.nabidka.typ == "G4" for v in pruvodce.vyber_top(vysledky, 5, profil=jen_gym))
+
+
+def test_kazda_zaskrtnuta_oblast_ma_mista_v_doporucenych():
+    """Zaškrtnuté IT nesmí zmizet jen proto, že gymnázia vyhrála složku typu."""
+    def vysledek(kkov, skore):
+        nab = pruvodce.Nabidka(
+            izo=f"i{skore}", redizo=f"r{skore}", skola="S", organizace=f"Š {skore}",
+            kod_kkov=kkov, obor="O", typ=oblasti.typ_oboru(kkov), trida_prihlasky=9,
+            obvody=(), adresa="", zrizovatel_verejny=True)
+        return pruvodce.Vysledek(nabidka=nab, skore=skore, slozky={}, sance=0.5,
+                                 sance_zdroj="", duvody=[], varovani=[])
+    vysledky = [vysledek("79-41-K/41", 90 - i) for i in range(12)]
+    vysledky += [vysledek("18-20-M/01", 70 - i) for i in range(5)]
+    p = pruvodce.Profil(trida=9, oblasti_zajmu=["it", "vseobecne"])
+    top = pruvodce.vyber_top(vysledky, 10, profil=p)
+    typy = [v.nabidka.typ for v in top]
+    assert len(top) == 10
+    assert typy.count("M") == 2       # natvrdo, ne REZERVA_OBLASTI
+    assert typy.count("G4") == 8
+    assert [v.skore for v in top] == sorted((v.skore for v in top), reverse=True)
 
 
 def test_rezerva_nezkrati_petici_kdyz_neni_cim_naplnit():
@@ -1215,3 +1236,41 @@ def test_export_nese_konstanty_sirky(conn):
     assert k["prah_siroky_vyber"] == oblasti.PRAH_SIROKY_VYBER
     assert k["zajem_pridana_oblast"] == pruvodce.ZAJEM_PRIDANA_OBLAST
     assert k["rezerva_zvolenych"] == pruvodce.REZERVA_ZVOLENYCH
+
+
+def test_it_zamereni_nesrazi_gymnazium():
+    # Programování zaškrtnuté u IT neříká nic o tom, jaké gymnázium chce:
+    # gymnázium bez doloženého zaměření nesmí dostat srážku „nevíme" (0,8).
+    profil = pruvodce.Profil(oblasti_zajmu=["vseobecne", "it"], zamereni=["programovani"])
+    gym = pruvodce.Nabidka(izo="1", redizo="1", skola="G", organizace="G",
+                           kod_kkov="79-41-K/41", obor="Gymnázium", typ="G4", trida_prihlasky=9, obvody=(), adresa="", zrizovatel_verejny=True)
+    it = pruvodce.Nabidka(izo="2", redizo="2", skola="S", organizace="S",
+                          kod_kkov="18-20-M/01", obor="Informační technologie", typ="M", trida_prihlasky=9, obvody=(), adresa="", zrizovatel_verejny=True)
+    assert pruvodce._uroven_zamereni(gym, profil) == "mimo"
+    assert pruvodce._shoda_zamereni(gym, profil) == 1.0
+    assert pruvodce._uroven_zamereni(it, profil) == "nevime"
+    assert pruvodce._shoda_zamereni(it, profil) == 0.8
+
+
+def test_gymnazialni_zamereni_srazi_gymnazium_bez_nej():
+    profil = pruvodce.Profil(oblasti_zajmu=["vseobecne"], zamereni=["informatika"])
+    gym = pruvodce.Nabidka(izo="1", redizo="1", skola="G", organizace="G",
+                           kod_kkov="79-41-K/41", obor="Gymnázium", typ="G4", trida_prihlasky=9, obvody=(), adresa="", zrizovatel_verejny=True)
+    assert pruvodce._shoda_zamereni(gym, profil) == 0.8
+    gym.zamereni_kody = ("informatika",)
+    assert pruvodce._shoda_zamereni(gym, profil) == 1.0
+
+
+def test_doporucuje_deset():
+    assert pruvodce.POCET_DOPORUCENYCH == 10
+
+
+def test_uzky_vyber_vseobecneho_netlaci_od_gymnazia():
+    # „Jen všeobecné vzdělání + jedno zaměření" je úzký výběr, ale neznamená
+    # „vím přesně, chci obor" — šířka tu nesmí nahradit `rozhodnuto`.
+    profil = pruvodce.Profil(oblasti_zajmu=["vseobecne"], zamereni=["informatika"],
+                             rozhodnuto="otevreno")
+    assert profil.sirka is None
+    pref = oblasti.preference_typu(profil.osobnostni, profil.sirka)
+    assert pref["G4"] == 1.0
+    assert pruvodce.Profil(oblasti_zajmu=["it"], zamereni=["programovani"]).sirka is not None

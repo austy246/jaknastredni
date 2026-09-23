@@ -690,6 +690,9 @@
   // si přidaná oblast sama zvyšovala šířku, kterou byla vyvolaná.
   function sirkaVyberu() {
     if (!stav.oblasti.length) return null;
+    // Se zaškrtnutým všeobecným vzděláním šířka nenahrazuje `rozhodnuto`
+    // (Python: Profil.sirka) — úzký výběr tu znamená „chci gymnázium".
+    if (stav.oblasti.indexOf("vseobecne") >= 0) return null;
     var nabizena = nabizenaZamereni(stav.oblasti);
     if (!nabizena.length) return null;
     var zvolena = stav.zamereni.filter(function (k) { return nabizena.indexOf(k) >= 0; });
@@ -735,6 +738,13 @@
     var hledane = hledanaZamereni();
     if (!hledane.length) return "obor";        // neptáme se -> nic nesrážíme
     if (protina(n.zamereni_kody, hledane).length) return "obor";
+    // Srážet jen za zaměření z oblasti, přes kterou nabídka prošla — IT
+    // zaměření nemá co říct o gymnáziu (Python: _uroven_zamereni, "mimo").
+    var ucinne = ucinneOblasti();
+    var shoda = oblastiOboru(n.kod_kkov).filter(function (x) { return ucinne.indexOf(x) >= 0; });
+    if (!hledane.some(function (k) {
+      return C.zamereni[k].oblasti.some(function (o) { return shoda.indexOf(o) >= 0; });
+    })) return "mimo";
     if (protina(n.zamereni_skoly, hledane).length) return "skola";
     return (n.zamereni_kody && n.zamereni_kody.length) ? "jine" : "nevime";
   }
@@ -916,44 +926,43 @@
   }
 
   function vyberTop(vysledky, pocet) {
-    // Vynechaný obor téže školy nesmí zmizet beze stopy — přidá se jako
-    // poznámka k té zobrazené, jinak se uchazeč nedozví, že škola nabízí
-    // i obor, který chce víc (nebo na který má vyšší šanci).
-    var out = [], zobrazena = {}, odlozene = [];
-    var rezervovat = stav.vseobecneTaky ? Math.min(K.rezerva_zvolenych, pocet) : 0;
-    function jeZvolena(v) {
-      return oblastiOboru(v.n.kod_kkov).some(function (o) { return stav.oblasti.indexOf(o) >= 0; });
-    }
-    for (var i = 0; i < vysledky.length; i++) {
-      var v = vysledky[i], r = v.n.redizo;
-      if (zobrazena[r]) {
-        var cil = zobrazena[r];
-        if (!cil.dalsiObory) cil.dalsiObory = [];
-        if (cil.dalsiObory.length < 3) {
-          var sance = v.sance == null ? "šance neznámá" : "šance " + Math.round(v.sance * 100) + " %";
-          cil.dalsiObory.push(oborPlny(v.n) + " (" + v.n.kod_kkov + ", " + sance + ")");
-        }
-        continue;
+    // Jedna nabídka na školu. Vynechaný obor téže školy nesmí zmizet beze
+    // stopy — přidá se jako poznámka k té zobrazené (Python: vyber_top).
+    var kandidati = [], prvni = {};
+    vysledky.forEach(function (v) {
+      var hlavni = prvni[v.n.redizo];
+      if (!hlavni) { prvni[v.n.redizo] = v; kandidati.push(v); return; }
+      if (!hlavni.dalsiObory) hlavni.dalsiObory = [];
+      if (hlavni.dalsiObory.length < 3) {
+        var sance = v.sance == null ? "šance neznámá" : "šance " + Math.round(v.sance * 100) + " %";
+        hlavni.dalsiObory.push(oborPlny(v.n) + " (" + v.n.kod_kkov + ", " + sance + ")");
       }
-      if (out.length >= pocet) continue;
-      // Když si průvodce přidal všeobecné vzdělání sám, drží se poslední
-      // `rezerva_zvolenych` míst pro oblasti, které uchazeč doopravdy
-      // zaškrtl. Složka typu se normalizuje přes kandidáty, takže jakmile
-      // gymnázium porazí průmyslovku, porazí ji *každé* — a kdo napsal
-      // „baví mě IT", dostal pětici gymnázií a ani jednu průmyslovku.
-      if (!jeZvolena(v) && rezervovat && out.length >= pocet - rezervovat) {
-        odlozene.push(v);
-        continue;
-      }
-      zobrazena[r] = v;
-      out.push(v);
-      if (jeZvolena(v) && rezervovat) rezervovat--;
+    });
+    function sedi(v, podminka) {
+      return oblastiOboru(v.n.kod_kkov).some(function (o) { return podminka.indexOf(o) >= 0; });
     }
-    // Rezerva se nemusí naplnit (ve zvolených oblastech nemusí být dost
-    // škol) — odložené se pak vrátí, ať pětice není kratší.
-    for (var j = 0; j < odlozene.length && out.length < pocet; j++) out.push(odlozene[j]);
-    return out.sort(function (a, b) { return b.skore - a.skore; });
+    // Rezervy: když si průvodce přidal všeobecné vzdělání sám, mají jistá
+    // místa oblasti, které uchazeč doopravdy zaškrtl; při víc zaškrtnutých
+    // oblastech má jistá místa každá z nich — jinak normalizovaná složka
+    // typu nechá jeden typ školy vymést celou desítku.
+    var zvolene = stav.oblasti.filter(function (o, i, a) { return a.indexOf(o) === i; });
+    var rezervy = [];
+    if (stav.vseobecneTaky) rezervy.push([zvolene, K.rezerva_zvolenych]);
+    if (zvolene.length > 1) zvolene.forEach(function (o) { rezervy.push([[o], K.rezerva_oblasti]); });
+    var vybrane = [];
+    rezervy.forEach(function (r) {
+      var uz = vybrane.filter(function (v) { return sedi(v, r[0]); }).length;
+      for (var i = 0; i < kandidati.length && uz < r[1]; i++) {
+        var v = kandidati[i];
+        if (sedi(v, r[0]) && vybrane.indexOf(v) < 0) { vybrane.push(v); uz++; }
+      }
+    });
+    vybrane = vybrane.sort(function (a, b) { return b.skore - a.skore; }).slice(0, pocet);
+    for (var j = 0; j < kandidati.length && vybrane.length < pocet; j++)
+      if (vybrane.indexOf(kandidati[j]) < 0) vybrane.push(kandidati[j]);
+    return vybrane.sort(function (a, b) { return b.skore - a.skore; });
   }
+
   function portfolio(vysledky) {
     var out = {}, pouzite = {};
     Object.keys(K.pasma_portfolia).forEach(function (role) {
@@ -1417,7 +1426,7 @@
     // odpověď. Bez ní ale není poznat, proč složka `typ` řadí, jak řadí.
     var sirka = sirkaVyberu(), radek = document.getElementById("ladeni-sirka");
     if (sirka == null) {
-      radek.textContent = "Šířka výběru: nezměřitelná (žádná oblast, nebo k ní žádná zaměření).";
+      radek.textContent = "Šířka výběru: nepoužitá (žádná oblast, zaškrtnuté všeobecné vzdělání, nebo k oblastem žádná zaměření).";
     } else {
       var tab = tabulkaSirky(sirka);
       var klicove = ["G4", "LYC", "M", "H"].filter(function (x) { return tab[x] !== undefined; });
@@ -1736,7 +1745,7 @@
 
     var top = document.getElementById("top5");
     top.textContent = "";
-    vyberTop(vysledky, 5).forEach(function (v) { top.appendChild(karta(v)); });
+    vyberTop(vysledky, K.pocet_doporucenych).forEach(function (v) { top.appendChild(karta(v)); });
 
     var pf = document.getElementById("portfolio");
     pf.textContent = "";

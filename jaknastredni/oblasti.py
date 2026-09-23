@@ -138,8 +138,13 @@ OSOBNOSTNI_OTAZKY: dict[str, tuple[str, dict[str, tuple[str, dict[str, float]]]]
         "hodne":    ("Hodně — teorie u tabule mě nebaví",
                      {"G8": 0.05, "G6": 0.05, "G4": 0.05, "LYC": 0.3, "M": 0.6, "L0": 1.0,
                       "H": 1.0, "E": 1.0, "J": 0.8}),
+        # Gymnázium tu mělo 0,5 — půl cesty k „hodně praxe". Jenže kdo
+        # odpoví „něco od obojího", gymnázium tím nevylučuje (laboratoře,
+        # projekty, informatika tam jsou), a protože se typ normalizuje
+        # proti kandidátům, dělalo z 0,5 proti lyceu 0,9 plnou nulu:
+        # s „jen všeobecné vzdělání" vyšlo deset lyceí a žádné gymnázium.
         "stredne":  ("Něco od obojího",
-                     {"G8": 0.5, "G6": 0.5, "G4": 0.5, "LYC": 0.9, "M": 1.0, "L0": 0.8,
+                     {"G8": 0.75, "G6": 0.75, "G4": 0.75, "LYC": 0.9, "M": 1.0, "L0": 0.8,
                       "H": 0.5, "E": 0.4, "J": 0.4}),
         "teorie":   ("Radši se učím a přemýšlím",
                      {"G8": 1.0, "G6": 1.0, "G4": 1.0, "LYC": 0.9, "M": 0.6, "L0": 0.2,
@@ -238,6 +243,14 @@ ZAMERENI: dict[str, tuple[str, tuple[str, ...], str]] = {
                      r"malb|sochař|kerami|sklář|šperk|odě[vy]|módn|scénograf"),
     "hudba_divadlo": ("Hudba, tanec, divadlo", ("umeni",),
                       r"hudebn|tanečn|divadeln|zpěv|konzervatoř|herect"),
+    # Zaměření gymnázií a lyceí. Ptáme se na ně u „Všeobecného vzdělání",
+    # protože IT/ekonomická zaměření výš se týkají odborných oborů: kdo chce
+    # gymnázium s rozšířenou informatikou, nechce tím říct „programátorskou
+    # průmyslovku" — a naopak.
+    "informatika": ("Informatika a programování (gymnázium, lyceum)", ("vseobecne",),
+                    r"informatik|programov|robotik|výpočetní techni"),
+    "ekonomie": ("Ekonomie a podnikání (gymnázium, lyceum)", ("vseobecne",),
+                 r"ekonomi|podnikav|finanční gramotn"),
     # Příroda
     "priroda_zvirata": ("Příroda, zvířata, zemědělství", ("priroda",),
                         r"veterin|zeměděl|zahradni|chov|lesnict|ekolog|"
@@ -265,7 +278,7 @@ def zamereni_textu(*texty: str | None) -> tuple[str, ...]:
 def zamereni_oblasti(oblasti_zajmu: "Iterable[str]") -> tuple[str, ...]:
     """Zaměření, na která má smysl se ptát u zvolených oblastí zájmu.
 
-    Formulář nemá uchazeči nabídnout všech 28 zaměření — jen ta, která
+    Formulář nemá uchazeči nabídnout všech 30 zaměření — jen ta, která
     patří k oblastem, co zaškrtl. Pořadí drží pořadí v `ZAMERENI`.
     """
     zvolene = set(oblasti_zajmu)

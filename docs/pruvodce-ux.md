@@ -420,7 +420,7 @@ učí v Praze desítky škol a každá něco jiného:
 
 Rozdíl, podle kterého se uchazeč rozhoduje, je **jen v těchhle textech** —
 v žádném číselníku není. Proto se zaměření hledá klíčovými slovy
-(`oblasti.ZAMERENI`, 28 zaměření) ve čtyřech polích: název oboru z rejstříku,
+(`oblasti.ZAMERENI`, 30 zaměření) ve čtyřech polích: název oboru z rejstříku,
 `svp_nazev` (infoabsolvent), `zamereni_oboru` (CERMAT) a volný popis školy
 (`doplnujici_informace` z Atlasu, `vybaveni_a_nabidka` z infoabsolventu).
 
@@ -445,6 +445,34 @@ oblast × zaměření jich **36 (78 %) změní aspoň jednu školu v pětici**.
 
 Zaměření nic nefiltruje, jen přeskládá pořadí — a počítá se jen tehdy, když
 patří k některé ze zvolených oblastí (`Profil.hledana_zamereni`).
+
+**Srážka jen v oblasti, kde nabídka soutěží** (září 2026). Zaměření
+„Programování" zaškrtnuté u IT dřív srazilo i každé gymnázium (nemá ŠVP
+„programování" → úroveň `nevime`, ×0,8), přestože gymnázium do IT vůbec
+nepatří a informatiku učí jako předmět. Teď se sráží jen za zaměření, jehož
+oblast je mezi oblastmi, přes které nabídka prošla; jinak je úroveň `mimo`
+(×1,0). Shoda u oboru platí vždy, takže gymnázium s „programováním" v ŠVP
+dostane důvod na kartě. Pro gymnázia a lycea přibyla vlastní zaměření
+u oblasti „Všeobecné vzdělání": `informatika` a `ekonomie`.
+
+Na profilu uchazeče se zaškrtnutým všeobecným vzděláním, humanitními obory
+a IT (programování + elektro), s odpovědí „něco od obojího" a skóre ~120
+nebylo v první desítce žádné gymnázium (nejlepší až 24.). Kromě srážky za
+zaměření to dělaly ještě dvě věci:
+
+- **Šířka výběru přebíjela explicitní „chci si nechat otevřené dveře"**
+  (viz „Šířka výběru"). Kdo zaškrtne všeobecné vzdělání, na tuhle otázku
+  už odpověděl sám; úzký výběr „jen všeobecné + informatika" navíc
+  znamená „chci gymnázium", ne „vím přesně, chci obor". `Profil.sirka` je
+  proto se zaškrtnutým `vseobecne` None. Bez toho vyšlo profilu „jen
+  všeobecné + informatika" deset lyceí a žádné gymnázium.
+- **„Něco od obojího" dávalo gymnáziu 0,5** proti lyceu 0,9. Protože se
+  typ normalizuje proti kandidátům, byla z toho plná nula. Nově 0,75.
+
+Aby se nepřehouplo na opačnou stranu (deset gymnázií, žádná průmyslovka
+u uchazeče, který si IT zaškrtl), má při víc zaškrtnutých oblastech každá
+z nich v doporučených `REZERVA_OBLASTI` = 2 místa (`vyber_top`). Doporučuje
+se nově deset škol (`POCET_DOPORUCENYCH`), ne pět.
 
 ### Co tahle cesta neumí
 

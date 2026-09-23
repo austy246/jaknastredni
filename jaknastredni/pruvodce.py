@@ -292,7 +292,16 @@ class Profil:
 
     @property
     def sirka(self) -> float | None:
-        """Jak široce má uchazeč zaškrtnuto (0–1), nebo None = nezměřitelné."""
+        """Jak široce má uchazeč zaškrtnuto (0–1), nebo None = nezaměřujeme.
+
+        Kdo zaškrtl „Všeobecné vzdělání", na otázku `rozhodnuto` už odpověděl
+        sám a šířka ji nahrazovat nesmí: úzký výběr u něj neznamená „vím
+        přesně, chci obor", ale naopak „chci gymnázium". S šířkou vyšlo
+        uchazeči, který zaškrtl jen všeobecné vzdělání, deset lyceí a žádné
+        gymnázium (tabulka „vím přesně" dává gymnáziu 0,3).
+        """
+        if "vseobecne" in self.oblasti_zajmu:
+            return None
         return oblasti.sirka_vyberu(self.oblasti_zajmu, self.zamereni)
 
     @property
@@ -1406,7 +1415,13 @@ def _skore_zajem(nab: Nabidka, profil: Profil) -> float:
 # u oboru nechává skóre být, shoda jen v popisu školy ho srazí jemně
 # (škola to učí, ale u tohohle oboru to doložené nemáme) a doložené **jiné**
 # zaměření hodně — takový obor se jmenuje stejně, ale učí něco jiného.
-SHODA_ZAMERENI = {"obor": 1.0, "skola": 0.9, "nevime": 0.8, "jine": 0.6}
+#
+# `mimo` = uchazeč sice zaměření vybral, ale žádné z nich nepatří do oblasti,
+# kvůli které tahle nabídka prošla. Zaměření „Programování" zaškrtnuté u IT
+# neříká nic o tom, jaké gymnázium chce — srážet gymnázium za to, že nemá
+# ŠVP „programování", ho trestalo za oblast, ve které nesoutěží (a gymnázia
+# informatiku učí taky, jen jako předmět, ne jako obor).
+SHODA_ZAMERENI = {"obor": 1.0, "mimo": 1.0, "skola": 0.9, "nevime": 0.8, "jine": 0.6}
 
 # Násobek skóre zájmu pro nabídku, která se trefila **jen** do oblasti, co si
 # průvodce přidal sám (`Profil.vseobecne_taky`). Uchazeč ji nezaškrtl — je to
@@ -1416,9 +1431,18 @@ SHODA_ZAMERENI = {"obor": 1.0, "skola": 0.9, "nevime": 0.8, "jine": 0.6}
 # nedostal ani jednu průmyslovku — to je druhý extrém, ne oprava.
 ZAJEM_PRIDANA_OBLAST = 0.75
 
-# Kolik z pětice se drží pro oblasti, které uchazeč sám zaškrtl, když si
+# Kolik nabídek průvodce doporučí (karty na webu, výchozí `--pocet`). Bylo
+# pět; s pěti se pod IT obory nevešlo ani jedno gymnázium, i když byla
+# hned za nimi.
+POCET_DOPORUCENYCH = 10
+
+# Kolik z doporučených se drží pro oblasti, které uchazeč sám zaškrtl, když si
 # průvodce přidal všeobecné vzdělání. Viz `vyber_top`.
 REZERVA_ZVOLENYCH = 2
+
+# Kolik z doporučených má jisté každá zaškrtnutá oblast, když jich uchazeč
+# zaškrtl víc. Viz `vyber_top`.
+REZERVA_OBLASTI = 2
 
 
 def _shoda_zamereni(nab: Nabidka, profil: Profil) -> float:
@@ -1430,12 +1454,23 @@ def _shoda_zamereni(nab: Nabidka, profil: Profil) -> float:
     hledane = profil.hledana_zamereni
     if not hledane:
         return 1.0
-    return SHODA_ZAMERENI[_uroven_zamereni(nab, hledane)]
+    return SHODA_ZAMERENI[_uroven_zamereni(nab, profil)]
 
 
-def _uroven_zamereni(nab: Nabidka, hledane: set[str]) -> str:
+def _uroven_zamereni(nab: Nabidka, profil: Profil) -> str:
+    """Úroveň shody v zaměření (klíč `SHODA_ZAMERENI`).
+
+    Srážet se smí jen za zaměření z oblasti, přes kterou nabídka prošla
+    (viz `mimo`). Shoda u oboru ale platí vždycky — gymnázium s ŠVP
+    „programování" má dostat důvod na kartě i uchazeči, který programování
+    zaškrtl u IT.
+    """
+    hledane = profil.hledana_zamereni
     if set(nab.zamereni_kody) & hledane:
         return "obor"
+    shoda = set(oblasti.oblasti_oboru(nab.kod_kkov)) & set(profil.ucinne_oblasti)
+    if not any(shoda & set(oblasti.ZAMERENI[k][1]) for k in hledane):
+        return "mimo"
     if set(nab.zamereni_skoly) & hledane:
         return "skola"
     if nab.zamereni_kody:
@@ -1608,7 +1643,7 @@ def _duvody_zamereni(nab: Nabidka, profil: Profil) -> list[str]:
     hledane = profil.hledana_zamereni
     if not hledane:
         return [f"Škola u oboru uvádí ŠVP \u201e{nab.svp}\u201c"] if nab.svp and nab.svp != nab.obor else []
-    uroven = _uroven_zamereni(nab, hledane)
+    uroven = _uroven_zamereni(nab, profil)
     if uroven == "obor":
         kde = (f"ŠVP \u201e{nab.svp}\u201c" if nab.svp and nab.svp != nab.obor
                else "v popisu oboru")
@@ -1624,7 +1659,7 @@ def _varovani_zamereni(nab: Nabidka, profil: Profil) -> list[str]:
     hledane = profil.hledana_zamereni
     if not hledane:
         return []
-    uroven = _uroven_zamereni(nab, hledane)
+    uroven = _uroven_zamereni(nab, profil)
     if uroven == "jine":
         return [f"Obor je podle popisu spíš {_popis_zamereni(nab.zamereni_kody)}, "
                 f"ne to zaměření, které jsi vybral."]
@@ -1682,7 +1717,7 @@ def _varovani(nab: Nabidka, profil: Profil, p: float | None) -> list[str]:
     return out
 
 
-def vyber_top(vysledky: list[Vysledek], pocet: int = 5, max_na_skolu: int = 1,
+def vyber_top(vysledky: list[Vysledek], pocet: int = POCET_DOPORUCENYCH, max_na_skolu: int = 1,
               profil: Profil | None = None) -> list[Vysledek]:
     """Prvních `pocet` nabídek, ale nejvýš `max_na_skolu` od jedné školy.
 
@@ -1709,45 +1744,53 @@ def vyber_top(vysledky: list[Vysledek], pocet: int = 5, max_na_skolu: int = 1,
     *každé* gymnázium — a kdo napsal „baví mě IT", dostal pětici gymnázií a
     ani jednu průmyslovku. Smysl přidání je dát obojí vedle sebe na
     porovnání, ne jedno nahradit druhým.
+
+    Podobně při víc zaškrtnutých oblastech má každá z nich jisté
+    `REZERVA_OBLASTI` míst. Kdo zaškrtl všeobecné vzdělání i IT a na
+    otázku „víš, čemu se chceš věnovat" odpověděl „nechat otevřené dveře",
+    dostal deset gymnázií — IT, které si sám zaškrtl, zmizelo úplně.
     """
-    rezervovat = 0
-    if profil is not None and profil.vseobecne_taky:
-        rezervovat = min(REZERVA_ZVOLENYCH, pocet)
-    zvolene = set(profil.oblasti_zajmu) if profil is not None else set()
-
-    def je_zvolena(v: Vysledek) -> bool:
-        return bool(set(oblasti.oblasti_oboru(v.nabidka.kod_kkov)) & zvolene)
-
-    out: list[Vysledek] = []
-    zobrazene: dict[str, list[Vysledek]] = {}
-    odlozene: list[Vysledek] = []       # vytlačené rezervou, kdyby nedošlo naplnění
+    # Jedna nabídka na školu; další obory téže školy do `dalsi_obory`.
+    kandidati: list[Vysledek] = []
+    prvni: dict[str, Vysledek] = {}
     for v in vysledky:
-        redizo = v.nabidka.redizo
-        uz_zobrazene = zobrazene.setdefault(redizo, [])
-        if len(uz_zobrazene) >= max_na_skolu:
-            posledni = uz_zobrazene[-1]
-            if len(posledni.dalsi_obory) < 3:
-                sance = "šance neznámá" if v.sance is None else f"šance {v.sance * 100:.0f} %"
-                posledni.dalsi_obory.append(
-                    f"{v.nabidka.obor_plny} ({v.nabidka.kod_kkov}, {sance})")
-            continue
-        if len(out) >= pocet:
-            continue
-        # Poslední `rezervovat` míst patří zvoleným oblastem. Nabídka mimo ně
-        # se odloží — a vrátí se na konci, pokud se rezerva nenaplnila (v
-        # zvolených oblastech prostě nemusí být dost škol).
-        if not je_zvolena(v) and rezervovat and len(out) >= pocet - rezervovat:
-            odlozene.append(v)
-            continue
-        uz_zobrazene.append(v)
-        out.append(v)
-        if je_zvolena(v) and rezervovat:
-            rezervovat -= 1
-    for v in odlozene:
-        if len(out) >= pocet:
+        hlavni = prvni.get(v.nabidka.redizo)
+        if hlavni is None:
+            prvni[v.nabidka.redizo] = v
+            kandidati.append(v)
+        elif len(hlavni.dalsi_obory) < 3:
+            sance = "šance neznámá" if v.sance is None else f"šance {v.sance * 100:.0f} %"
+            hlavni.dalsi_obory.append(f"{v.nabidka.obor_plny} ({v.nabidka.kod_kkov}, {sance})")
+
+    def oblasti_nabidky(v: Vysledek) -> set[str]:
+        return set(oblasti.oblasti_oboru(v.nabidka.kod_kkov))
+
+    # Rezervy: (podmínka, kolik). Berou se nejlepší kandidáti, co podmínku
+    # splňují; zbytek míst se doplní podle skóre.
+    rezervy: list[tuple[set[str], int]] = []
+    if profil is not None:
+        zvolene = list(dict.fromkeys(profil.oblasti_zajmu))
+        if profil.vseobecne_taky:
+            rezervy.append((set(zvolene), REZERVA_ZVOLENYCH))
+        if len(zvolene) > 1:
+            rezervy.extend(({o}, REZERVA_OBLASTI) for o in zvolene)
+    vybrane: list[Vysledek] = []
+    for podminka, kolik in rezervy:
+        splnuji = [v for v in kandidati if oblasti_nabidky(v) & podminka]
+        uz = sum(1 for v in vybrane if oblasti_nabidky(v) & podminka)
+        for v in splnuji:
+            if uz >= kolik:
+                break
+            if v not in vybrane:
+                vybrane.append(v)
+                uz += 1
+    vybrane = sorted(vybrane, key=lambda v: -v.skore)[:pocet]
+    for v in kandidati:
+        if len(vybrane) >= pocet:
             break
-        out.append(v)
-    return sorted(out, key=lambda v: -v.skore)
+        if v not in vybrane:
+            vybrane.append(v)
+    return sorted(vybrane, key=lambda v: -v.skore)
 
 
 def poznamky(profil: Profil, vysledky: list[Vysledek],
@@ -2152,7 +2195,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--db", default="data/jaknastredni.db", help="cesta k databázi")
     ap.add_argument("--profil", help="JSON s odpověďmi (jinak se průvodce zeptá interaktivně)")
-    ap.add_argument("--pocet", type=int, default=5, help="kolik škol zobrazit (výchozí 5)")
+    ap.add_argument("--pocet", type=int, default=POCET_DOPORUCENYCH,
+                    help=f"kolik škol zobrazit (výchozí {POCET_DOPORUCENYCH})")
     ap.add_argument("--json", action="store_true", help="výstup jako JSON místo karet")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args(argv)
@@ -2219,7 +2263,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n{veta}")
         if navrh and not profil.zlepseni_bodu:
             print(f"  (Spusť znovu s \"zlepseni_bodu\": {navrh:.0f} v profilu, "
-                  "ať vidíš pětici pro ten cíl.)")
+                  "ať vidíš doporučení pro ten cíl.)")
 
     print(f"\n=== Vyhovuje {len(vysledky)} nabídek, tady je {len(nejlepsi)} nejlepších ===")
     for h in hlasky:
@@ -2230,7 +2274,7 @@ def main(argv: list[str] | None = None) -> int:
     scenare = scenare_zlepseni(profil, [v.nabidka for v in nejlepsi])
     if scenare:
         print("\n=== Co udělá příprava ===")
-        print("Šance u pětice výše podle toho, o kolik bodů se zlepšíš "
+        print("Šance u doporučených škol výše podle toho, o kolik bodů se zlepšíš "
               "v KAŽDÉM předmětu (z 50):")
         hlavicka = " " * 40 + "".join(f"{f'+{k:.0f} b.':>10}" for k, _, _ in scenare)
         print(hlavicka)

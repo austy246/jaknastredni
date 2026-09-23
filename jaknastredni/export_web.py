@@ -117,6 +117,8 @@ def export(conn) -> dict[str, Any]:
             "sance_z_poptavky": pruvodce.SANCE_Z_POPTAVKY,
             "zajem_pridana_oblast": pruvodce.ZAJEM_PRIDANA_OBLAST,
             "rezerva_zvolenych": pruvodce.REZERVA_ZVOLENYCH,
+            "pocet_doporucenych": pruvodce.POCET_DOPORUCENYCH,
+            "rezerva_oblasti": pruvodce.REZERVA_OBLASTI,
             "vaha_podilu_zamereni": oblasti.VAHA_PODILU_ZAMERENI,
             "sirka_rozhodnuto": oblasti.SIRKA_ROZHODNUTO,
             "sirka_otevreno": oblasti.SIRKA_OTEVRENO,
