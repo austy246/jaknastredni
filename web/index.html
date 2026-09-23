@@ -164,7 +164,7 @@
   .sance-pas { height: 7px; background: var(--surface-2); position: relative; overflow: hidden; }
   .sance-pas i { position: absolute; inset-block: 0; left: 0; display: block; background: linear-gradient(90deg, var(--accent), var(--accent) 70%, color-mix(in srgb, var(--accent) 35%, transparent)); }
 
-  /* osa bodů 0–200 s hranicemi po letech a skórem uchazeče */
+  /* osa bodů (výřez kolem hranic a skóru) s hranicemi po letech a skórem uchazeče */
   .osa { display: grid; gap: 6px; }
   .osa-plocha { position: relative; height: 58px; background: var(--surface-2); }
   .osa-plocha .rok { position: absolute; inset-block: 0; width: 2px; background: var(--line-strong); }
@@ -1154,30 +1154,48 @@
     d.appendChild(el("span", "detail", detail || ""));
     return d;
   }
+  // Osa se přiblíží na to, co je na ní k vidění: od nejnižší hodnoty
+  // (hranice nebo tvůj skór) −10 % po nejvyšší +10 %, v mezích 0–200.
+  // Na celé škále 0–200 se hranice 92 a 106 slévaly do jednoho místa.
+  var OSA_OKRAJ = 0.10, OSA_MIN_ROZPETI = 20;
+  function osaRozsah(hodnoty) {
+    var od = Math.max(0, Math.floor(Math.min.apply(null, hodnoty) * (1 - OSA_OKRAJ)));
+    var po = Math.min(200, Math.ceil(Math.max.apply(null, hodnoty) * (1 + OSA_OKRAJ)));
+    if (po - od < OSA_MIN_ROZPETI) {           // jediná hodnota -> aspoň ±10 b.
+      var stred = (od + po) / 2;
+      od = Math.max(0, Math.floor(stred - OSA_MIN_ROZPETI / 2));
+      po = Math.min(200, od + OSA_MIN_ROZPETI);
+    }
+    return [od, po];
+  }
   function osa(h) {
     var box = el("div", "osa");
     var plocha = el("div", "osa-plocha");
-    Object.keys(h).map(Number).sort().forEach(function (rok) {
-      var pozice = Math.max(0, Math.min(99, h[rok] / 200 * 100));
+    var skor = (stav.skorCj != null && stav.skorMa != null) ? stav.skorCj + stav.skorMa : null;
+    var roky = Object.keys(h).map(Number).sort();
+    var hodnoty = roky.map(function (r) { return h[r]; });
+    if (skor != null) hodnoty.push(skor);
+    var rozsah = osaRozsah(hodnoty), od = rozsah[0], po = rozsah[1];
+    function pozice(x) { return Math.max(0, Math.min(99, (x - od) / (po - od) * 100)); }
+    roky.forEach(function (rok) {
       var t = el("span", "rok");
-      t.style.left = pozice + "%";
+      t.style.left = pozice(h[rok]) + "%";
       var popisek = el("b", null, rok + ": " + Math.round(h[rok]));
-      if (pozice > 62) { popisek.style.left = "auto"; popisek.style.right = "4px"; }
+      if (pozice(h[rok]) > 62) { popisek.style.left = "auto"; popisek.style.right = "4px"; }
       t.appendChild(popisek);
       plocha.appendChild(t);
     });
-    var skor = (stav.skorCj != null && stav.skorMa != null) ? stav.skorCj + stav.skorMa : null;
     if (skor != null) {
       var ja = el("span", "ja");
-      ja.style.left = Math.max(0, Math.min(99, skor / 200 * 100)) + "%";
-      ja.appendChild(el("b", null, "ty: " + skor));
+      ja.style.left = pozice(skor) + "%";
+      ja.appendChild(el("b", null, "ty: " + Math.round(skor)));
       plocha.appendChild(ja);
     }
     box.appendChild(plocha);
     var popis = el("div", "osa-popis");
-    popis.appendChild(el("span", null, "0 b."));
-    popis.appendChild(el("span", null, "hranice přijetí po letech (ČJ + MA, 0–200 b.)"));
-    popis.appendChild(el("span", null, "200 b."));
+    popis.appendChild(el("span", null, od + " b."));
+    popis.appendChild(el("span", null, "hranice přijetí po letech (ČJ + MA, výřez " + od + "–" + po + " z 0–200 b.)"));
+    popis.appendChild(el("span", null, po + " b."));
     box.appendChild(popis);
     return box;
   }
