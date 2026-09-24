@@ -1417,3 +1417,101 @@ def test_posun_proti_podobnym_odecte_prumer_skupiny(conn):
     # posuny 20, 10, 10, 10, 10 -> průměr 12 -> první +8, ostatní −2
     assert podle["100000020"].posun_proti_podobnym == pytest.approx(8.0)
     assert podle["100000021"].posun_proti_podobnym == pytest.approx(-2.0)
+
+
+# --------------------------------------------------------------------------
+# Zlepšení a návrh přihlášek podle typu (profil 15 + 25 bodů, zadané +20
+# v každém předmětu místo +20 celkem — šance vyšly pro 160 z 200 místo 120)
+# --------------------------------------------------------------------------
+
+def _vysledek(redizo: str, typ: str, sance: float, skore: float) -> pruvodce.Vysledek:
+    nab = pruvodce.Nabidka(
+        izo="1" + redizo, redizo=redizo, skola="Škola", organizace=f"Škola {redizo}",
+        kod_kkov={"M": "18-20-M/01", "H": "26-57-H/01"}[typ], obor="Obor", typ=typ,
+        trida_prihlasky=9, obvody=("Praha 4",), adresa="Ulice 1", zrizovatel_verejny=True)
+    return pruvodce.Vysledek(nabidka=nab, skore=skore, slozky={}, sance=sance,
+                             sance_zdroj="test", duvody=[], varovani=[])
+
+
+VYSOKA = dict(trida=9, po_skole="vysoka", rozhodnuto="obor", praxe="stredne")
+
+
+def test_sedici_typy_uchazece_na_vysokou():
+    sedi = pruvodce.Profil(**VYSOKA).sedici_typy
+    assert "M" in sedi and "H" not in sedi
+    # Bez odpovědí se podle typu nevybírá.
+    assert pruvodce.Profil(trida=9).sedici_typy == set()
+
+
+def test_portfolio_nedava_sen_v_typu_ktery_nesedi():
+    """Regrese: uchazeči na vysokou vyšel jako sen učební obor Autoelektrikář."""
+    vysledky = [
+        _vysledek("600000001", "H", 0.30, 90),    # jediný v pásmu snu, typ nesedí
+        _vysledek("600000002", "M", 0.60, 50),
+        _vysledek("600000003", "H", 0.95, 80),    # jediný v pásmu jistoty
+    ]
+    trojice = pruvodce.portfolio(vysledky, pruvodce.Profil(**VYSOKA))
+    assert trojice["sen"] is None
+    assert trojice["realisticka"].nabidka.redizo == "600000002"
+    assert trojice["realisticka"].varovani == []
+    # Jistota v nesedícím typu je lepší než žádná — ale musí to říct.
+    assert trojice["jistota"].nabidka.redizo == "600000003"
+    assert any("typ vzdělání ti podle odpovědí nesedí" in w for w in trojice["jistota"].varovani)
+    # Varování je jen na kopii, doporučená karta téže nabídky ho nemá.
+    assert vysledky[2].varovani == []
+    # Bez profilu se chová jako dřív: rozhoduje jen pásmo šance.
+    assert pruvodce.portfolio(vysledky)["sen"].nabidka.redizo == "600000001"
+
+
+def test_portfolio_dava_prednost_sedicimu_typu():
+    vysledky = [_vysledek("600000001", "H", 0.95, 90), _vysledek("600000002", "M", 0.90, 60)]
+    trojice = pruvodce.portfolio(vysledky, pruvodce.Profil(**VYSOKA))
+    assert trojice["jistota"].nabidka.redizo == "600000002"
+
+
+def test_scenare_zlepseni_pocitaji_od_dnesnich_bodu(conn):
+    """Regrese: se zadaným +20 byl sloupec „+0 b." už 160 z 200, dnešních 80 chybělo."""
+    profil = pruvodce.Profil(trida=9, skor_cj=30, skor_ma=50, zlepseni_bodu=20)
+    gympl = [n for n in pruvodce.nacti_nabidky(conn) if n.redizo == "600000001"]
+    scenare = pruvodce.scenare_zlepseni(profil, gympl)
+    assert [k for k, _, _ in scenare] == [0, 3, 6, 10, 20]
+    assert [c for _, c, _ in scenare] == [80, 92, 104, 120, 160]
+
+
+def test_poznamky_reknou_s_jakym_skore_se_pocita():
+    vysledky = [_vysledek("600000002", "M", 0.60, 50)]
+    profil = pruvodce.Profil(trida=9, skor_cj=30, skor_ma=50, zlepseni_bodu=20)
+    hlasky = pruvodce.poznamky(profil, vysledky)
+    assert any("z dnešních 40 na 80 bodů ze 100" in h and "z 80 na 160 z 200" in h for h in hlasky)
+    assert any("Jestli jsi myslel +20 bodů celkem, nastav +10" in h for h in hlasky)
+    # +10 na předmět je ještě v mezích návrhu, +11 už ne.
+    profil.zlepseni_bodu = 10
+    assert not any("Jestli jsi myslel" in h for h in pruvodce.poznamky(profil, vysledky))
+    profil.zlepseni_bodu = 11
+    assert any("nastav +5 nebo +6 —" in h for h in pruvodce.poznamky(profil, vysledky))
+    # Bez zlepšení není co vysvětlovat.
+    profil.zlepseni_bodu = 0
+    assert not any("Počítám se zlepšením" in h for h in pruvodce.poznamky(profil, vysledky))
+
+
+def test_poznamky_neslibuji_typ_ktery_ve_vyberu_neni():
+    """Regrese: „sedí ti lyceum" u výběru, kde žádné lyceum nebylo."""
+    vysledky = [_vysledek("600000002", "M", 0.60, 50)]
+    hlasky = pruvodce.poznamky(pruvodce.Profil(**VYSOKA), vysledky)
+    veta = next(h for h in hlasky if h.startswith("Podle odpovědí ti sedí"))
+    assert "ale není: " in veta and oblasti.popis_typu("LYC") in veta.split("ale není: ")[1]
+    assert oblasti.popis_typu("M") not in veta.split("ale není: ")[1]
+
+
+def test_export_nese_strop_posuvniku(conn):
+    k = export_web.export(conn)["konstanty"]
+    assert k["max_zlepseni_bodu"] == 15
+    assert "nesedí" in k["varovani_mimo_typ"]
+
+
+def test_web_zrcadli_zlepseni_a_portfolio(web_js):
+    assert "K.max_zlepseni_bodu" in web_js
+    assert 'max="15"' in web_js                         # výchozí hodnota v HTML sedí na Python
+    assert "K.varovani_mimo_typ" in web_js
+    assert "sediciTypy()" in web_js.split("function portfolio(")[1].split("function ")[0]
+    assert "Počítám se zlepšením" in web_js

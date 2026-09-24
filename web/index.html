@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Kam na střední</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -354,13 +355,14 @@
       <div class="radky">
         <div class="pole"><label for="skor-cj">Český jazyk (0–50 b.)</label><input type="number" id="skor-cj" min="0" max="50" step="1" placeholder="—"></div>
         <div class="pole"><label for="skor-ma">Matematika (0–50 b.)</label><input type="number" id="skor-ma" min="0" max="50" step="1" placeholder="—"></div>
-        <p class="soucet" id="soucet">Celkem <b>—</b> z 200 % skóru</p>
+        <p class="soucet" id="soucet">Celkem <b>—</b> ze 100 bodů</p>
       </div>
       <div class="radky">
         <div class="pole" style="flex:1;min-width:260px">
           <label for="zlepseni">Když se do zkoušek zlepšíš o <b id="zlepseni-popis">+0</b> bodů
-            <b>v každém předmětu</b> (z 50)</label>
-          <input type="range" id="zlepseni" min="0" max="20" step="1" value="0" style="width:100%">
+            <b>v každém předmětu</b> (z 50) — tedy o <b id="zlepseni-celkem">+0</b> bodů celkem</label>
+          <input type="range" id="zlepseni" min="0" max="15" step="1" value="0" style="width:100%">
+          <p class="hint" id="zlepseni-varovani" hidden></p>
         </div>
       </div>
     </div>
@@ -982,16 +984,33 @@
     return vybrane.sort(function (a, b) { return b.skore - a.skore; });
   }
 
+  // Typy vzdělání, které podle odpovědí sedí — `Profil.sedici_typy`.
+  // Prázdné = uchazeč na osobnostní otázky neodpověděl, podle typu se nevybírá.
+  function sediciTypy() {
+    var maOdpoved = Object.keys(stav.osobnostni).some(function (k) { return stav.osobnostni[k]; });
+    if (!maOdpoved && sirkaVyberu() == null) return [];
+    return doporuceneTypy();
+  }
+
+  // Port `pruvodce.portfolio`: sen jen v sedícím typu, realistická a jistota
+  // sedící typ upřednostní, jinak vezmou jiný a řeknou to na kartě
+  // (`mimoTyp` na kopii — tentýž výsledek může být i mezi doporučenými).
   function portfolio(vysledky) {
-    var out = {}, pouzite = {};
+    var out = {}, pouzite = {}, sedi = sediciTypy();
     Object.keys(K.pasma_portfolia).forEach(function (role) {
       var pasmo = K.pasma_portfolia[role];
       var kand = vysledky.filter(function (v) {
         return v.sance != null && v.sance >= pasmo[0] && v.sance < pasmo[1] && !pouzite[v.n.redizo];
       });
+      var sedici = sedi.length ? kand.filter(function (v) { return sedi.indexOf(v.n.typ) >= 0; }) : kand;
+      var mimoTyp = false;
+      if (!sedici.length && role !== "sen") { sedici = kand; mimoTyp = kand.length > 0; }
       var nej = null;
-      kand.forEach(function (v) { if (!nej || v.skore > nej.skore) nej = v; });
-      if (nej) pouzite[nej.n.redizo] = 1;
+      sedici.forEach(function (v) { if (!nej || v.skore > nej.skore) nej = v; });
+      if (nej) {
+        pouzite[nej.n.redizo] = 1;
+        if (mimoTyp) nej = Object.assign({}, nej, { mimoTyp: true });
+      }
       out[role] = nej;
     });
     return out;
@@ -1073,6 +1092,7 @@
       out.push("Škola nemá v datech CERMAT maturitní výsledky (malá škola nebo nový obor).");
     if (n.inspekce_datum && n.inspekce_datum < "2019-01-01")
       out.push("Poslední inspekce ČŠI je z " + n.inspekce_datum + " — starší než 7 let.");
+    if (v.mimoTyp) out.push(K.varovani_mimo_typ);
     return out;
   }
 
@@ -1358,16 +1378,48 @@
     var bodyCj = cislo("skor-cj", 0, 50), bodyMa = cislo("skor-ma", 0, 50);
     stav.bodyCj = bodyCj;
     stav.bodyMa = bodyMa;
-    stav.zlepseni = cislo("zlepseni", 0, 20) || 0;
+    stav.zlepseni = cislo("zlepseni", 0, K.max_zlepseni_bodu) || 0;
     document.getElementById("zlepseni-popis").textContent = "+" + stav.zlepseni;
+    document.getElementById("zlepseni-celkem").textContent = "+" + 2 * stav.zlepseni;
     vykresliNavrh();
     stav.skorCj = bodyCj == null ? null : Math.min(50, bodyCj + stav.zlepseni) / 50 * 100;
     stav.skorMa = bodyMa == null ? null : Math.min(50, bodyMa + stav.zlepseni) / 50 * 100;
     stav.prospech = cislo("prospech", 1, 5);
-    var soucet = document.querySelector("#soucet b");
-    soucet.textContent = (stav.skorCj != null && stav.skorMa != null)
-      ? Math.round(stav.skorCj + stav.skorMa) : "—";
+    vykresliSoucet(bodyCj, bodyMa);
     vykresli();
+  }
+
+  // Součet pod poli pro body. Dřív ukazoval % skór z 200 **už se zlepšením**:
+  // kdo zadal 15 + 25 bodů a posuvník +20, viděl hned pod tím „Celkem 160"
+  // a neměl jak poznat, že posuvník přičetl 40 bodů, ne 20. Teď je vidět
+  // dnešní součet v bodech ze 100 (v tom uchazeč přemýšlí), zvlášť součet se
+  // zlepšením a v závorce % skór z 200 — v něm jsou hranice na kartách.
+  // Posuvník jde po celých bodech — lichou polovinu nabídnout oběma směry.
+  function polovinaZlepseni(z) {
+    var dolu = Math.floor(z / 2), nahoru = Math.ceil(z / 2);
+    return dolu === nahoru ? String(dolu) : dolu + " nebo +" + nahoru;
+  }
+  function vykresliSoucet(bodyCj, bodyMa) {
+    var soucet = document.getElementById("soucet");
+    var varovani = document.getElementById("zlepseni-varovani");
+    varovani.hidden = true;
+    if (bodyCj == null || bodyMa == null) {
+      soucet.innerHTML = "Celkem <b>—</b> ze 100 bodů";
+      return;
+    }
+    var dnes = bodyCj + bodyMa;
+    var text = "Celkem <b>" + dnes + "</b> ze 100 bodů (" + 2 * dnes + " z 200 % skóru)";
+    if (stav.zlepseni) {
+      var potom = Math.round((stav.skorCj + stav.skorMa) / 2);
+      text += " · se zlepšením <b>" + potom + "</b> ze 100 (" + 2 * potom + " z 200)";
+    }
+    soucet.innerHTML = text + ". Hranice přijetí na kartách jsou v % skóru z 200.";
+    if (stav.zlepseni > K.max_navrh_bodu) {
+      varovani.textContent = "+" + stav.zlepseni + " v každém předmětu je víc, než kolik průvodce počítá "
+        + "i při přípravě naplno (+" + K.max_navrh_bodu + "). Jestli myslíš +" + stav.zlepseni
+        + " bodů celkem, nastav +" + polovinaZlepseni(stav.zlepseni) + ".";
+      varovani.hidden = false;
+    }
   }
   function cislo(id, min, max) {
     var v = document.getElementById(id).value;
@@ -1398,11 +1450,11 @@
     var el2 = document.getElementById("navrh-zlepseni");
     var navrh = navrhZlepseni();
     if (navrh == null) {
-      el2.textContent = "Bez odpovědí posuvník v otázce 7 nikam neposouvám.";
+      el2.textContent = "Bez odpovědí posuvník v otázce 5 nikam neposouvám.";
       return;
     }
     el2.textContent = "Podle odpovědí bych počítal s +" + navrh + " body v každém předmětu"
-      + " (posuvník v otázce 7 je teď na +" + stav.zlepseni + "). Je to pravidlo palce,"
+      + " (posuvník v otázce 5 je teď na +" + stav.zlepseni + "). Je to pravidlo palce,"
       + " ne předpověď — kolik bodů příprava reálně přinese, z veřejných dat nikdo neví.";
   }
 
@@ -1440,11 +1492,31 @@
     })) out.push("V " + stav.obvody.join(", ") + " nic, co by odpovídalo ostatním podmínkám, není — ukazuju nejbližší okolí.");
     if (stav.skorCj == null || stav.skorMa == null)
       out.push("Bez očekávaného skóru z přijímaček je šance jen hrubý odhad z poměru přihlášek — vyplň otázku 5.");
-    var typy = doporuceneTypy();
-    var maOdpoved = Object.keys(stav.osobnostni).some(function (k) { return stav.osobnostni[k]; });
-    if (typy.length && maOdpoved)
-      out.push("Podle odpovědí ti sedí: " + typy.map(function (t) { return C.typy[t].popis; }).join(", ")
-               + ". Ostatní typy se nevyřadily, jen jsou níž.");
+    else if (stav.zlepseni) {
+      // Port `_poznamky_zlepseni`: předpoklad o zlepšení se říká nahlas.
+      var z = stav.zlepseni, dnes = 2 * (stav.bodyCj + stav.bodyMa);
+      var potom = Math.round(stav.skorCj + stav.skorMa);
+      out.push("Počítám se zlepšením o +" + z + " bodů v každém předmětu (+" + 2 * z + " celkem): "
+               + "z dnešních " + dnes / 2 + " na " + potom / 2 + " bodů ze 100, tj. z " + dnes
+               + " na " + potom + " z 200 % skóru. Šance na kartách platí pro " + potom + ".");
+      if (z > K.max_navrh_bodu)
+        out.push("+" + z + " bodů v každém předmětu je víc, než kolik průvodce počítá i při přípravě "
+                 + "naplno (+" + K.max_navrh_bodu + "). Jestli jsi myslel +" + z + " bodů celkem, nastav +"
+                 + polovinaZlepseni(z) + " — jinak jsou šance nadsazené.");
+    }
+    var typy = sediciTypy();
+    if (typy.length) {
+      var veta = "Podle odpovědí ti sedí: " + typy.map(function (t) { return C.typy[t].popis; }).join(", ")
+               + ". Ostatní typy se nevyřadily, jen jsou níž.";
+      var chybi = typy.filter(function (t) {
+        return !vysledky.some(function (v) { return v.n.typ === t; });
+      });
+      if (chybi.length)
+        veta += " Mezi nabídkami, které prošly filtrem, ale není: "
+              + chybi.map(function (t) { return C.typy[t].popis; }).join(", ")
+              + " — obory, které sis zaškrtl, tenhle typ nenabízejí.";
+      out.push(veta);
+    }
     if (!stav.talentove)
       out.push("Obory s talentovou zkouškou jsem vynechal — mají jinou vstupní zkoušku a přihlášku "
                + "už do 30. 11. Zapni je v poslední otázce, pokud sport nebo umění děláš závodně.");
@@ -1786,6 +1858,10 @@
         + pct(Math.min(pa[1], 1)) + ", z toho nejvyšší skóre shody."));
     });
     m.appendChild(ul);
+    m.appendChild(el("p", null, "Když jsi odpověděl na otázky o tom, co tě baví a kam chceš po škole, "
+      + "bere se jako sen jen typ vzdělání, který ti podle nich sedí — sen na oboru, který nechceš, "
+      + "není sen. Realistická volba a jistota sedící typ upřednostní; když v jejich pásmu šance žádný "
+      + "není, vezmou jiný a na kartě to napíšou."));
 
     m.appendChild(el("h3", null, "6. Všechny ladicí parametry"));
     m.appendChild(el("p", "hint", "Pro ladění: hodnoty z PARAMETRY v jaknastredni/pruvodce.py. Po změně stačí "
@@ -1913,6 +1989,8 @@
   ["skor-cj", "skor-ma", "prospech", "zlepseni"].forEach(function (id) {
     document.getElementById(id).addEventListener("input", zmena);
   });
+  // Strop posuvníku drží Python (`MAX_ZLEPSENI_BODU`), `max` v HTML je jen výchozí.
+  document.getElementById("zlepseni").max = K.max_zlepseni_bodu;
 
   // Doporučený prospěch zná jen Atlas školství; dokud scraper nedoběhl, řekni to.
   if (!NAB.some(function (n) { return n.doporuceny_prospech != null; })) {
@@ -1934,7 +2012,8 @@
   window.JNS = { stav: stav, nabidky: NAB, konstanty: K, ciselniky: C,
                  ohodnot: ohodnot, duvodFiltru: duvodFiltru, profil: profilProPython,
                  urovenZamereni: urovenZamereni, vahy: vahy, prekresli: zmena,
-                 sirka: sirkaVyberu, sirokyVyber: sirokyVyber, vyberTop: vyberTop };
+                 sirka: sirkaVyberu, sirokyVyber: sirokyVyber, vyberTop: vyberTop,
+                 portfolio: portfolio, poznamky: poznamky };
 
   ukazKrok();
   document.getElementById("celkem").textContent = NAB.length;

@@ -99,7 +99,8 @@ def export(conn) -> dict[str, Any]:
     return {
         # Datum generování patří na stránku: nasazená verze může být týdny
         # stará a uchazeč nemá jak poznat, jestli čte letošní, nebo loňská data.
-        "vygenerovano": date.today().strftime("%-d. %-m. %Y"),
+        # Bez `strftime("%-d")` — to umí jen glibc, na Windows spadne.
+        "vygenerovano": f"{date.today().day}. {date.today().month}. {date.today().year}",
         "nabidky": [nabidka_do_dictu(n) for n in nabidky],
         "konstanty": {
             "roky_jpz": pruvodce.ROKY_JPZ,
@@ -114,6 +115,8 @@ def export(conn) -> dict[str, Any]:
             "min_vzorek": pruvodce.MIN_VZOREK,
             "okno_pasma": pruvodce.OKNO_PASMA,
             "max_navrh_bodu": pruvodce.MAX_NAVRH_BODU,
+            "max_zlepseni_bodu": pruvodce.MAX_ZLEPSENI_BODU,
+            "varovani_mimo_typ": pruvodce.VAROVANI_MIMO_TYP,
             "slozky_skore": pruvodce.SLOZKY_SKORE,
             "parametry": pruvodce.PARAMETRY,
             "omez": list(pruvodce.OMEZ),

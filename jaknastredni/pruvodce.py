@@ -222,6 +222,14 @@ PRIPRAVA_OTAZKY: dict[str, tuple[str, dict[str, tuple[str, float]]]] = {
 # si ho má přenastavit. Škála: 0 = nedělá nic, 1 = připravuje se naplno.
 MAX_NAVRH_BODU = 10
 
+# Strop posuvníku zlepšení (body **na předmět**). Dřív 20 — dvojnásobek toho,
+# co průvodce navrhne i při přípravě naplno, a posuvník svým rozsahem sváděl
+# zadat „+20 celkem" jako +20 v každém předmětu. Uchazeč s 15 + 25 body pak
+# dostal výsledky pro 160 z 200 místo 120 a „jistotu" se šancí, která by při
+# skutečném skóre byla 3 %. Nad `MAX_NAVRH_BODU` se navíc ukáže upozornění
+# (`poznamky`).
+MAX_ZLEPSENI_BODU = 15
+
 # Pásma portfolia přihlášek (šance na přijetí). Tři přihlášky = tři role.
 PASMA_PORTFOLIA: dict[str, tuple[float, float]] = {
     "sen": (0.10, 0.45),
@@ -356,6 +364,25 @@ class Profil:
             return None
         pridat = self.zlepseni_bodu / 50 * 100
         return min(100.0, self.skor_cj + pridat) + min(100.0, self.skor_ma + pridat)
+
+    @property
+    def skor_dnes(self) -> float | None:
+        """Součet % skóru ČJ + MA **bez** zlepšení — to, co uchazeč zadal."""
+        if self.skor_cj is None or self.skor_ma is None:
+            return None
+        return self.skor_cj + self.skor_ma
+
+    @property
+    def sedici_typy(self) -> set[str]:
+        """Typy vzdělání, které podle osobnostních otázek sedí (`doporucene_typy`).
+
+        Prázdná množina = uchazeč na nic neodpověděl, podle typu se nevybírá.
+        Tatáž podmínka jako u věty „Podle odpovědí ti sedí…" v `poznamky`.
+        """
+        sirka = self.sirka
+        if not (any(self.osobnostni.values()) or sirka is not None):
+            return set()
+        return set(oblasti.doporucene_typy(self.osobnostni, self.trida, sirka=sirka))
 
     @classmethod
     def z_json(cls, data: dict[str, Any]) -> "Profil":
@@ -1953,12 +1980,23 @@ def poznamky(profil: Profil, vysledky: list[Vysledek],
             "Bez očekávaného skóru z přijímaček je šance jen hrubý odhad z poměru "
             "přihlášek — zkus průvodce znovu po přijímačkách nanečisto."
         )
+    out.extend(_poznamky_zlepseni(profil))
     sirka = profil.sirka
     doporucene = oblasti.doporucene_typy(profil.osobnostni, profil.trida, sirka=sirka)
     if doporucene and (any(profil.osobnostni.values()) or sirka is not None):
-        out.append("Podle odpovědí ti sedí: "
-                   + ", ".join(oblasti.popis_typu(t) for t in doporucene)
-                   + ". Ostatní typy se nevyřadily, jen jsou níž.")
+        veta = ("Podle odpovědí ti sedí: "
+                + ", ".join(oblasti.popis_typu(t) for t in doporucene)
+                + ". Ostatní typy se nevyřadily, jen jsou níž.")
+        # Věta nesmí slibovat typ, který ve výběru vůbec není: uchazeči, který
+        # zaškrtl jen IT, vyšlo „sedí ti lyceum", a mezi 49 nabídkami žádné
+        # lyceum nebylo — filtr oblastí je vyhodil ještě před řazením.
+        typy_ve_vyberu = {v.nabidka.typ for v in vysledky}
+        chybi = [t for t in doporucene if t not in typy_ve_vyberu]
+        if chybi:
+            veta += (" Mezi nabídkami, které prošly filtrem, ale není: "
+                     + ", ".join(oblasti.popis_typu(t) for t in chybi)
+                     + " — obory, které sis zaškrtl, tenhle typ nenabízejí.")
+        out.append(veta)
     # Odvozené zjištění se ukazuje, ne schovává: uchazeč má vědět, že mu
     # pořadí posunula **jeho vlastní** zaškrtnutá políčka, ne náhoda.
     out.extend(_poznamka_sirky(profil))
@@ -1985,7 +2023,41 @@ def poznamky(profil: Profil, vysledky: list[Vysledek],
 # Portfolio přihlášek
 # --------------------------------------------------------------------------
 
-def portfolio(vysledky: list[Vysledek]) -> dict[str, Vysledek | None]:
+def _poznamky_zlepseni(profil: Profil) -> list[str]:
+    """Z jakého skóre průvodce počítá, když uchazeč posunul posuvník zlepšení.
+
+    Zlepšení je **na předmět** a přičítá se do obou, takže „+20" posune
+    celkový součet o 40 bodů ze 100. Kdo myslel „+20 celkem", dostal výsledky
+    pro skóre o dvacet bodů vyšší, než chtěl — a nikde to nebylo vidět:
+    karty ukazují jen šanci, ne skór, se kterým se počítala. Proto se
+    předpoklad vypisuje nahlas i s dnešním skóre.
+    """
+    dnes, se_zlepsenim = profil.skor_dnes, profil.skor
+    if dnes is None or se_zlepsenim is None or not profil.zlepseni_bodu:
+        return []
+    z = profil.zlepseni_bodu
+    out = [f"Počítám se zlepšením o +{z:.0f} bodů v každém předmětu (+{2 * z:.0f} celkem): "
+           f"z dnešních {dnes / 2:.0f} na {se_zlepsenim / 2:.0f} bodů ze 100, "
+           f"tj. z {dnes:.0f} na {se_zlepsenim:.0f} z 200 % skóru. Šance na kartách platí "
+           f"pro {se_zlepsenim:.0f}."]
+    if z > MAX_NAVRH_BODU:
+        # Posuvník jde po celých bodech — lichou polovinu nabídnout oběma směry.
+        dolu, nahoru = math.floor(z / 2), math.ceil(z / 2)
+        polovina = f"{dolu}" if dolu == nahoru else f"{dolu} nebo +{nahoru}"
+        out.append(f"+{z:.0f} bodů v každém předmětu je víc, než kolik průvodce počítá "
+                   f"i při přípravě naplno (+{MAX_NAVRH_BODU}). Jestli jsi myslel "
+                   f"+{z:.0f} bodů celkem, nastav +{polovina} — jinak jsou šance nadsazené.")
+    return out
+
+
+# Varování na kartě z návrhu přihlášek, která je jiného typu vzdělání, než
+# jaký uchazeči podle odpovědí sedí (viz `portfolio`).
+VAROVANI_MIMO_TYP = ("Tenhle typ vzdělání ti podle odpovědí nesedí — v pásmu šance pro "
+                     "tuhle přihlášku ale nic, co ti sedí, není.")
+
+
+def portfolio(vysledky: list[Vysledek], profil: Profil | None = None,
+              ) -> dict[str, Vysledek | None]:
     """Z ohodnocených nabídek vybere trojici na tři přihlášky.
 
     Od roku 2024 se podávají až 3 přihlášky a o umístění rozhoduje centrální
@@ -1994,7 +2066,17 @@ def portfolio(vysledky: list[Vysledek]) -> dict[str, Vysledek | None]:
     nerozkládá pořadím, ale skladbou: jedna ambiciózní, jedna realistická a
     jedna, kde je přijetí velmi pravděpodobné (jinak hrozí 2. kolo).
     Výběr v každém pásmu = nejvyšší skóre shody, ne nejvyšší šance.
+
+    S profilem se hlídá i **typ vzdělání** (`Profil.sedici_typy`). Samotné
+    pásmo šance bralo cokoli, co do něj padlo: uchazeči, který chce na
+    vysokou a má průměr 1,4, vyšel jako „sen" tříletý obor Autoelektrikář —
+    jediné, co v pásmu 10–45 % zbylo. Sen v typu, který uchazeč nechce, není
+    sen, proto se tam bere **jen** sedící typ, jinak zůstane místo prázdné.
+    Realistická volba a jistota sedící typ **upřednostní**, ale když v pásmu
+    žádný není, vezmou jiný a řeknou to na kartě (`VAROVANI_MIMO_TYP`) —
+    prázdná jistota je horší než jistota na oboru, který není první volbou.
     """
+    sedi = profil.sedici_typy if profil is not None else set()
     out: dict[str, Vysledek | None] = {}
     pouzite: set[str] = set()      # REDIZO, ne IZO×KKOV
     for role, (dolni, horni) in PASMA_PORTFOLIA.items():
@@ -2004,12 +2086,20 @@ def portfolio(vysledky: list[Vysledek]) -> dict[str, Vysledek | None]:
             and dolni <= v.sance < horni
             and v.nabidka.redizo not in pouzite
         ]
-        vybrany = max(kandidati, key=lambda v: v.skore) if kandidati else None
+        sedici = [v for v in kandidati if v.nabidka.typ in sedi] if sedi else kandidati
+        mimo_typ = False
+        if not sedici and role != "sen":
+            sedici, mimo_typ = kandidati, bool(kandidati)
+        vybrany = max(sedici, key=lambda v: v.skore) if sedici else None
         if vybrany is not None:
             # Tři přihlášky na jednu školu nejsou rozložené riziko. Dedupe je
             # na organizaci (REDIZO), ne na oboru — dva obory téže školy padnou
             # obvykle společně (stejná kritéria, stejné pořadí uchazečů).
             pouzite.add(vybrany.nabidka.redizo)
+            if mimo_typ:
+                # Kopie: tentýž Vysledek může být i mezi doporučenými, kde
+                # tohle varování nepatří.
+                vybrany = dataclasses.replace(vybrany, varovani=[*vybrany.varovani, VAROVANI_MIMO_TYP])
         out[role] = vybrany
     return out
 
@@ -2132,7 +2222,8 @@ def prubeh_pruvodce() -> Profil:
     skor_cj = None if body_cj is None else body_cj / 50 * 100
     skor_ma = None if body_ma is None else body_ma / 50 * 100
     if skor_cj is not None and skor_ma is not None:
-        print(f"   => {skor_cj + skor_ma:.0f} z 200 bodů % skóru")
+        print(f"   => {body_cj + body_ma:.0f} ze 100 bodů, tj. {skor_cj + skor_ma:.0f} z 200 % skóru"
+              " (v té stupnici jsou hranice přijetí)")
 
     prospech = _zeptej_se_cislo(
         "\n8) Jaký máš průměr na vysvědčení? [1-5, Enter = přeskočit]:", 5)
@@ -2203,13 +2294,19 @@ def scenare_zlepseni(profil: Profil, nabidky: list[Nabidka],
     jednotce rozcházely: stejně vypadající „+8" znamenalo v každém z nich
     něco jiného.
 
+    Kroky se počítají od **dnešních** bodů, ne od skóre už se zlepšením
+    z profilu — jinak tabulka zlepšení schovala: se zadaným +20 byl sloupec
+    „+0 b." už 160 z 200 a dnešních 80 v ní nebylo vůbec. Zlepšení z profilu
+    se přidá jako vlastní sloupec (když mezi kroky není).
+
     Vrací pro každý krok (body na předmět, celkový % skór, [(popis, šance)]).
     """
     if profil.skor_cj is None or profil.skor_ma is None:
         return []
+    kroky = sorted({*kroky_bodu, profil.zlepseni_bodu})
     out = []
-    for krok in kroky_bodu:
-        varianta = dataclasses.replace(profil, zlepseni_bodu=profil.zlepseni_bodu + krok)
+    for krok in kroky:
+        varianta = dataclasses.replace(profil, zlepseni_bodu=krok)
         skor = varianta.skor
         out.append((krok, round(skor),
                     [(f"{n.organizace[:34]} ({n.kod_kkov})", sance_prijeti(n, skor)[0])
@@ -2365,7 +2462,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     nejlepsi = vyber_top(vysledky, args.pocet, profil=profil)
-    trojice = portfolio(vysledky)
+    trojice = portfolio(vysledky, profil)
     hlasky = poznamky(profil, vysledky, nabidky)
 
     if args.json:
@@ -2412,9 +2509,10 @@ def main(argv: list[str] | None = None) -> int:
     scenare = scenare_zlepseni(profil, [v.nabidka for v in nejlepsi])
     if scenare:
         print("\n=== Co udělá příprava ===")
-        print("Šance u doporučených škol výše podle toho, o kolik bodů se zlepšíš "
-              "v KAŽDÉM předmětu (z 50):")
-        hlavicka = " " * 40 + "".join(f"{f'+{k:.0f} b.':>10}" for k, _, _ in scenare)
+        print("Šance u doporučených škol výše podle toho, o kolik bodů se od dnešních "
+              "zlepšíš v KAŽDÉM předmětu (z 50); * = s tím počítá výsledek výše:")
+        hlavicka = " " * 40 + "".join(
+            f"{f'+{k:.0f} b.' + ('*' if k == profil.zlepseni_bodu else ''):>10}" for k, _, _ in scenare)
         print(hlavicka)
         print(" " * 40 + "".join(f"{f'({c}/200)':>10}" for _, c, _ in scenare))
         for i, (popis, _) in enumerate(scenare[0][2]):

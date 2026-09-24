@@ -33,6 +33,15 @@ rizika** (sen / realistická / jistota). Kdo si podá tři sny, jde do 2. kola.
 Proto `portfolio()` a proto je v textu výsledku ta věta o pořadí napsaná
 natvrdo — je to nejčastější a nejdražší omyl rodičů.
 
+Pásmo šance ale samo nestačí. Uchazeči, který chce na vysokou a má průměr
+1,4, vyšel jako „sen" tříletý obor Autoelektrikář — jediné, co v pásmu
+10–45 % zbylo. `portfolio()` proto dostává profil a hlídá **typ vzdělání**
+(`Profil.sedici_typy`, tatáž množina jako věta „Podle odpovědí ti sedí…"):
+sen se bere jen ze sedících typů, jinak zůstane prázdný; realistická volba
+a jistota sedící typ upřednostní, a když v pásmu žádný není, vezmou jiný
+s varováním na kartě (`VAROVANI_MIMO_TYP`). Prázdná jistota je horší než
+jistota na oboru, který není první volbou.
+
 **3. Průhlednost místo přesnosti.** Data umí spočítat hodně, ale ne to
 hlavní (jestli tam bude dítě šťastné). Každá karta proto nese `duvody`
 (proč se objevila) i `varovani` (co data neříkají) a šance je vždy doplněná
@@ -120,6 +129,18 @@ Proč zrovna takhle:
   přípravy na body, soubory uchazečů CERMAT obsahují výsledek, ne přípravu.
   Jakýkoli převod „3× týdně = +15 bodů" by byl vymyšlený, tedy přesně to,
   co u agregátorů kritizujeme (README, zdroj 6).
+- **Posuvník zlepšení je v bodech na předmět a výsledek to říká nahlas.**
+  Uchazeč s 15 + 25 body chtěl „+20 celkem", posuvník (tehdy do 20) ale
+  přičetl +20 do každého předmětu: výsledky platily pro 160 z 200 místo 120,
+  „jistota" měla při skutečném skóre šanci 63 % a „realistická" 3 %. Nic
+  z toho nebylo vidět — součet pod poli ukazoval rovnou 160 a tabulka
+  „Co udělá příprava" začínala od 160. Proto: strop `MAX_ZLEPSENI_BODU` (15),
+  u posuvníku i celkový přírůstek („tedy o +30 bodů celkem"), součet ukazuje
+  dnešní body ze 100 a zvlášť se zlepšením (v závorce % skór z 200, v němž
+  jsou hranice na kartách), nad `MAX_NAVRH_BODU` upozornění „jestli jsi
+  myslel celkem, nastav polovinu", mezi poznámkami výsledku věta, s jakým
+  skóre se počítá (`_poznamky_zlepseni`), a scénáře v CLI začínají od
+  dnešních bodů (`scenare_zlepseni`).
 - **Jazyk (otázka 11) váží, nefiltruje.** Jako tvrdý filtr vyhazoval třetinu
   nabídky (138 → 90) a měnil 3 z 5 škol v pětici — na otázku, která vypadá
   jako detail na konci formuláře, moc. Kdo na jazyku trvá, zapne
@@ -800,6 +821,11 @@ EOF
 
 Výsledek se porovná s `pruvodce.ohodnot(Profil.z_json(profil), nabidky)`.
 Rozdíl ve skóre nad 0,02 bodu je chyba v portu, ne zaokrouhlení.
+
+`window.JNS` vystavuje i `portfolio` a `poznamky`, takže jde stejně porovnat
+návrh tří přihlášek (včetně `mimoTyp`) a texty poznámek s `pruvodce.portfolio`
+a `pruvodce.poznamky`. Místo Playwrightu jde stránku servírovat i přes
+`python -m http.server --directory web` a skript pustit v konzoli prohlížeče.
 
 ## Další kroky
 
